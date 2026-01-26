@@ -1,0 +1,9 @@
+location / {
+    # 尝试按原样访问文件，如果不存在则尝试加 .php 访问
+    try_files $uri $uri/ $uri.php?$args;
+}
+
+# 强制将带 .php 的 URL 重定向到不带后缀的 URL
+if ($request_uri ~ ^/(.*)\.php$) {
+    return 301 /$1;
+}

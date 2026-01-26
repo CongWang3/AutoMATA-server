@@ -82,11 +82,18 @@
             <!-- <p class="secondary-font">Get many features from us exactly what you are looking for.</p> -->
         </div>
 
-        <div style="height: 200px; width: 1320px; justify-content: center; display: flex; align-items: center;">
-            <!-- <script type="text/javascript" id="mapmyvisitors" src="//mapmyvisitors.com/map.js?d=1TQ78vsdHNfZUbF05j2pZNDFqKuRfJibShpoQVkLxrM&cl=ffffff&w=a"></script> -->
-             <div style="height: 160px; width: 200px;">
-
-                <!-- <a href="https://mapmyvisitors.com/web/1c0h6"  title="Visit tracker"><img src="https://mapmyvisitors.com/map.png?d=1TQ78vsdHNfZUbF05j2pZNDFqKuRfJibShpoQVkLxrM&cl=ffffff" /></a> -->
+        <div style="height: 400px; width: 100%; justify-content: center; display: flex; align-items: center;">
+             <div style="text-align: center;">
+                <!-- 使用懒加载，避免阻塞首屏渲染 -->
+                <a href="https://mapmyvisitors.com/web/1c0h6" title="Visit tracker" target="_blank" rel="noopener">
+                    <img src="https://mapmyvisitors.com/map.png?d=1TQ78vsdHNfZUbF05j2pZNDFqKuRfJibShpoQVkLxrM&cl=ffffff" 
+                         alt="Visitor Map" 
+                         loading="lazy" 
+                         width="600" 
+                         height="300"
+                         style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"
+                         onerror="this.style.display='none'">
+                </a>
              </div>
         </div>
 

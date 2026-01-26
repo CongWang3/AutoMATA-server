@@ -233,10 +233,6 @@
 
 </script>
 
-<!-- <style>
-    引入css
-    <?php include __DIR__ . '/../static/css/show.css' ?>  /*因为chrome直接用link加载css时会把css转为html，这是不对的，所以要用这样子加载*/
-</style> -->
 <!-- <section id="banner" style="background-image:url(images/background-img.jpg);"> -->
 <section id="banner">
     <div class="container padding-medium-2">

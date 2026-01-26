@@ -35,6 +35,9 @@
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
 
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <!-- Bootstrap JS 需要尽早加载以支持导航下拉菜单 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0-alpha3/js/bootstrap.bundle.min.js" integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe" crossorigin="anonymous"></script>
     
     <?php ini_set('max_execution_time', '0'); ?>
      <?php // set_time_limit(0); // 不限制时间?>
@@ -121,5 +124,3 @@
       
 <!-- </body>
 </html> -->
-</```
-```

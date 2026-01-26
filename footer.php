@@ -90,11 +90,9 @@
 
   <!-- 将脚本移到这里，避免阻塞首屏渲染 -->
   <script src="https://cdn.bootcdn.net/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
-  <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0-alpha3/js/bootstrap.bundle.min.js" integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe" crossorigin="anonymous"></script>
   <script src="https://cdn.bootcdn.net/ajax/libs/Swiper/9.4.1/swiper-bundle.min.js"></script>
   <script src="js/plugins.js"></script>
   <script src="js/script.js"></script>
-  <!-- 在 jQuery 加载后再执行 noConflict -->
   <script>jQuery.noConflict();</script>
 
 </body>
