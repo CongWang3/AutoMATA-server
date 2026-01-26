@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="format-detection" content="telephone=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <!-- 预加载本地优化后的背景图 -->
+    <link rel="preload" as="image" href="images/background.png">
+    <!-- 设置网站图标 -->
+    <link rel="icon" type="image/png" href="/images/vite.svg">
     <title>AutoMATA</title>
 
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/Swiper/9.4.1/swiper-bundle.min.css" />
@@ -27,34 +32,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;600;700&family=Roboto+Slab&display=swap"
     rel="stylesheet">
 
-    <!-- JS文件 - 调整顺序 -->
-    <!-- 先加载Bootstrap -->
-    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0-alpha3/js/bootstrap.bundle.min.js" integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe" crossorigin="anonymous"></script>
-    <!-- 然后加载其他库 -->
-    <script src="https://cdn.bootcdn.net/ajax/libs/Swiper/9.4.1/swiper-bundle.min.js"></script>
-    <script src="js/plugins.js"></script>
-    <script src="js/script.js"></script>
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
 
-
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <!-- 如果需要jQuery，放在最后并使用noConflict -->
-    <script src="js/jquery-1.11.0.min.js"></script>
-    <script>$.noConflict();</script>
-
-    <!--删除47 line php include __DIR__ . '/../static/js/functions.js'-->
-    <!-- <style>
-      <?php include __DIR__ . '/../static/css/reset.css' ?>
-      <?php include __DIR__ . '/../static/css/index.css' ?>
-    </style>
-
     
-    <script>
-        
-    </script>
-     -->
-
-     <?php ini_set('max_execution_time', '0'); ?>
+    <?php ini_set('max_execution_time', '0'); ?>
      <?php // set_time_limit(0); // 不限制时间?>
     
 </head>
@@ -65,7 +47,7 @@
       <div class="main-logo">
         <a href="index.php"  target="_blank">
           <!-- <img src="images/logo.png" alt="logo" class="img-fluid"> -->
-          <img src="images/logo(1).png" alt="logo" class="img-fluid" width="220px" height="44px">
+          <img src="https://xxs-img.oss-cn-hangzhou.aliyuncs.com/img202601261643927.png" alt="logo" class="img-fluid" width="220px" height="44px">
         </a>
       </div>
       
@@ -139,3 +121,5 @@
       
 <!-- </body>
 </html> -->
+</```
+```

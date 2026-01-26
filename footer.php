@@ -88,21 +88,14 @@
     </div>
 </footer>
 
-<div id="footer-bottom">
-<hr class="m-0 text-black-50">
-<div class="container py-3">
-    <div class="row mt-3">
-    <div class="col-md-6 copyright">
-        <p>© 2024 NWAFU. All rights reserved.</p>
-    </div>
-    <div class="col-md-6 text-md-end">
-        <!-- <p><a target="_blank" href="" title="网页模板" class="text-decoration-underline fw-bold">王耳</a></p> -->
-        <p><a target="_blank" href="https://www.nwafu.edu.cn/" title="网页模板" class="text-decoration-underline fw-bold"><img src="images/nwafu_logo.png" width="90" height="90" style="position: relative; top: -30px;;"></a></p>
-         
-    </div>
-    </div>
-</div>
-</div>
+  <!-- 将脚本移到这里，避免阻塞首屏渲染 -->
+  <script src="https://cdn.bootcdn.net/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0-alpha3/js/bootstrap.bundle.min.js" integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe" crossorigin="anonymous"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/Swiper/9.4.1/swiper-bundle.min.js"></script>
+  <script src="js/plugins.js"></script>
+  <script src="js/script.js"></script>
+  <!-- 在 jQuery 加载后再执行 noConflict -->
+  <script>jQuery.noConflict();</script>
 
 </body>
 </html>

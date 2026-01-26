@@ -18,8 +18,8 @@
 
             </div>
             <div class="col-md-6 col-lg-7 d-block d-md-none d-lg-block p-0">
-                <!-- <img src="images/billboard-img.jpg" alt="img" class="img-fluid"> -->
-                <img src="https://xxs-img.oss-cn-hangzhou.aliyuncs.com/img202601261354486.png" alt="img" class="img-fluid">
+                <!-- 使用本地 500KB 优化图 -->
+                <img src="images/background.png" alt="img" class="img-fluid" fetchpriority="high">
             </div>
         </div>
     </div>
@@ -85,7 +85,7 @@
         <div style="height: 200px; width: 1320px; justify-content: center; display: flex; align-items: center;">
             <!-- <script type="text/javascript" id="mapmyvisitors" src="//mapmyvisitors.com/map.js?d=1TQ78vsdHNfZUbF05j2pZNDFqKuRfJibShpoQVkLxrM&cl=ffffff&w=a"></script> -->
              <div style="height: 160px; width: 200px;">
-                <script type="text/javascript" id="mmvst_globe" src="//mapmyvisitors.com/globe.js?d=cqZLq_ySx-fpAgoz0lOwvqtxCyvs3kjVSQmT9tr-SHA"></script>
+
                 <!-- <a href="https://mapmyvisitors.com/web/1c0h6"  title="Visit tracker"><img src="https://mapmyvisitors.com/map.png?d=1TQ78vsdHNfZUbF05j2pZNDFqKuRfJibShpoQVkLxrM&cl=ffffff" /></a> -->
              </div>
         </div>
