@@ -1,0 +1,29 @@
+assets/vendor/chocolat/images/close.png
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.gif
+download_data/
+# 忽略示例大文件
+example/read_count.txt
+example/draw_example/volcano_example.txt
+# 忽略所有图片和二进制资源（根据你的需求决定是否保留核心图标）
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.gif
+*.zip
+*.tar.gz
+# 忽略前端 Map 文件
+*.map
+*.tiff
+*.md
+*.pyc
+*.txt
+icomoon
+assets
+
+vendor/phpmailer/phpmailer/language/phpmailer.lang-ja.php

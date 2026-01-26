@@ -1,0 +1,576 @@
+# 代码说明：chatGPT生成
+# Autoencoder 模型：我们首先构建了一个 Autoencoder，它将输入的 1D 数据压缩到一个隐藏层，然后进行重构。在训练过程中，我们使用 MSELoss 来优化重构误差。
+# 分类模型：接着，我们使用训练好的 Autoencoder 的编码器部分提取特征，并将这些特征传入一个简单的分类器进行二分类预测。二分类时，输出使用 Sigmoid 激活函数。
+# 保存和加载模型：通过 torch.save() 保存训练好的 Autoencoder 和分类器模型，然后通过 torch.load() 加载这些模型，方便后续调用。
+# 训练数据：我们假设训练数据是 1D 的，使用随机数生成一些模拟数据，进行训练和测试。
+# 预测：加载模型后，使用 Autoencoder 提取的特征通过分类器进行预测，输出 0 或 1。
+import shutup  # 控制台输出 忽略 warning
+shutup.please()
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+import numpy as np
+import os
+import pickle
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import  StratifiedKFold
+from sklearn.utils import shuffle
+from sklearn.metrics import accuracy_score,recall_score,precision_score,f1_score,matthews_corrcoef,confusion_matrix,roc_auc_score,classification_report,multilabel_confusion_matrix,hamming_loss
+from sklearn.metrics import precision_recall_fscore_support
+from sklearn.preprocessing import LabelEncoder
+from utils.earlystopping import EarlyStopping
+from utils.FocalLoss import FocalLoss
+import argparse
+import warnings
+warnings.simplefilter(action='ignore', category=RuntimeWarning)
+
+torch.manual_seed(2022)
+
+from DataProcess import load_data,process  # 新加
+
+# 一审
+def set_random_seed(seed):
+    """设置随机种子确保可重现性"""
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    torch.Generator().manual_seed(seed)  # dataloader的随机种子
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+class Autoencoder(nn.Module):  # feature_dim, 64, 32 ,16
+    def __init__(self, input_dim, hidden_size_1=64, hidden_size_2=32, hidden_size_3=16, lr=0.001, dropout_rate=0.5):
+        super(Autoencoder, self).__init__()
+
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, hidden_size_1),
+            nn.ReLU(True),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_size_1, hidden_size_2),
+            nn.ReLU(True),
+            nn.Linear(hidden_size_2, hidden_size_3),
+            nn.ReLU(True)
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(hidden_size_3, hidden_size_2),
+            nn.ReLU(True),
+            nn.Linear(hidden_size_2, hidden_size_1),
+            nn.ReLU(True),
+            nn.Linear(hidden_size_1, input_dim),
+        )
+
+        self.criterion = nn.MSELoss()  # Autoencoder 通常使用 MSELoss 来优化重建误差
+        self.learning_rate = lr
+        self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        return decoded, encoded
+
+
+class Classifier(nn.Module):  # 16, 8, 2
+    def __init__(self, hidden_size_3=16, cls_hidden_size=8, output_size=2, lr=0.001, loss_function="crossentropy", optimizer_function="adam"):
+        self.output_size = output_size  # 记录flatten层的输出维度
+        super(Classifier, self).__init__()
+
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_size_3, cls_hidden_size),
+            nn.ReLU(),
+            nn.Linear(cls_hidden_size, output_size),
+            # nn.Sigmoid()  # 二分类时用 Sigmoid 激活函数
+            # nn.Softmax(dim=1)
+        )
+
+        self.learning_rate = lr
+        self.loss_function = loss_function  # 一审
+        if loss_function == "crossentropy":
+            self.criterion = nn.CrossEntropyLoss()
+        elif loss_function == "focalloss":
+            if output_size == 2:
+                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
+            else:
+                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+        elif loss_function == "nllloss":
+            self.criterion = nn.NLLLoss()
+
+        if optimizer_function == "adam":
+            self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        elif optimizer_function == "sgd":
+            self.optimizer = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)  # 应改为0.5 SGD对这些敏感
+        elif optimizer_function == "rmsprop":
+            self.optimizer = optim.RMSprop(self.parameters(), lr=self.learning_rate)
+
+    def forward(self, x):
+        # 一审
+        logits = self.fc(x)
+        if self.loss_function == "nllloss":
+            return nn.functional.log_softmax(logits, dim=1)
+        return logits
+        # if (self.output_size == 2):
+        #     act = nn.Softmax(dim=1).to(device)
+        #     x = act(x)
+        # return self.fc(x)
+
+
+
+# 训练 Autoencoder
+def train_autoencoder(model, dataloader):
+    
+    # 训练模型
+    train_loss = 0
+    for data in dataloader:
+        inputs, _ = data[0].to(device), data[1].to(device)
+        model.optimizer.zero_grad()
+        decoded, _ = model(inputs)
+        loss = model.criterion(decoded, inputs)
+        loss.backward()
+        model.optimizer.step()
+        train_loss += loss.item()
+
+    train_loss /= len(dataloader)  # 一次迭代的损失
+    # print("train loss = {}".format(train_loss))
+    return train_loss  # 返回每个 epoch 的损失值
+
+
+def val_autoencoder(model, val_dataloader):
+    val_loss = 0 # 积累测试损失
+    with torch.no_grad(): # 上下文管理器，将其包裹的代码块中的梯度计算禁用，以减少内存使用和加速计算。
+        for data in val_dataloader:
+            inputs, _ = data[0].to(device), data[1].to(device)
+            decoded, _  = model(inputs)
+            val_loss += model.criterion(decoded, inputs).item() #计算并累积测试损失
+    val_loss /= len(val_dataloader)  # 一次迭代的损失
+    # print("val loss = {}".format(val_loss))
+    return val_loss  # 返回测试损失
+
+# 训练分类模型
+def train_classifier(classifier, dataloader):
+    # criterion = nn.BCELoss()  # 二分类问题，使用二进制交叉熵损失
+    # optimizer = optim.Adam(classifier.parameters(), lr=learning_rate)
+    true_label_list, pred_label_list= [], []
+    train_loss = 0
+    classifier.train()
+    for data in dataloader:
+        features, labels = data[0].to(device), data[1].to(device)
+        classifier.optimizer.zero_grad()
+        outputs = classifier(features)
+        # loss = classifier.criterion(outputs.view(-1), labels.float())  # BCELoss 需要 0-1 之间的标签
+        loss = classifier.criterion(outputs, labels)
+        loss.backward()
+        classifier.optimizer.step()
+        train_loss += loss.item()
+        true_label_list.append(labels.cpu().detach().numpy())
+        pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())  # softmax
+
+
+    train_loss /= len(dataloader)  # 一次迭代的损失
+    y_true = np.concatenate(true_label_list)
+    y_pred = np.concatenate(pred_label_list)
+    train_acc = accuracy_score(y_true,y_pred)
+    train_precision, train_recall, train_f1 = precision_recall_fscore_support(y_true, y_pred, average='weighted')[:-1]
+
+    return train_loss, train_acc, train_precision, train_recall, train_f1
+
+
+def val_classifier(classifier, dataloader):
+    true_label_list, pred_label_list= [], []
+    # 验证模型
+    classifier.eval()
+    val_loss = 0 # 积累测试损失
+    with torch.no_grad(): # 上下文管理器，将其包裹的代码块中的梯度计算禁用，以减少内存使用和加速计算。
+        for data in dataloader:
+            features, labels = data[0].to(device), data[1].to(device)
+            outputs = classifier(features)
+            # loss = classifier.criterion(outputs.view(-1), labels.float())  # BCELoss 需要 0-1 之间的标签
+            loss = classifier.criterion(outputs, labels)
+            val_loss += loss.item()
+            true_label_list.append(labels.cpu().detach().numpy())
+            pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())  # softmax
+
+    y_true = np.concatenate(true_label_list)
+    y_pred = np.concatenate(pred_label_list)
+    val_loss /= len(dataloader)  # 一次迭代的损失
+    val_acc = accuracy_score(y_true,y_pred)
+    val_precision, val_recall, val_f1 = precision_recall_fscore_support(y_true, y_pred, average='macro')[:-1]
+    
+    return val_loss, val_acc, val_precision, val_recall, val_f1
+
+def extract_features(autoencoder, dataloader):
+    encoder = autoencoder.encoder
+    features = []
+    labels = []
+    for data in dataloader:
+        inputs, label = data
+        inputs, label  = inputs.to(device), label.to(device)
+        with torch.no_grad():
+            encoded_features = encoder(inputs)
+        features.append(encoded_features)
+        labels.append(label)
+    # 连接features和labels
+    features = torch.cat(features, dim=0)  # torch.Size([34, 16])
+    labels = torch.cat(labels, dim=0)  # torch.Size([34])
+    # 构造dataloader
+    dataset =  torch.utils.data.TensorDataset(features, labels)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
+    return loader
+
+
+# 保存模型
+def save_model(autoencoder, classifier, autoencoder_path, classifier_path):
+    torch.save(autoencoder.state_dict(), autoencoder_path)
+    torch.save(classifier.state_dict(), classifier_path)
+    print("模型保存成功！")
+
+# 加载模型
+def load_model(autoencoder, classifier, autoencoder_path, classifier_path):
+    autoencoder.load_state_dict(torch.load(autoencoder_path))
+    classifier.load_state_dict(torch.load(classifier_path))
+    print("模型加载成功！")
+
+
+def test(dataloader, autoencoder, classifier):
+    loader = extract_features(autoencoder, dataloader)  # 数据集loader
+    true_label_list, pred_label_list= [], []
+
+    classifier.eval()
+    with torch.no_grad(): # 上下文管理器，将其包裹的代码块中的梯度计算禁用，以减少内存使用和加速计算。
+        for data in loader:
+            features, labels = data[0].to(device), data[1].to(device)
+            outputs = classifier(features)
+            true_label_list.append(labels.cpu().detach().numpy())
+            pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())  # softmax
+
+    y_true = np.concatenate(true_label_list)
+    y_pred = np.concatenate(pred_label_list)
+    acc = accuracy_score(y_true,y_pred)
+    precision, recall, f1 = precision_recall_fscore_support(y_true, y_pred, average='macro')[:-1]
+    # 还可以增加其他计算指标 mcc，auc等等
+    return acc, precision, recall, f1
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--jobID", default="20250415140649_Zefvf3Fa", type=str)
+    parser.add_argument("--kfold", default=0, type=int)  # 0 表示不使用kfold
+    parser.add_argument("--ratio", default="0", type=str)  # "0" 表示不使用split，值只能以:分割，e.g. 8:1:1 新加
+    
+    parser.add_argument("--epochs", default=5, type=int)
+    parser.add_argument("--es", default=100, type=int)
+    parser.add_argument("--lr", default=0.01, type=float)
+    parser.add_argument("--bs", default=32, type=int, help="batch size")
+    parser.add_argument("--loss_function", default="crossentropy", type=str)  # 交叉熵损失函数 crossentropy, nllloss, focalloss
+    parser.add_argument("--optimizer_function", default="adam", type=str)  # adam, rmsprop, sgd
+    parser.add_argument("--output_size", default=4, type=int)  # 分类数 2
+    parser.add_argument("--type", default="single", type=str)  # all表示运行所有模型，修改result路径；single表示只运行当前模型-默认single
+    parser.add_argument('--random_seed', type=int, default=42, help='随机种子')  # 一审新增
+
+
+    args = parser.parse_args()
+    jobID = args.jobID
+    kfold = args.kfold
+    ratio = args.ratio  # 新加
+    epochs = args.epochs
+    es = args.es
+    lr = args.lr
+    batch_size = args.bs
+    loss_function = args.loss_function
+    optimizer_function = args.optimizer_function
+    output_size = args.output_size  # 分类数
+    type = args.type
+
+    print('jobID =',jobID)
+    print('model = AutoEncoder')
+    print('kfold =', kfold)
+    print('ratio =', ratio)  # 新加
+    print('epochs =', epochs)
+    print('earlystopping =', es)
+    print('learning rate =', lr)
+    print('batch size =', batch_size)
+    print('loss function =', loss_function)
+    print('optimizer function =', optimizer_function)
+    print('label number =', output_size)
+    random_seed = args.random_seed  # 一审新增
+    print('random seed =', random_seed)  # 一审新增
+    set_random_seed(random_seed)  # 一审新增
+
+
+    # jobID = "20240808232043_OtJF37SH"  # 参数待改
+    # kfold = 0 # 默认不使用kfold 参数待改
+    # epochs = 2  # 参数待改
+    # es = 50  # 参数待改 早停epoch
+    # lr = 0.001  # learning rate
+    # loss_function = "crossentropy"  # 交叉熵损失函数 crossentropy, nllloss, focalloss
+    # optimizer_function = "adam"  # adam, rmsprop, sgd
+    # output_size=2  # 分类数
+    # batch_size = 128  # batch size
+    hidden_size_1=64
+    hidden_size_2=32
+    hidden_size_3=16
+    cls_hidden_size=8
+    dropout_rate = 0.0  # dropout层的比例
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if (type == "all"):
+        result_path = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/result/autoencoder/'
+    else:
+        result_path = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/result/'
+    
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
+
+    savename = result_path+'model_autoencoder.pth'
+    savename_cls = result_path+'model_cls.pth'
+    
+    early_stopping = EarlyStopping(es, verbose=True, savename=savename, delta=0.0001)
+    early_stopping_cls = EarlyStopping(es, verbose=True, savename=savename_cls, delta=0.0001)
+    
+    # 处理数据 需要split 新加
+    if (ratio != "0"):
+        process(jobID=jobID, ratio=ratio)
+    
+
+    # 加载训练数据集
+    X_train, Y_train = load_data("train", jobID=jobID)
+    '''训练模型参数'''
+    input_dim = X_train.shape[1]
+
+
+    # 训练模型
+    if (kfold):
+        kfscore = []
+        skf = StratifiedKFold(n_splits=kfold)
+        for i, (train_idx, val_idx) in enumerate(skf.split(X_train, Y_train)):
+            early_stopping = EarlyStopping(es, verbose=True, savename=savename, delta=0.0001)  # 每个fold要新开一个早停
+            early_stopping_cls = EarlyStopping(es, verbose=True, savename=savename_cls, delta=0.0001)
+            print("--------The {} fold is training---------".format(i+1))
+            trainset, valset = torch.FloatTensor(np.array(X_train)[train_idx]), torch.FloatTensor(np.array(X_train)[val_idx])
+            traintag, valtag = torch.LongTensor(np.array(Y_train)[train_idx]), torch.LongTensor(np.array(Y_train)[val_idx])
+
+            train_dataset = torch.utils.data.TensorDataset(trainset, traintag)
+            train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+            val_dataset =  torch.utils.data.TensorDataset(valset, valtag)
+            val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
+
+            # define model
+            autoencoder = Autoencoder(input_dim, hidden_size_1, hidden_size_2, hidden_size_3, lr, dropout_rate).to(device)
+            classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function).to(device)  # 输出分类概率
+
+            # begin training
+            val_loss_s = []  # 存储每个 epoch 的损失值
+            train_loss_s = []  # 存储每个 epoch 的损失值
+            print("--------Training Autoencoder--------")
+            for t in range(epochs):
+                print("--------Begin the {} epoch training---------".format(t+1))
+                # 训练 Autoencoder
+                train_loss = train_autoencoder(autoencoder, train_loader)
+                # 验证Autoencoder
+                val_loss = val_autoencoder(autoencoder, val_loader)
+                print("train loss = {}".format(train_loss))
+                print("validation loss = {}".format(val_loss))
+
+                train_loss_s.append(train_loss)
+                val_loss_s.append(val_loss)
+
+                # 早停
+                early_stopping(val_loss, autoencoder)
+                if early_stopping.early_stop:
+                    print('early stopping')
+                    epochs = t+1  # 保存早停的迭代次数
+                    break
+            print("--------Autoencoder Training Ends--------")
+
+            # 训练并验证分类器 classifier
+            val_acc_s_cls = []  # 存储每个 epoch 的准确率
+            val_loss_s_cls = []  # 存储每个 epoch 的损失值
+            train_acc_s_cls = []  # 存储每个 epoch 的准确率
+            train_loss_s_cls = []  # 存储每个 epoch 的损失值
+            print("--------Training Classifier--------")
+            # 使用训练好的 Autoencoder 提取训练集特征
+            train_loader = extract_features(autoencoder, train_loader)
+            # 使用训练好的 Autoencoder 提取验证集特征
+            val_loader = extract_features(autoencoder, val_loader)
+            
+            for t in range(epochs):
+                print("--------Begin the {} epoch training---------".format(t+1))
+                # 训练 Autoencoder
+                train_loss, train_acc, train_precision, train_recall, train_f1 = train_classifier(classifier, train_loader)
+                # 验证Autoencoder
+                val_loss, val_acc, val_precision, val_recall, val_f1 = val_classifier(classifier, val_loader)
+                print("train loss = {}, acc = {}, precision = {}, recall = {}, f1 = {} ".format(round(train_loss, 4), round(train_acc, 4), round(train_precision, 4), round(train_recall, 4), round(train_f1, 4)))
+                print("validation loss = {}, acc = {}, precision = {}, recall = {}, f1 = {}".format(round(val_loss, 4), round(val_acc, 4), round(val_precision, 4), round(val_recall, 4), round(val_f1, 4)))
+
+                train_loss_s_cls.append(train_loss)
+                val_loss_s_cls.append(val_loss)
+                val_acc_s_cls.append(val_acc)
+                train_acc_s_cls.append(train_acc)
+
+                # 早停
+                early_stopping_cls(val_loss, classifier)
+                if early_stopping_cls.early_stop:
+                    print('early stopping')
+                    epochs = t+1  # 保存早停的迭代次数
+                    break
+            print("--------Classifier Training Ends--------")
+
+            print("--------The {} fold validation result---------".format(i+1))
+            _, val_acc, val_precision, val_recall, val_f1 = val_classifier(classifier, val_loader)
+            print("validation acc = {}, precision = {}, recall = {}, f1 = {}".format(round(val_acc, 4), round(val_precision, 4), round(val_recall, 4), round(val_f1, 4)))
+            kfscore.append(val_classifier(classifier, val_loader))
+
+        # average score
+        kfscore = np.array(kfscore).sum(axis= 0)/float(kfold)  # acc, precision, recall, f1
+        print("--------KFold Final Average Validation Results---------")
+        print("Stratified KFold mean validation acc = {}, precision = {}, recall = {}, f1 = {}".format(round(kfscore[1], 4), round(kfscore[2], 4), round(kfscore[3], 4), round(kfscore[4], 4)))
+
+
+    else:
+        autoencoder = Autoencoder(input_dim, hidden_size_1, hidden_size_2, hidden_size_3, lr, dropout_rate).to(device)
+        classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function).to(device)  # 输出分类概率
+        
+        train_dataset =  torch.utils.data.TensorDataset(X_train, Y_train)
+        train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+        X_val, Y_val = load_data("validate", jobID=jobID)
+        val_dataset =  torch.utils.data.TensorDataset(X_val, Y_val)
+        val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
+
+        # 训练并验证 Autoencoder
+        val_loss_s = []  # 存储每个 epoch 的损失值
+        train_loss_s = []  # 存储每个 epoch 的损失值
+        print("--------Training Autoencoder--------")
+        for t in range(epochs):
+            print("--------Begin the {} epoch training---------".format(t+1))
+            # 训练 Autoencoder
+            train_loss = train_autoencoder(autoencoder, train_loader)
+            # 验证Autoencoder
+            val_loss = val_autoencoder(autoencoder, val_loader)
+            print("train loss = {}".format(train_loss))
+            print("validation loss = {}".format(val_loss))
+
+            train_loss_s.append(train_loss)
+            val_loss_s.append(val_loss)
+
+            # 早停
+            early_stopping(val_loss, autoencoder)
+            if early_stopping.early_stop:
+                print('early stopping')
+                epochs = t+1  # 保存早停的迭代次数
+                break
+        print("--------Autoencoder Training Ends--------")
+
+
+        # 训练并验证分类器 classifier
+        val_acc_s_cls = []  # 存储每个 epoch 的准确率
+        val_loss_s_cls = []  # 存储每个 epoch 的损失值
+        train_acc_s_cls = []  # 存储每个 epoch 的准确率
+        train_loss_s_cls = []  # 存储每个 epoch 的损失值
+        print("--------Training Classifier--------")
+        # 使用训练好的 Autoencoder 提取训练集特征
+        train_loader = extract_features(autoencoder, train_loader)
+        # 使用训练好的 Autoencoder 提取验证集特征
+        val_loader = extract_features(autoencoder, val_loader)
+        
+        for t in range(epochs):
+            print("--------Begin the {} epoch training---------".format(t+1))
+            # 训练 Autoencoder
+            train_loss, train_acc, train_precision, train_recall, train_f1 = train_classifier(classifier, train_loader)
+            # 验证Autoencoder
+            val_loss, val_acc, val_precision, val_recall, val_f1 = val_classifier(classifier, val_loader)
+            print("train loss = {}, acc = {}, precision = {}, recall = {}, f1 = {} ".format(round(train_loss, 4), round(train_acc, 4), round(train_precision, 4), round(train_recall, 4), round(train_f1, 4)))
+            print("validation loss = {}, acc = {}, precision = {}, recall = {}, f1 = {}".format(round(val_loss, 4), round(val_acc, 4), round(val_precision, 4), round(val_recall, 4), round(val_f1, 4)))
+
+
+            train_loss_s_cls.append(train_loss)
+            val_loss_s_cls.append(val_loss)
+            val_acc_s_cls.append(val_acc)
+            train_acc_s_cls.append(train_acc)
+
+            # 早停
+            early_stopping_cls(val_loss, classifier)
+            if early_stopping_cls.early_stop:
+                print('early stopping')
+                epochs = t+1  # 保存早停的迭代次数
+                break
+        print("--------Classifier Training Ends--------")
+    
+
+
+    '''绘制训练-验证曲线'''
+    # 创建子图，分别用于绘制准确率和损失值
+    plt.plot(list(range(1, epochs+1)), train_loss_s_cls, label = 'training loss')  # 测试集loss  acc
+    plt.plot(list(range(1, epochs+1)), val_loss_s_cls, label = 'validation loss')  # 验证集损失  val_acc
+    plt.plot(list(range(1, epochs+1)), train_acc_s_cls, label = 'training accuracy')  # 测试集loss  acc
+    plt.plot(list(range(1, epochs+1)), val_acc_s_cls, label = 'validation accuracy')  # 验证集损失  val_acc
+
+    plt.xlabel("Epoch")  # 坐标轴
+    plt.ylabel("Loss—Accuracy")
+
+    plt.title('acc-loss curve')
+    plt.legend(loc='upper left')
+    # plt.savefig("D:\\wamp\\www\\multi_omics_own\\download_data\\Jobs\\"+jobID+"\\result\\figure"+".png", format='png')
+    plt.savefig(result_path + "figure.png", format='png', dpi=300)
+    plt.close()
+
+    print("Done!")  # 训练结束
+
+    '''保存模型https://blog.csdn.net/chumingqian/article/details/124696856'''
+    
+    # with open(savename, 'wb') as outfile:
+    #     pickle.dump(autoencoder, outfile)
+    # with open(savename_cls, 'wb') as outfile:
+    #     pickle.dump(classifier, outfile)
+    # class Autoencoder(nn.Module):  # feature_dim, 64, 32 ,16
+    # def __init__(self, input_dim, hidden_size_1=64, hidden_size_2=32, hidden_size_3=16, lr=0.001, dropout_rate=0.5):
+    torch.save({
+        'epochs': epochs,
+        'model_state_dict': autoencoder.state_dict(), 
+        'input_dim': input_dim,
+        'hidden_size_1': hidden_size_1,
+        'hidden_size_2': hidden_size_2,
+        'hidden_size_3': hidden_size_3,
+        'learning_rate': lr,
+        'dropout_rate': dropout_rate
+    }, savename)
+
+    torch.save({
+        'model_state_dict': classifier.state_dict(), 
+        'hidden_size_3': hidden_size_3,
+        'cls_hidden_size': cls_hidden_size,
+        'output_size': output_size,
+        'learning_rate': lr,
+        'loss_function': loss_function,
+        'optimizer_function': optimizer_function
+    }, savename_cls)
+
+
+
+    '''加载模型'''
+    # with open(savename, 'rb') as infile:
+    #     autoencoder = pickle.load(infile)
+    # with open(savename_cls, 'rb') as infile:
+    #     classifier = pickle.load(infile)
+
+    '''测试模型'''
+    # 加载测试数据集
+    X_test, Y_test = load_data("test", jobID=jobID)
+    test_dataset =  torch.utils.data.TensorDataset(X_test, Y_test)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
+    acc, precision, recall, f1 = test(dataloader=test_loader, autoencoder = autoencoder, classifier = classifier)
+    print("test acc = {}, precision = {}, recall = {}, f1 = {}".format(acc, precision, recall, f1))
+
+    # 保存模型测试结果
+    # with open("D:\\wamp\\www\\multi_omics_own\\download_data\\Jobs\\"+jobID+"\\result\\"+"test_result.txt", mode="w") as f:
+    with open(result_path + "test_result.txt", mode="w") as f:
+        f.write("test result: \n")
+        f.write("acc = " + str(round(acc, 4)) + "\n")
+        f.write("precision = " + str(round(precision, 4)) + "\n")
+        f.write("recall = " + str(round(recall, 4)) + "\n")
+        f.write("f1 = " + str(round(f1, 4)) + "\n")
+
+
+
+
+

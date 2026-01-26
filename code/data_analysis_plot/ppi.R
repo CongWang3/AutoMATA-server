@@ -1,0 +1,142 @@
+# https://www.jianshu.com/p/5bfb94b0e250
+# 得连外网才能下载，不连外网也能下载，只是很慢，多运行几次脚本就下载完成了
+# setwd("D:/wamp/www/multi_omics_own/code/data_analysis_plot")
+library(tidyverse)
+library(clusterProfiler)
+
+
+library(STRINGdb)  #  安装BiocManager::install("STRINGdb")，https://www.bioconductor.org/packages/release/bioc/vignettes/STRINGdb/inst/doc/STRINGdb.pdf
+library(igraph)
+library(ggraph)
+
+getOption('timeout')  # 解决超时
+options(timeout=100000)
+library(optparse)
+
+
+# 参数
+option_list <- list(
+  make_option(c("-i", "--input"), type="character", default="D:\\wamp\\www\\multi_omics_own\\download_data\\Jobs\\protein_case\\ppi_data.txt", action="store", help="This argument is input path"),
+  make_option(c("-j", "--jobID"), type="character", default="protein_case", action="store", help="This argument is jobID"),  # 默认ppi_example
+  make_option(c("-a", "--type"), type="character", default="SYMBOL", action="store", help="This argument is the type of data, inluding SYMBOL, ENTREZID, and ENSEMBL"), 
+  make_option(c("-b", "--org"), type="character", default="Homo_sapiens", action="store", help="This argument is the organism, inluding Mus_musculus, Homo_sapiens, Drosophila_melanogaster, and Bos_taurus"),   # 默认Mus_musculus
+  make_option(c("-c", "--score_threshold"), type="double", default=400, action="store", help="The interaction results were filtered according to the protein interaction scores."), # 默认400
+  make_option(c("-d", "--plot_type"), type="character", default="linear", action="store", help="This parameter is the type of plot, including linear, kk, and stress"), # 默认linear
+  make_option(c("-e", "--show_num"), type="integer", default=5, action="store", help="Only gene names with more than <show_num> nodes are shown in the plot") # 默认5
+)
+opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw PPI!"))
+print("opt done")
+
+# 创建STRINGdb对象
+# species物种号（from NCBI），version数据库版本号(最新12.0)，score_threshold分数阈值
+type = opt$type  # 基因列表类型，包含SYMBOL、ENSEMBL、ENTREZID。
+score_threshold <- opt$score_threshold  # score_threshold是蛋白互作的得分，此值会用于筛选互作结果，400是默认分值，如果要求严格可以调高此值。根据蛋白互作的得分筛选互作结果
+plot_type <- opt$plot_type  # linear, kk, stress
+show_num <- opt$show_num # 绘图时只显示节点数大于5的基因名称
+# input <- opt$input  # 输入文件
+input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "") 
+# type = "SYMBOL"  # 基因列表类型，包含SYMBOL、ENSEMBL、ENTREZID。
+# species <- 10090
+# org <- "org.Mm.eg.db"
+# score_threshold <- 400  # score_threshold是蛋白互作的得分，此值会用于筛选互作结果，400是默认分值，如果要求严格可以调高此值。根据蛋白互作的得分筛选互作结果
+# plot_type <- "linear"  # linear, kk, stress
+# show_num <- 5 # 绘图时只显示节点数大于5的基因名称
+# input <- "D:\\wamp\\www\\multi_omics_own\\example\\draw_example\\ppi_example.txt"  # 输入文件
+# jobID <- "ppi_example"  # 任务ID
+
+if (opt$org == "Homo_sapiens"){
+    org <- "org.Hs.eg.db"  # 人类的包 待修改为其他物种的包
+    species <- 9606
+    library(org.Hs.eg.db)
+}else if(opt$org == "Mus_musculus"){
+    org <- "org.Mm.eg.db"
+    species <- 10090
+    library(org.Mm.eg.db)
+}else if (opt$org == "Bos_taurus"){
+    species <- 9913
+    org <- "org.Bt.eg.db"
+    library(org.Bt.eg.db)
+}else if (opt$org == "Drosophila_melanogaster"){
+    species <- 7227
+    org <- "org.Dm.eg.db" 
+    library(org.Dm.eg.db)
+}
+
+data <- read.table(input,header = TRUE, check.names = FALSE)
+print("read data done")
+data <- na.omit(data)
+
+string_db <- STRINGdb$new( version="12", species=species,
+                           score_threshold=score_threshold, input_directory="")
+
+
+if(type == "ENSEMBL"){
+    # ENSEMBL-删除小数点后的数字
+    data[,1] <- gsub("\\.\\d+", "", data[,1])  # 删除小数点后的数字
+}
+
+if(type != "ENTREZID") {
+    # 将Gene Symbol / ENSEMBL 转换为Entrez ID
+    # gene <- gene %>% bitr(fromType = type, toType = "ENTREZID", OrgDb = org, drop = T)  # drop NA or not
+    data <- data[,1] %>% bitr(fromType = type, toType = "ENTREZID", OrgDb = org, drop = T)  # drop NA or not
+
+}
+
+if(type == "ENTREZID"){
+    # 修改列名为 ENTREZID
+    colnames(data)[1] <- "ENTREZID"
+}
+
+
+data_mapped <- data %>% string_db$map(my_data_frame_id_col_names = "ENTREZID", 
+                removeUnmappedRows = TRUE)  # 需要下载。data_mapped包含ENTREZID   SYMBOL   STRING_id三列
+# # 报错schannel: CertGetCertificateChain trust error CERT_TRUST_IS_UNTRUSTED_ROOT
+# # 解决：没解决
+# string_db$plot_network( data_mapped$STRING_id )  # 和官网出图相同
+
+
+# 使用get_interactions获取蛋白互作信息，以用于后续可视化
+hit<-data_mapped$STRING_id
+info <- string_db$get_interactions(hit)  # 需要下载. 特别慢。info包含from to combined_score三列
+# 可视化info表格 https://www.jianshu.com/p/5bfb94b0e250
+
+# 转换stringID为Symbol，只取前两列和最后一列
+links <- info %>%
+  mutate(from = data_mapped[match(from, data_mapped$STRING_id), "SYMBOL"]) %>% 
+  mutate(to = data_mapped[match(to, data_mapped$STRING_id), "SYMBOL"]) %>%  
+  dplyr::select(from, to , last_col()) %>% 
+  dplyr::rename(weight = combined_score)
+# 节点数据
+nodes <- links %>% { data.frame(data = c(.$from, .$to)) } %>% distinct()
+# 创建网络图
+# 根据links和nodes创建
+net <- igraph::graph_from_data_frame(d=links,vertices=nodes,directed = F)
+# 添加一些参数信息用于后续绘图
+# V和E是igraph包的函数，分别用于修改网络图的节点（nodes）和连线(links)
+igraph::V(net)$deg <- igraph::degree(net) # 每个节点连接的节点数
+igraph::V(net)$size <- igraph::degree(net)/5 #
+igraph::E(net)$width <- igraph::E(net)$weight/10
+
+
+
+# 只显示节点数大于5(show_num)的基因名称。
+# 这里的参数设置是节点的大小和其连接的线的数量有关，线数量越多则点越大；线的宽度和其蛋白互作的得分有关，得分越高则越宽。
+cir <- FALSE
+if(plot_type == "linear"){
+    cir <- TRUE
+}
+p1 <- ggraph(net, layout = plot_type, circular = cir)+
+  geom_edge_arc(aes(edge_width=width), color = "lightblue", show.legend = F)+
+  geom_node_point(aes(size=size), color="orange", alpha=0.7)+
+  geom_node_text(aes(filter=deg>show_num, label=name), size = 1.5, repel = F)+
+  scale_edge_width(range = c(0.2,1))+
+  scale_size_continuous(range = c(1,10) )+
+  guides(size=F)+
+  theme_graph()
+
+
+# 保存图片
+result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/ppi", sep="")
+for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+    ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width = 7.5, height = 6)
+}
