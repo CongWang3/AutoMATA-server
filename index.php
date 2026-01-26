@@ -19,7 +19,7 @@
             </div>
             <div class="col-md-6 col-lg-7 d-block d-md-none d-lg-block p-0">
                 <!-- <img src="images/billboard-img.jpg" alt="img" class="img-fluid"> -->
-                <img src="images/background.png" alt="img" class="img-fluid">
+                <img src="https://xxs-img.oss-cn-hangzhou.aliyuncs.com/img202601261354486.png" alt="img" class="img-fluid">
             </div>
         </div>
     </div>
