@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoMATA API 文档</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .endpoint {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            margin: 15px 0;
+            padding: 15px;
+        }
+        .method {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            color: white;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .get { background-color: #28a745; }
+        .post { background-color: #007bff; }
+        .put { background-color: #ffc107; color: #212529; }
+        .delete { background-color: #dc3545; }
+        .path {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .description {
+            margin: 10px 0;
+            color: #666;
+        }
+        .example {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .response {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AutoMATA 训练任务管理系统 API 文档</h1>
+        
+        <h2>基础信息</h2>
+        <ul>
+            <li><strong>基础URL</strong>: http://localhost:8000/api</li>
+            <li><strong>文档</strong>: <a href="/docs">Swagger UI</a> | <a href="/redoc">ReDoc</a></li>
+            <li><strong>健康检查</strong>: <a href="/">根路径</a></li>
+        </ul>
+
+        <h2>用户管理 API</h2>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <span class="path">/api/users/</span>
+            <div class="description">创建新用户</div>
+            <div class="example">
+                请求示例:<br>
+                curl -X POST http://localhost:8000/api/users/ \<br>
+                &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+                &nbsp;&nbsp;-d '{"username":"testuser","email":"test@example.com","password":"password123"}'
+            </div>
+            <div class="response">
+                响应示例:<br>
+                {"id": 1, "username": "testuser", "email": "test@example.com", "is_active": true, "created_at": "2026-02-05T19:35:24"}
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <span class="path">/api/users/</span>
+            <div class="description">获取所有用户列表</div>
+            <div class="example">
+                curl http://localhost:8000/api/users/
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <span class="path">/api/users/{user_id}</span>
+            <div class="description">根据ID获取特定用户</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <span class="path">/api/users/{user_id}</span>
+            <div class="description">更新用户信息</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <span class="path">/api/users/{user_id}</span>
+            <div class="description">删除用户</div>
+        </div>
+
+        <h2>训练任务管理 API</h2>
+
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <span class="path">/api/training/tasks</span>
+            <div class="description">创建新的训练任务</div>
+            <div class="example">
+                请求示例:<br>
+                curl -X POST http://localhost:8000/api/training/tasks \<br>
+                &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+                &nbsp;&nbsp;-d '{"task_name":"测试任务","model_type":"supervised","language":"python","parameters":"{\"learning_rate\": 0.01}","dataset_path":"/data/dataset.csv","created_by":1}'
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <span class="path">/api/training/tasks</span>
+            <div class="description">获取训练任务列表</div>
+            <div class="example">
+                curl http://localhost:8000/api/training/tasks
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <span class="path">/api/training/tasks/{task_id}</span>
+            <div class="description">根据ID获取特定训练任务</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <span class="path">/api/training/tasks/{task_id}</span>
+            <div class="description">更新训练任务</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <span class="path">/api/training/tasks/{task_id}</span>
+            <div class="description">删除训练任务</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <span class="path">/api/training/tasks/{task_id}/logs</span>
+            <div class="description">获取特定任务的训练日志</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <span class="path">/api/training/logs</span>
+            <div class="description">添加训练日志</div>
+        </div>
+
+        <h2>状态说明</h2>
+        <ul>
+            <li><strong>任务状态</strong>: pending(待处理), running(运行中), completed(已完成), failed(失败)</li>
+            <li><strong>模型类型</strong>: supervised(监督学习), unsupervised(无监督学习)</li>
+            <li><strong>语言</strong>: python, r</li>
+        </ul>
+    </div>
+</body>
+</html>
