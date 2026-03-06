@@ -6,6 +6,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config.settings import settings
 
+# 导入路由
+from api.routers import auth
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO if settings.DEBUG else logging.WARNING,
@@ -35,6 +38,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 注册路由
+app.include_router(auth.router)
 
 
 @app.on_event("startup")

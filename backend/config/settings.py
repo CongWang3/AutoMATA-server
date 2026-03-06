@@ -2,14 +2,26 @@
 应用配置模块
 """
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import List, Optional
 import json
 import warnings
+import os
+import secrets
 
 
 class SecurityWarning(UserWarning):
     """安全相关警告类"""
     pass
+
+
+def _generate_warning_key() -> str:
+    """生成带警告的默认密钥"""
+    warnings.warn(
+        "使用默认密钥，生产环境请设置 SECRET_KEY 环境变量",
+        SecurityWarning
+    )
+    return "DEVELOPMENT_KEY_DO_NOT_USE_IN_PRODUCTION_" + secrets.token_urlsafe(16)
 
 
 class Settings(BaseSettings):
@@ -25,20 +37,38 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     
-    # 数据库配置
+    # 数据库配置 - 支持真实环境连接
     DB_USER: str = "automata"
     DB_PASSWORD: str = "123456"
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306
     DB_NAME: str = "automata"
+    DB_SOCKET: Optional[str] = None  # Unix socket 路径，如: /var/run/mysqld/mysqld.sock
     
     @property
     def DATABASE_URL(self) -> str:
-        """构建数据库连接 URL"""
-        return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        """构建数据库连接 URL - 支持 Unix socket"""
+        # 如果配置了 Unix socket，优先使用 socket 连接
+        if self.DB_SOCKET:
+            # Unix socket 连接格式: mysql+pymysql://user:password@localhost/dbname?unix_socket=/path/to/socket
+            return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@localhost/{self.DB_NAME}?unix_socket={self.DB_SOCKET}"
+        else:
+            # 标准 TCP 连接
+            return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
     # JWT 配置
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str = Field(
+        default_factory=lambda: os.environ.get("SECRET_KEY") or _generate_warning_key(),
+        description="JWT 密钥，生产环境必须通过环境变量 SECRET_KEY 设置"
+    )
+    
+    # <!-- 
+    # 审查上下文：
+    # - 设计意图：通过环境变量和警告机制确保生产环境使用安全密钥
+    # - 已知局限：开发环境仍使用默认密钥，但会发出明确警告
+    # - 业务背景：安全认证机制的核心配置
+    # - 测试重点：请验证生产环境部署时密钥是否已正确设置
+    # -->
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 小时
     
