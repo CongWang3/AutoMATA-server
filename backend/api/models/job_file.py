@@ -29,7 +29,7 @@ class JobFile(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment="主键 ID")
     job_id = Column(
-        Integer, 
+        String(36), 
         ForeignKey("jobs.id", ondelete="CASCADE"), 
         nullable=False, 
         index=True, 

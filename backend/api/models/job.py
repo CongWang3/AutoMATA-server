@@ -29,7 +29,7 @@ class Job(Base):
     
     __tablename__ = "jobs"
     
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="内部 ID")
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), comment="任务ID (UUID)")
     job_id = Column(String(50), unique=True, nullable=False, index=True, comment="作业 ID")
     job_type = Column(
         Enum(JobType), 
