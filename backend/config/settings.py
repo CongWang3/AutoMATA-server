@@ -2,7 +2,14 @@
 应用配置模块
 """
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import List, Optional
+import json
+import warnings
+
+
+class SecurityWarning(UserWarning):
+    """安全相关警告类"""
+    pass
 
 
 class Settings(BaseSettings):
@@ -43,8 +50,33 @@ class Settings(BaseSettings):
     # Redis 配置（Celery 使用）
     REDIS_URL: str = "redis://localhost:6379/0"
     
+    # CORS 配置 - 支持多环境
+    CORS_ORIGINS: List[str] = ["http://localhost:5173"]
+    
     class Config:
         env_file = ".env"
+        
+        @classmethod
+        def parse_env_var(cls, value: str):
+            """解析环境变量中的 JSON 格式列表"""
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                # 兼容单字符串格式
+                return [value] if value else []
+    
+    @property
+    def is_production(self) -> bool:
+        """判断是否为生产环境"""
+        return not self.DEBUG
+    
+    def validate_cors_config(self) -> None:
+        """验证 CORS 配置"""
+        if self.is_production and "*" in self.CORS_ORIGINS:
+            warnings.warn(
+                "生产环境使用通配符 CORS 配置存在安全风险",
+                SecurityWarning
+            )
 
 
 # 全局配置实例

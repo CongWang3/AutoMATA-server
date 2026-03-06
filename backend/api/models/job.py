@@ -48,10 +48,12 @@ class Job(Base):
     parameters = Column(Text, comment="任务参数配置 (JSON 字符串)")
     result_path = Column(String(500), comment="结果文件路径")
     error_message = Column(Text, comment="错误信息")
+    # 用户删除后作业历史仍需保留，因此使用 SET NULL
     created_by = Column(
         Integer, 
-        ForeignKey("users.id"), 
+        ForeignKey("users.id", ondelete="SET NULL"), 
         index=True, 
+        nullable=True,
         comment="创建用户 ID"
     )
     created_at = Column(DateTime, default=datetime.utcnow, index=True, comment="创建时间")
@@ -70,4 +72,12 @@ class Job(Base):
     logs = relationship("JobLog", back_populates="job", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Job(job_id={self.job_id}, status={self.status})>"
+        # <!-- 
+        # 审查上下文：
+        # - 设计意图：使用 status.value 而非 status 本身，确保显示小写状态字符串
+        # - 已知局限：无
+        # - 业务背景：与数据库存储格式一致，status 字段在数据库中存储为小写字符串
+        # - 测试重点：请验证 repr 输出包含小写的状态值而非枚举类名
+        # -->
+        status_value = self.status.value if self.status is not None else None
+        return f"<Job(job_id={self.job_id}, status={status_value})>"

@@ -26,6 +26,13 @@ example/draw_example/volcano_example.txt
 icomoon
 assets
 
+# Python 环境配置
+# Conda 环境导出文件（用于环境复现，可以提交）
+environment.yml
+environment.yaml
+spec-file.txt
+
+backend/tests/*
 vendor/phpmailer/phpmailer/language/phpmailer.lang-ja.php
 node_modules/.package-lock.json
 node_modules/.bin/esbuild
@@ -1093,3 +1100,6 @@ node_modules/vue-router/dist/experimental/index.d.mts
 node_modules/vue-router/dist/experimental/index.mjs
 node_modules/vue-router/vetur/attributes.json
 node_modules/vue-router/vetur/tags.json
+
+automata-api/nohup.out
+.qoder/

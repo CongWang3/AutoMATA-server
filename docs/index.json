@@ -170,6 +170,63 @@
           "url": "/docs/guides/RESULT_PAGE_GUIDE.md"
         }
       ]
+    },
+    "testing": {
+      "name": "测试报告",
+      "description": "测试执行报告和验证文档",
+      "path": "testing/",
+      "files": [
+        {
+          "filename": "TEST_REPORT_v1.0.md",
+          "title": "AutoMATA Backend 测试报告 v1.0",
+          "type": "test_report",
+          "version": "1.0",
+          "status": "final",
+          "created": "2026-03-06T19:00:00Z",
+          "modified": "2026-03-06T19:00:00Z",
+          "tags": ["testing", "backend", "pytest", "mysql", "unit-testing", "integration-testing"],
+          "summary": "完整的后端测试报告，包括单元测试、模型测试和 MySQL 真实环境验证",
+          "sections": [
+            "执行摘要",
+            "单元测试结果",
+            "模型测试结果",
+            "MySQL 真实环境测试",
+            "质量评估",
+            "已知问题清单",
+            "发布建议"
+          ],
+          "url": "/docs/testing/TEST_REPORT_v1.0.md"
+        }
+      ]
+    },
+    "releases": {
+      "name": "版本发布",
+      "description": "版本发布说明和变更日志",
+      "path": "releases/",
+      "files": [
+        {
+          "filename": "RELEASE_NOTES_v1.0.0-beta.md",
+          "title": "AutoMATA Backend v1.0.0-beta 发布说明",
+          "type": "release_notes",
+          "version": "1.0.0-beta",
+          "status": "final",
+          "created": "2026-03-06T19:05:00Z",
+          "modified": "2026-03-06T19:05:00Z",
+          "tags": ["release", "version", "changelog", "backend", "v1.0.0"],
+          "summary": "v1.0.0-beta 版本的完整发布说明，包括新功能、技术栈、安装指南和变更日志",
+          "sections": [
+            "发布信息",
+            "新增功能",
+            "技术栈",
+            "测试覆盖",
+            "已知问题",
+            "升级指南",
+            "变更日志",
+            "快速开始"
+          ],
+          "url": "/docs/releases/RELEASE_NOTES_v1.0.0-beta.md"
+        }
+      ]
     }
   },
   "quickReference": {
@@ -236,19 +293,22 @@
     ]
   },
   "statistics": {
-    "totalDocuments": 6,
-    "totalLines": 4700,
+    "totalDocuments": 8,
+    "totalLines": 5638,
     "byCategory": {
       "architecture": 1,
       "development": 1,
       "api": 1,
       "database": 1,
       "frontend": 1,
-      "guides": 1
+      "guides": 1,
+      "testing": 1,
+      "releases": 1
     },
     "byStatus": {
       "draft": 5,
-      "stable": 1
+      "stable": 1,
+      "final": 2
     },
     "byType": {
       "architecture": 1,
@@ -256,7 +316,9 @@
       "api-specification": 1,
       "database-design": 1,
       "frontend-design": 1,
-      "guide": 1
+      "guide": 1,
+      "test_report": 1,
+      "release_notes": 1
     }
   },
   "searchKeywords": [
@@ -282,6 +344,14 @@
     "typescript",
     "result-page",
     "frontend-backend-separation",
-    "php"
+    "php",
+    "testing",
+    "pytest",
+    "unit-testing",
+    "integration-testing",
+    "release",
+    "version",
+    "changelog",
+    "beta"
   ]
 }

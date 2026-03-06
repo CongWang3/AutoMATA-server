@@ -1,7 +1,7 @@
 """
 作业文件关联模型
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -22,17 +22,22 @@ class JobFile(Base):
     
     __tablename__ = "job_files"
     
+    # 组合唯一约束：同一个任务的同一个文件在同一角色下只能有一条记录
+    __table_args__ = (
+        UniqueConstraint("job_id", "file_id", "file_role", name="uk_job_file_role"),
+    )
+    
     id = Column(Integer, primary_key=True, autoincrement=True, comment="主键 ID")
     job_id = Column(
         Integer, 
-        ForeignKey("jobs.id"), 
+        ForeignKey("jobs.id", ondelete="CASCADE"), 
         nullable=False, 
         index=True, 
         comment="任务 ID"
     )
     file_id = Column(
         String(50), 
-        ForeignKey("files.id"), 
+        ForeignKey("files.id", ondelete="CASCADE"), 
         nullable=False, 
         index=True, 
         comment="文件 ID"
