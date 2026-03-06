@@ -35,6 +35,7 @@ class File(Base):
     )
     download_count = Column(Integer, default=0, comment="下载次数")
     is_public = Column(Boolean, default=False, comment="是否公开")
+    delete_marked_at = Column(DateTime, nullable=True, comment="标记删除时间")
     created_at = Column(DateTime, default=datetime.utcnow, index=True, comment="创建时间")
     updated_at = Column(
         DateTime, 

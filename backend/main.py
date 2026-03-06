@@ -7,7 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import settings
 
 # 导入路由
-from api.routers import auth
+from api.routers import auth, files
+
+# 导入定时任务
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from sqlalchemy.orm import Session
+from config.database import get_db
+from api.services.file_service import FileUploadService
+from api.models.user import User
 
 # 配置日志
 logging.basicConfig(
@@ -41,7 +49,61 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(auth.router)
+app.include_router(files.router)
 
+
+# 创建全局调度器
+scheduler = BackgroundScheduler()
+
+def cleanup_marked_files_task():
+    """定时清理标记删除的文件（带重试机制）"""
+    # <!-- 
+    # 审查上下文：
+    # - 设计意图：实现带重试机制的定时清理任务，提高任务执行可靠性
+    # - 已知局限：使用简单的退避重试策略，复杂场景可考虑专业任务队列
+    # - 业务背景：确保文件系统垃圾回收的稳定执行
+    # - 测试重点：请验证重试逻辑、失败告警、任务状态监控
+    # -->
+    
+    import time
+    import logging
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        db_gen = None
+        try:
+            # 获取数据库会话
+            db_gen = get_db()
+            db = next(db_gen)
+            
+            # 查找系统清理用户
+            system_user = db.query(User).filter(User.username == "system_cleaner").first()
+            if not system_user:
+                logger.error("系统清理用户不存在")
+                return
+                
+            # 创建文件服务实例
+            file_service = FileUploadService(db, system_user)
+            
+            result = file_service.cleanup_marked_files()
+            logger.info(f"定时清理任务完成: {result}")
+            return  # 成功执行后退出
+            
+        except Exception as e:
+            retry_count += 1
+            if retry_count < max_retries:
+                # 指数退避：1秒, 2秒, 4秒
+                sleep_time = 2 ** (retry_count - 1)
+                logger.warning(f"定时清理任务第{retry_count}次失败，{sleep_time}秒后重试: {e}")
+                time.sleep(sleep_time)
+            else:
+                logger.error(f"定时清理任务连续失败{max_retries}次，需要人工干预: {e}")
+                # 这里可以添加告警通知机制
+        finally:
+            # 确保数据库会话正确关闭
+            if db_gen is not None:
+                db_gen.close()
 
 @app.on_event("startup")
 async def startup_event():
@@ -57,11 +119,23 @@ async def startup_event():
     if settings.is_production:
         logger.warning(f"生产环境 CORS 配置：{settings.CORS_ORIGINS}")
         settings.validate_cors_config()
+    
+    # 启动定时清理任务（每小时执行一次）
+    scheduler.add_job(
+        cleanup_marked_files_task,
+        IntervalTrigger(hours=1),
+        id='file_cleanup_job',
+        name='文件清理任务',
+        replace_existing=True
+    )
+    scheduler.start()
+    logger.info("定时清理任务已启动")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """应用关闭时执行"""
+    scheduler.shutdown()
     logger.info(f"{settings.APP_NAME} 已关闭")
 
 
