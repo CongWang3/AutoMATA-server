@@ -1,6 +1,13 @@
 // API配置和通用工具
+// <!-- 
+// 审查上下文：
+// - 设计意图：使用环境变量配置API端点，支持不同环境部署
+// - 已知局限：当前配置适用于开发环境，生产环境需要HTTPS和域名配置
+// - 业务背景：支持前后端分离部署，便于维护和扩展
+// - 测试重点：验证不同环境下API连接的正确性
+// -->
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8000/api',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api',
   TIMEOUT: 10000,
   HEADERS: {
     'Content-Type': 'application/json',

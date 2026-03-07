@@ -6,7 +6,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: () => import('../views/Index.vue')
+      component: () => import('../views/Home.vue')
     },
     {
       path: '/about',
@@ -18,22 +18,22 @@ const router = createRouter({
     },
     // 数据处理相关路由
     {
-      path: '/genome',
+      path: '/data-process/genome',
       name: 'genome',
-      component: () => import('../views/AboutView.vue') // 临时使用 AboutView，后续替换为实际组件
+      component: () => import('../views/AboutView.vue')
     },
     {
-      path: '/transcriptome',
+      path: '/data-process/transcriptome',
       name: 'transcriptome',
       component: () => import('../views/AboutView.vue')
     },
     {
-      path: '/protein',
+      path: '/data-process/protein',
       name: 'protein',
       component: () => import('../views/AboutView.vue')
     },
     {
-      path: '/integration',
+      path: '/data-process/integration',
       name: 'integration',
       component: () => import('../views/AboutView.vue')
     },
@@ -41,7 +41,7 @@ const router = createRouter({
     {
       path: '/model/train/supervised',
       name: 'train-supervised',
-      component: () => import('../views/model/components/AutoMATATrainingSupervised.vue')
+      component: () => import('../views/ModelTrain/Supervised.vue')
     },
     {
       path: '/model/train/unsupervised',
@@ -67,6 +67,21 @@ const router = createRouter({
     {
       path: '/analysis',
       name: 'analysis',
+      component: () => import('../views/AboutView.vue')
+    },
+    {
+      path: '/analysis/differential',
+      name: 'analysis-differential',
+      component: () => import('../views/AboutView.vue')
+    },
+    {
+      path: '/analysis/enrichment',
+      name: 'analysis-enrichment',
+      component: () => import('../views/AboutView.vue')
+    },
+    {
+      path: '/analysis/visualization',
+      name: 'analysis-visualization',
       component: () => import('../views/AboutView.vue')
     },
     // 帮助页面路由
