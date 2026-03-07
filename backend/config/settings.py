@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 小时
     
     # 文件上传配置
-    MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB
+    MAX_UPLOAD_SIZE: int = 500 * 1024 * 1024  # 500MB，增加上传限制
     UPLOAD_DIR: str = "./uploaded_files"
     ALLOWED_FILE_TYPES: list = ["txt", "csv", "xlsx", "xls"]
     
@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     
     # CORS 配置 - 支持多环境
-    CORS_ORIGINS: List[str] = ["http://localhost:5173"]
+    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:5174"]
     
     class Config:
         env_file = ".env"

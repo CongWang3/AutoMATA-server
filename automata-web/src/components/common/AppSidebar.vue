@@ -61,13 +61,13 @@
     </div>
     
     <div class="sidebar-footer" v-if="!collapsed">
-      <div class="user-info" v-if="userStore.user">
-        <el-avatar :size="32" :src="userStore.user.avatar">
-          {{ userStore.user.username.charAt(0).toUpperCase() }}
+      <div class="user-info" v-if="userStore.userInfo">
+        <el-avatar :size="32" :src="userStore.userInfo.avatar_url">
+          {{ userStore.userInfo.username.charAt(0).toUpperCase() }}
         </el-avatar>
         <div class="user-details">
-          <div class="username">{{ userStore.user.username }}</div>
-          <div class="email">{{ userStore.user.email }}</div>
+          <div class="username">{{ userStore.userInfo.username }}</div>
+          <div class="email">{{ userStore.userInfo.email }}</div>
         </div>
       </div>
       <div class="quick-actions">
@@ -130,7 +130,7 @@ function handleMenuSelect(index: string) {
 
 function logout() {
   userStore.logout()
-  router.push('/login')
+  // 路由跳转已在 userStore.logout() 中处理
 }
 </script>
 

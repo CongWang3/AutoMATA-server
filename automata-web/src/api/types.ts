@@ -1,5 +1,87 @@
 // API类型定义
 
+// 后端API基础响应类型
+export interface BaseApiResponse {
+  detail?: string
+}
+
+// 认证相关类型
+export interface User {
+  username?: string
+  email?: string
+  password?: string
+}
+
+export interface UserRegister {
+  username: string
+  email: string
+  password: string
+}
+
+export interface UserLogin {
+  username: string
+  password: string
+}
+
+export interface UserInfo {
+  id: number
+  username: string
+  email: string
+  created_at: string
+  is_active: boolean
+  avatar_url: string | null
+  is_admin: boolean
+  last_login_at: string | null
+}
+
+export interface AuthResponse {
+  access_token: string
+  token_type: string
+  expires_in: number
+  user: UserInfo
+}
+
+// 文件管理相关类型
+export interface FileUploadRequest {
+  file: File
+  file_type: string
+  description?: string
+}
+
+export interface FileInfo {
+  id: string
+  filename: string
+  original_name: string
+  file_path: string
+  file_size: number
+  file_type: string
+  md5_hash: string
+  uploaded_by: number
+  upload_time: string
+  delete_marked_at: string | null
+}
+
+export interface FileListResponse {
+  total: number
+  files: FileInfo[]
+  page: number
+  size: number
+}
+
+export interface FileDeleteResponse {
+  message: string
+  file_id: string
+  status: string
+}
+
+// WebSocket消息类型
+export interface WebSocketProgressMessage {
+  event: string
+  uploaded_bytes: number
+  total_bytes: number
+  progress_percent: number
+}
+
 // 可用模型类型
 export interface AvailableModel {
   model_type: string
@@ -45,32 +127,8 @@ export interface TrainingLog {
   timestamp: string
 }
 
-// 用户相关类型
-export interface User {
-  id: number
-  username: string
-  email: string
-  is_active: boolean
-  created_at: string
-  avatar?: string
-}
-
-export interface UserLogin {
-  username: string
-  password: string
-}
-
-export interface UserRegister {
-  username: string
-  email: string
-  password: string
-}
-
-export interface AuthResponse {
-  access_token: string
-  token_type: string
-  user: User
-}
+// 注意：User 相关类型已在前面定义（UserInfo, UserLogin, UserRegister, AuthResponse）
+// 为避免类型冲突，此处不再重复定义
 
 // 文件上传相关类型
 export interface UploadResponse {

@@ -7,8 +7,8 @@
 // - 测试重点：验证不同环境下API连接的正确性
 // -->
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api',
-  TIMEOUT: 10000,
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
+  TIMEOUT: 300000, // 5分钟超时，适应大文件上传
   HEADERS: {
     'Content-Type': 'application/json',
   }

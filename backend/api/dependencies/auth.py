@@ -45,9 +45,25 @@ def get_current_user(
     Raises:
         HTTPException: 认证失败时抛出 401 错误
     """
-    token = credentials.credentials
-    user = auth_service.get_current_user(token)
-    return user
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        token = credentials.credentials
+        logger.debug(f"开始验证token: {token[:20]}...")
+        user = auth_service.get_current_user(token)
+        logger.debug(f"Token验证成功，用户ID: {user.id}")
+        return user
+    except HTTPException as e:
+        logger.warning(f"Token验证失败: {e.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"Token验证过程中发生未预期错误: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="认证服务异常",
+            headers={"WWW-Authenticate": "Bearer"}
+        ) from e
 
 
 def get_current_active_user(

@@ -9,7 +9,7 @@
               class="social-icon text-primary fs-5 me-2" 
               icon="mdi:location"
               style="vertical-align: text-bottom"
-            ></iconify-icon>
+            />
             <span class="fw-bold">Address: </span> Northwest A&amp;F University
           </p>
           <p>
@@ -17,7 +17,7 @@
               class="social-icon text-primary fs-5 me-2" 
               icon="ic:baseline-email"
               style="vertical-align: text-bottom"
-            ></iconify-icon>
+            />
             <span class="fw-bold">Email: </span>
             wangc@nwsuaf.edu.cn <br/>
             &emsp;&emsp;&emsp;&emsp;&emsp;&nbsp;fuyi.li@nwafu.edu.cn
@@ -38,7 +38,7 @@
                 <router-link to="/model/train/supervised" class="footer-link">Model</router-link>
               </li>
               <li class="menu-item mb-2">
-                <router-link to="/data-analysis" class="footer-link">Data Analyse</router-link>
+                <router-link to="/data-analysis" class="footer-link">Data Analysis</router-link>
               </li>
               <li class="menu-item mb-2">
                 <router-link to="/help" class="footer-link">Help</router-link>
@@ -71,42 +71,42 @@
               <ul class="d-flex list-unstyled gap-3">
                 <li class="social">
                   <a href="https://www.facebook.com/home.php" target="_blank">
-                    <iconify-icon 
+                    <IconifyIcon 
                       class="social-icon fs-4 me-2" 
                       icon="ri:facebook-fill"
-                    ></iconify-icon>
+                    />
                   </a>
                 </li>
                 <li class="social">
                   <a href="https://x.com/i/flow/login" target="_blank">
-                    <iconify-icon 
+                    <IconifyIcon 
                       class="social-icon fs-4 me-2" 
                       icon="ri:twitter-fill"
-                    ></iconify-icon>
+                    />
                   </a>
                 </li>
                 <li class="social">
                   <a href="https://www.pinterest.com/#top" target="_blank">
-                    <iconify-icon 
+                    <IconifyIcon 
                       class="social-icon fs-4 me-2" 
                       icon="ri:pinterest-fill"
-                    ></iconify-icon>
+                    />
                   </a>
                 </li>
                 <li class="social">
                   <a href="https://www.instagram.com/" target="_blank">
-                    <iconify-icon 
+                    <IconifyIcon 
                       class="social-icon fs-4 me-2" 
                       icon="ri:instagram-fill"
-                    ></iconify-icon>
+                    />
                   </a>
                 </li>
                 <li class="social">
                   <a href="https://www.youtube.com/" target="_blank">
-                    <iconify-icon 
+                    <IconifyIcon 
                       class="social-icon fs-4 me-2" 
                       icon="ri:youtube-fill"
-                    ></iconify-icon>
+                    />
                   </a>
                 </li>
               </ul>

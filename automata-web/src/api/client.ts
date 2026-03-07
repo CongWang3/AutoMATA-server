@@ -7,6 +7,12 @@ export class ApiClient {
   private client: AxiosInstance
 
   constructor(baseURL: string = API_CONFIG.BASE_URL) {
+    console.log('🔧 API Client 初始化:', { 
+      baseURL, 
+      envBaseUrl: import.meta.env.VITE_API_BASE_URL,
+      configBaseUrl: API_CONFIG.BASE_URL 
+    })
+    
     this.client = axios.create({
       baseURL,
       timeout: API_CONFIG.TIMEOUT,
@@ -19,9 +25,9 @@ export class ApiClient {
   private setupInterceptors(): void {
     // 请求拦截器
     this.client.interceptors.request.use(
-      (config: AxiosRequestConfig) => {
+      (config) => {
         // 添加认证token
-        const token = localStorage.getItem('authToken')
+        const token = localStorage.getItem('access_token')
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`
         }
@@ -71,8 +77,9 @@ export class ApiClient {
           return data?.detail || data?.message || '请求参数错误'
         case 401:
           // 处理未授权，可能需要跳转登录
-          localStorage.removeItem('authToken')
-          window.location.href = '/login'
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('user_info')
+          localStorage.removeItem('token_expiry')
           return '未授权访问'
         case 403:
           return '权限不足'

@@ -183,12 +183,15 @@ class FileUploadService:
         try:
             # 流式读取和写入，避免大文件占用过多内存
             uploaded_bytes = 0
+            total_written = 0
             
             with open(file_path, "wb") as f:
                 chunk_size = 8192  # 8KB chunks
                 while chunk := file.file.read(chunk_size):
                     f.write(chunk)
-                    uploaded_bytes += len(chunk)
+                    written = len(chunk)
+                    uploaded_bytes += written
+                    total_written += written
                     # 调用进度回调
                     if progress_callback:
                         # total_bytes 可能为 None，则只上报 uploaded_bytes
@@ -196,6 +199,17 @@ class FileUploadService:
                             progress_callback(uploaded_bytes, total_bytes)
                         else:
                             progress_callback(uploaded_bytes, 0)
+            
+            # 验证文件是否完整保存
+            saved_file_size = file_path.stat().st_size
+            logger.info(f"💾 文件保存完成: {filename}, 期望大小: {total_bytes or 'unknown'}, 实际大小: {saved_file_size}")
+            
+            if total_bytes and saved_file_size != total_bytes:
+                logger.error(f"🚨 文件大小不匹配! 期望: {total_bytes}, 实际: {saved_file_size}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"文件保存不完整: 期望 {total_bytes} bytes, 实际 {saved_file_size} bytes"
+                )
             
             return str(file_path)
         except Exception as e:
@@ -260,9 +274,10 @@ class FileUploadService:
         
         # 5. 使用数据库事务和排他锁防止竞态条件
         try:
-            # 先尝试获取文件记录的排他锁
+            # 先尝试获取文件记录的排他锁（仅针对当前用户的相同文件）
             existing_file = self.db.query(File).filter(
-                File.md5_hash == md5_hash
+                File.md5_hash == md5_hash,
+                File.uploaded_by == self.user.id  # 限定为当前用户
             ).with_for_update().first()
             
             if existing_file:
@@ -270,8 +285,18 @@ class FileUploadService:
                 existing_file.download_count += 1
                 self.db.commit()
                 self.db.refresh(existing_file)
-                logger.info(f"文件去重成功: {existing_file.filename} (MD5: {md5_hash[:8]}...)")
-                return existing_file
+                logger.info(f"⚠️ 文件去重: {existing_file.filename} (MD5: {md5_hash[:8]}...)")
+                logger.info(f"📊 原始文件信息 - 大小: {existing_file.file_size} bytes, 路径: {existing_file.file_path}")
+                
+                # 验证文件物理存在
+                file_path = Path(existing_file.file_path)
+                if not file_path.exists():
+                    logger.warning(f"🚨 文件去重失败：物理文件不存在 {existing_file.file_path}")
+                    # 文件不存在，继续正常上传流程
+                    self.db.rollback()
+                else:
+                    logger.info(f"✅ 文件去重成功: {existing_file.filename} (MD5: {md5_hash[:8]}...)")
+                    return existing_file
         except Exception as e:
             # 如果锁获取失败，回滚并继续正常流程
             self.db.rollback()
@@ -305,6 +330,17 @@ class FileUploadService:
             self.db.add(db_file)
             self.db.commit()
             self.db.refresh(db_file)
+            
+            # 验证数据库记录是否正确创建
+            verified_file = self.db.query(File).filter(File.id == db_file.id).first()
+            if not verified_file:
+                logger.error(f"🚨 数据库记录验证失败: 文件ID {db_file.id} 不存在")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="数据库记录创建失败"
+                )
+            
+            logger.info(f"✅ 数据库记录验证成功: {verified_file.filename}")
             return db_file
         except Exception as e:
             # 如果数据库保存失败，删除已保存的文件
@@ -328,12 +364,14 @@ class FileUploadService:
         Returns:
             (文件列表, 总数)
         """
+        logger.info(f"📋 为用户 {self.user.id} 查询文件列表: page={page}, size={size}")
         offset = (page - 1) * size
         query = self.db.query(File).filter(File.uploaded_by == self.user.id)
         
         total = query.count()
         files = query.order_by(File.created_at.desc()).offset(offset).limit(size).all()
         
+        logger.info(f"✅ 用户 {self.user.id} 文件列表查询完成: 找到 {len(files)} 个文件，总计 {total} 个")
         return files, total
     
     def get_file_by_id(self, file_id: str) -> Optional[File]:

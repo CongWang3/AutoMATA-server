@@ -95,6 +95,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (e: 'file-selected', files: File[]): void
+  (e: 'upload-start', files: File[]): void
   (e: 'upload-progress', progress: number): void
   (e: 'upload-complete', response: any): void
   (e: 'upload-error', error: Error): void
@@ -191,13 +192,13 @@ const uploadFiles = async () => {
 
   try {
     uploadProgress.value = 0
-    const formData = new FormData()
     
-    selectedFiles.value.forEach((file, index) => {
-      formData.append(`file${index}`, file)
-    })
-
-    // 模拟上传进度
+    // 调用实际的上传API
+    // 注意：这里需要父组件传入上传函数或者使用全局store
+    // 临时解决方案：触发upload-complete事件让父组件处理
+    emit('upload-start', selectedFiles.value)
+    
+    // 模拟上传进度（实际应该由API回调控制）
     const interval = setInterval(() => {
       if (uploadProgress.value < 90) {
         uploadProgress.value += 10
@@ -205,7 +206,7 @@ const uploadFiles = async () => {
       }
     }, 200)
 
-    // 这里应该调用实际的上传API
+    // 等待父组件处理上传
     setTimeout(() => {
       clearInterval(interval)
       uploadProgress.value = 100

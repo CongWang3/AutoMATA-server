@@ -113,14 +113,19 @@ export const useUIStore = defineStore('ui', () => {
   }
   
   function initializeTheme() {
+    console.log('🎨 initializeTheme 开始')
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
     if (savedTheme) {
       theme.value = savedTheme
+      console.log('💾 使用保存的主题:', savedTheme)
     } else {
       // 检测系统主题偏好
+      console.log('🖥️ 检测系统主题偏好...')
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
       theme.value = prefersDark ? 'dark' : 'light'
+      console.log('🎯 检测结果:', theme.value)
     }
+    console.log('🎨 initializeTheme 完成')
   }
   
   function generateId(): string {

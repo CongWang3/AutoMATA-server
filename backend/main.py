@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import settings
 
 # 导入路由
-from api.routers import auth, files
+from api.routers import auth, files, chunked_download
 
 # 导入定时任务
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -17,10 +17,21 @@ from config.database import get_db
 from api.services.file_service import FileUploadService
 from api.models.user import User
 
-# 配置日志
+# 配置日志到项目目录
+import os
+from pathlib import Path
+
+# 创建日志目录
+log_dir = Path(__file__).parent / "logs"
+log_dir.mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO if settings.DEBUG else logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_dir / "fastapi.log", encoding='utf-8'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -39,17 +50,20 @@ app = FastAPI(
 # - 已知局限：开发环境默认允许 localhost:5173（Vue Vite 默认端口）
 # - 业务背景：docs/architecture/DESIGN.md - 前后端分离架构需要跨域配置
 # - 测试重点：请验证不同环境下 CORS 配置是否正确，特别是前端携带认证请求时
+# 增加请求体大小限制以支持大文件上传
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=3600
 )
 
 # 注册路由
 app.include_router(auth.router)
 app.include_router(files.router)
+app.include_router(chunked_download.router, prefix="/api/v1/files", tags=["分片下载"])
 
 
 # 创建全局调度器

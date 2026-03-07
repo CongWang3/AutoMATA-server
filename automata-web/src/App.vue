@@ -4,7 +4,6 @@ import { useUserStore } from './stores/user'
 import { useUIStore } from './stores/ui'
 import AppHeader from './components/common/AppHeader.vue'
 import AppFooter from './components/common/AppFooter.vue'
-import AppSidebar from './components/common/AppSidebar.vue'
 import LoadingSpinner from './components/common/LoadingSpinner.vue'
 import ErrorBoundary from './components/common/ErrorBoundary.vue'
 import { RouterView } from 'vue-router'
@@ -14,14 +13,24 @@ const uiStore = useUIStore()
 
 // 初始化应用
 onMounted(() => {
-  // 从localStorage恢复用户状态
-  userStore.initializeFromStorage()
+  // 开发环境下减少初始化日志
+  if (import.meta.env.DEV) {
+    console.log('🔍 App mounted - 开始初始化...')
+  }
   
-  // 初始化主题
-  uiStore.initializeTheme()
-  
-  // 设置全局loading状态监听
-  // 这里可以根据需要添加全局loading控制逻辑
+  try {
+    // 从localStorage恢复用户状态（异步执行）
+    userStore.initializeFromStorage()
+    
+    // 初始化主题（轻量级操作）
+    uiStore.initializeTheme()
+    
+    if (import.meta.env.DEV) {
+      console.log('⚡ App初始化完成')
+    }
+  } catch (error) {
+    console.error('❌ App初始化出错:', error)
+  }
 })
 </script>
 
@@ -34,14 +43,11 @@ onMounted(() => {
       text="加载中..."
     />
     
-    <!-- 侧边栏 -->
-    <AppSidebar />
+    <!-- 顶部导航栏（包含菜单） -->
+    <AppHeader />
     
     <!-- 主内容区域 -->
     <div class="main-wrapper">
-      <!-- 顶部导航 -->
-      <AppHeader />
-      
       <!-- 页面内容 -->
       <main class="main-content">
         <ErrorBoundary>
@@ -73,6 +79,7 @@ onMounted(() => {
 <style scoped>
 .app-container {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background-color: #f5f7fa;
 }

@@ -211,9 +211,15 @@ class AuthService:
             HTTPException: Token 无效或用户不存在时抛出 401 错误
         """
         from api.utils.security import verify_token
+        import logging
+        logger = logging.getLogger(__name__)
         
+        logger.info(f"开始验证token: {token[:20]}...")
         payload = verify_token(token)
+        logger.info(f"Token解析结果: {payload}")
+        
         if payload is None:
+            logger.error("Token验证失败：payload为None")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="无效的认证凭证",
@@ -221,15 +227,22 @@ class AuthService:
             )
         
         user_id: str = payload.get("sub")
+        logger.info(f"从payload中提取用户ID: {user_id}")
+        
         if user_id is None:
+            logger.error("Token验证失败：sub字段为空")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="无效的认证凭证",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
+        logger.info(f"查询用户ID: {user_id}")
         user = self.db.query(User).filter(User.id == int(user_id)).first()
+        logger.info(f"查询结果: {user}")
+        
         if user is None:
+            logger.error(f"用户不存在: ID={user_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户不存在",
@@ -237,12 +250,14 @@ class AuthService:
             )
         
         if not user.is_active:
+            logger.error(f"账户被禁用: user_id={user.id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="账户已被禁用",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
+        logger.info(f"认证成功: user_id={user.id}")
         return user
 
 
