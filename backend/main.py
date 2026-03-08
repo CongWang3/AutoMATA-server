@@ -2,6 +2,7 @@
 AutoMATA 后端应用入口
 """
 import logging
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config.settings import settings
@@ -44,7 +45,7 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# 配置 CORS
+# 配置 CORS - 在路由注册之前
 # 审查上下文：
 # - 设计意图：使用配置化的 CORS 来源，避免生产环境使用 "*" 带来的安全问题
 # - 已知局限：开发环境默认允许 localhost:5173（Vue Vite 默认端口）
@@ -180,9 +181,12 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+    # 使用单进程模式以支持 WebSocket 连接状态共享
+    # 下载阻塞问题通过 run_in_executor + 大线程池解决
     uvicorn.run(
         "main:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=False  # 禁用文件重载避免监视器冲突
+        reload=False,  # 禁用文件重载避免监视器冲突
+        timeout_keep_alive=65  # Keep-alive 超时
     )

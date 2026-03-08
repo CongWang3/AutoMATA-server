@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from typing import List, Set
 import json
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import logging
 from collections import defaultdict
 
@@ -18,6 +19,9 @@ from api.schemas.file import FileResponse, FileListResponse, FileUploadRequest
 from api.models.user import User
 from api.models.file import File
 from api.utils.download_queue import download_queue_manager, DownloadTask
+
+# 创建本地下载线程池（避免循环导入）
+DOWNLOAD_THREAD_POOL = ThreadPoolExecutor(max_workers=50, thread_name_prefix="download_worker")
 
 logger = logging.getLogger(__name__)
 
@@ -172,11 +176,27 @@ async def websocket_progress(websocket: WebSocket):
     # - 测试重点：请验证WebSocket连接建立、认证、消息处理流程
     # -->
     
+    client_host = websocket.client.host if websocket.client else "unknown"
+    logger.info(f"[WS] 新连接请求来自: {client_host}")
+    
     await websocket.accept()
+    logger.info(f"[WS] 连接已接受: {client_host}")
     
     try:
-        # 等待客户端发送认证消息
-        auth_message = await websocket.receive_text()
+        # 等待客户端发送认证消息（添加超时）
+        import asyncio
+        try:
+            logger.info(f"[WS] 等待认证消息...")
+            auth_message = await asyncio.wait_for(
+                websocket.receive_text(),
+                timeout=30.0  # 30秒超时
+            )
+            logger.info(f"[WS] 收到消息: {auth_message[:100]}...")
+        except asyncio.TimeoutError:
+            logger.warning(f"[WS] 等待认证消息超时: {client_host}")
+            await websocket.close(code=4002, reason="Authentication timeout")
+            return
+        
         auth_data = json.loads(auth_message)
         
         if auth_data.get('type') == 'auth' and 'token' in auth_data:
@@ -294,19 +314,12 @@ async def upload_file(
         description=description
     )
     
-    # 创建进度回调函数（同步函数，内部异步发送）
+    # 创建进度回调函数（同步函数）
     def progress_callback(uploaded_bytes: int, total_bytes: int):
         progress_percent = (uploaded_bytes / total_bytes * 100) if total_bytes > 0 else 0
-        progress_data = {
-            "event": "upload_progress",
-            "uploaded_bytes": uploaded_bytes,
-            "total_bytes": total_bytes,
-            "progress_percent": round(progress_percent, 2)
-        }
-        # 异步发送：不阻塞当前上传逻辑
-        asyncio.create_task(
-            connection_manager.send_progress(str(current_user.id), progress_data, timeout=3.0)
-        )
+        logger.info(f"📈 上传进度: {uploaded_bytes}/{total_bytes} bytes ({progress_percent:.1f}%)")
+        # 暂时不发送 WebSocket 进度更新，避免事件循环问题
+        # 后续可以通过其他方式实现进度通知
     
     # 处理文件上传
     service = FileUploadService(db, current_user)
@@ -379,7 +392,8 @@ async def public_download_file(
     """
     公开下载端点（带临时token验证）
     
-    使用异步流式传输，支持大文件下载，不阻塞服务器其他请求
+    使用 FileResponse 进行高效的文件传输，不阻塞事件循环
+    FileResponse 使用系统级 sendfile，由操作系统处理文件传输
     """
     import time
     import hmac
@@ -387,6 +401,7 @@ async def public_download_file(
     import urllib.parse
     from config.settings import settings
     from pathlib import Path
+    from fastapi.responses import FileResponse
     
     # 验证时间戳（5分钟有效期）
     current_time = int(time.time())
@@ -401,7 +416,7 @@ async def public_download_file(
     if not hmac.compare_digest(token, expected_signature):
         raise HTTPException(status_code=403, detail="无效的下载链接")
     
-    # 获取文件信息后立即关闭数据库会话
+    # 获取文件信息
     from api.models.file import File as FileModel
     db_file = db.query(FileModel).filter(FileModel.id == file_id).first()
     
@@ -411,7 +426,6 @@ async def public_download_file(
     # 保存需要的文件信息
     file_path_str = db_file.file_path
     original_name = db_file.original_name
-    file_size = Path(file_path_str).stat().st_size if Path(file_path_str).exists() else 0
     
     # 显式关闭数据库会话
     db.close()
@@ -420,19 +434,21 @@ async def public_download_file(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="文件不存在")
     
+    file_size = file_path.stat().st_size
+    
     # 处理中文文件名
     encoded_filename = urllib.parse.quote(original_name, safe='')
     
     logger.info(f"[DIRECT_DOWNLOAD] 开始下载: file={file_id}, user={uid}, size={file_size}")
     
-    # 使用 FileResponse 代替 StreamingResponse，更高效
-    from fastapi.responses import FileResponse as FastAPIFileResponse
-    
-    return FastAPIFileResponse(
-        path=file_path,
+    # 使用 FileResponse - 系统级文件传输，不阻塞事件循环
+    # FileResponse 内部使用 aiofiles 或 sendfile，效率极高
+    return FileResponse(
+        path=str(file_path),
         filename=original_name,
         media_type="application/octet-stream",
         headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
             "Cache-Control": "no-cache",
             "Accept-Ranges": "bytes"
         }
@@ -798,21 +814,27 @@ def get_direct_download_link(
     message = f"{file_id}:{uid}:{timestamp}".encode()
     signature = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
     
-    # 确定基础URL
-    # 检查是否通过Vite代理访问（开发环境）
-    forwarded_host = request.headers.get("x-forwarded-host", "")
-    forwarded_proto = request.headers.get("x-forwarded-proto", "http")
+    # 确定基础URL - 根据请求来源动态选择
+    # 如果是远程访问（非 localhost），使用服务器公网 IP
+    host = request.headers.get("host", "localhost")
+    origin = request.headers.get("origin", "")
     
-    # 如果是Vite代理，直接返回后端地址
-    if ":5173" in forwarded_host or ":5173" in request.headers.get("host", ""):
-        base_url = "http://localhost:8000"
-        logger.info(f"[DIRECT_LINK] 检测到Vite代理，使用直连后端URL: {base_url}")
+    # 检查是否是远程访问
+    is_remote = not any(x in host for x in ["localhost", "127.0.0.1"]) or \
+                not any(x in origin for x in ["localhost", "127.0.0.1", ""])
+    
+    if is_remote or "1.95.52.33" in origin:
+        # 远程访问：使用公网 IP
+        base_url = "http://1.95.52.33:8001"
+        logger.info(f"[DIRECT_LINK] 远程访问，使用公网下载服务器: {base_url}")
     else:
-        base_url = f"{forwarded_proto}://{request.headers.get('host', 'localhost:8000')}"
-        logger.info(f"[DIRECT_LINK] 使用标准URL: {base_url}")
+        # 本地访问：使用 localhost
+        base_url = "http://localhost:8001"
+        logger.info(f"[DIRECT_LINK] 本地访问，使用本地下载服务器: {base_url}")
     
-    # 构建下载URL
-    download_url = f"{base_url}/api/v1/files/public/download/{file_id}?token={signature}&uid={uid}&t={timestamp}"
+    # 构建下载URL - 指向独立下载服务器
+    encoded_filename = urllib.parse.quote(db_file.original_name, safe='')
+    download_url = f"{base_url}/download/{file_id}?token={signature}&uid={uid}&t={timestamp}&filename={encoded_filename}"
     
     logger.info(f"[DIRECT_LINK] 生成下载链接: file={db_file.original_name}, user={uid}")
     

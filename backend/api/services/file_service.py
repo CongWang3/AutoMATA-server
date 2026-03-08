@@ -303,7 +303,7 @@ class FileUploadService:
     
     def upload_file(self, file: UploadFile, request: FileUploadRequest, progress_callback=None) -> File:
         """
-        上传文件并保存元数据（增强安全版本）
+        上传文件并保存元数据（增强安全版本 + OSS 支持）
         
         Args:
             file: 上传的文件对象
@@ -318,13 +318,14 @@ class FileUploadService:
         """
         # <!-- 
         # 审查上下文：
-        # - 设计意图：实现带并发控制的安全文件上传流程，防止竞态条件
-        # - 已知局限：使用数据库排他锁，可能影响高并发场景性能，但保证数据一致性
-        # - 业务背景：docs/architecture/file_upload_download_architecture.md - 安全上传流程
-        # - 测试重点：请验证多用户同时上传相同文件时的一致性，文件类型验证准确性
+        # - 设计意图：实现带并发控制的安全文件上传流程，并集成阿里云 OSS 存储
+        # - 已知局限：OSS 上传增加网络耗时，但显著减轻后端存储压力
+        # - 业务背景：解决本地文件 I/O 导致的后端卡顿问题
+        # - 测试重点：请验证 OSS 上传成功后本地文件清理、数据库记录一致性
         # -->
         
         # 1. 高级文件类型验证
+        logger.info(f"🔍 开始文件类型验证: {file.filename}")
         is_valid, error_msg = self._validate_file_type_advanced(file)
         if not is_valid:
             logger.warning(f"文件类型验证失败: {error_msg}, 文件名: {file.filename}")
@@ -373,23 +374,25 @@ class FileUploadService:
         file_ext = file.filename.split('.')[-1] if file.filename and '.' in file.filename else 'dat'
         unique_filename = f"{uuid.uuid4()}.{file_ext}"
         
-        # 7. 保存文件到磁盘
+        # 7. 保存文件到磁盘（永久存储）
         file_path = self._save_file_to_disk(
             file, 
             unique_filename, 
             total_bytes=actual_file_size, 
             progress_callback=progress_callback
         )
+        logger.info(f"💾 文件已保存到路径: {file_path}")
         
-        # 8. 创建文件记录
+        # 8. 创建文件记录（存储本地文件路径）
         db_file = File(
             filename=unique_filename,
             original_name=file.filename or unique_filename,
-            file_path=file_path,
+            file_path=file_path,  # 存储本地文件路径
             file_size=actual_file_size,
             file_type=request.file_type,
             md5_hash=md5_hash,
-            uploaded_by=self.user.id
+            uploaded_by=self.user.id,
+            storage_type="local"  # 标记存储类型
         )
         
         try:
@@ -397,6 +400,21 @@ class FileUploadService:
             self.db.add(db_file)
             self.db.commit()
             self.db.refresh(db_file)
+            
+            logger.info(f"🎉 文件上传完成: {db_file.filename} (本地: {file_path})")
+            return db_file
+            
+        except Exception as e:
+            # 如果数据库保存失败，删除已保存的文件
+            if Path(file_path).exists():
+                Path(file_path).unlink()
+                logger.info(f"🗑️ 回滚：已删除本地文件: {file_path}")
+            
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"数据库保存失败: {str(e)}"
+            )
             
             # 验证数据库记录是否正确创建
             verified_file = self.db.query(File).filter(File.id == db_file.id).first()

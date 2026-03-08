@@ -44,26 +44,30 @@ export class WebSocketService {
    * @returns 连接Promise
    */
   connect(baseUrl?: string): Promise<void> {
-    console.log('🔌 开始WebSocket连接...')
+    console.log('🔌 开始 WebSocket 连接...')
     return new Promise((resolve, reject) => {
       // 如果已经连接，直接返回
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        console.log('✅ WebSocket已经连接，直接返回')
+        console.log('✅ WebSocket 已经连接，直接返回')
         resolve()
         return
       }
-
+  
       // 关闭现有连接
       this.disconnect()
-
-      const base = baseUrl || import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000'
+  
+      // 如果启用了直接 API 连接，使用后端地址而不是 Vite代理
+      const useDirectAPI = import.meta.env.VITE_DIRECT_API === 'true'
+      const base = baseUrl || (useDirectAPI 
+        ? 'ws://localhost:8005' 
+        : import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8005')
       const token = AuthService.getAuthToken()
-      
+        
       if (!token) {
-        reject(new Error('未找到认证token'))
+        reject(new Error('未找到认证 token'))
         return
       }
-
+  
       const wsUrl = `${base}/api/v1/files/ws/progress`
       
       try {
@@ -202,17 +206,16 @@ export class WebSocketService {
 
   /**
    * 启动心跳机制
+   * 注意：心跳只用于保持连接活跃，不触发重连（避免影响 Vite 代理）
    */
   private startHeartbeat(): void {
     this.heartbeatInterval = window.setInterval(() => {
-      this.sendMessage({ type: 'heartbeat' })
-      
-      // 设置心跳超时
-      this.heartbeatTimeout = window.setTimeout(() => {
-        console.warn('心跳超时，尝试重连')
-        this.reconnect()
-      }, 5000)
-    }, 30000) // 每30秒发送一次心跳
+      // 只有连接正常时才发送心跳
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.sendMessage({ type: 'heartbeat' })
+      }
+      // 移除心跳超时重连逻辑 - 依赖 WebSocket 原生的 onclose 事件来处理断线
+    }, 60000) // 每60秒发送一次心跳
   }
 
   /**

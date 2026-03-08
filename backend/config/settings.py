@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     
     # 服务器配置
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 8005
     
     # 数据库配置 - 支持真实环境连接
     DB_USER: str = "automata"
@@ -80,8 +80,8 @@ class Settings(BaseSettings):
     # Redis 配置（Celery 使用）
     REDIS_URL: str = "redis://localhost:6379/0"
     
-    # CORS 配置 - 支持多环境
-    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:5174"]
+    # CORS 配置 - 开发环境允许所有来源（支持本地前端直连）
+    CORS_ORIGINS: List[str] = ["*"]
     
     class Config:
         env_file = ".env"

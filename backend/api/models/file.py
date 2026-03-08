@@ -26,6 +26,7 @@ class File(Base):
     file_type = Column(String(50), index=True, comment="文件类型")
     mime_type = Column(String(100), comment="MIME 类型")
     md5_hash = Column(String(32), comment="MD5 哈希值")
+    storage_type = Column(String(20), default="local", comment="存储类型: local, oss")
     # 用户删除时其上传文件也应删除，因此使用 CASCADE
     uploaded_by = Column(
         Integer, 

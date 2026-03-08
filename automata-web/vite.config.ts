@@ -13,13 +13,28 @@ export default defineConfig({
     }
   },
   server: {
+    host: '0.0.0.0', // 绑定到所有网络接口
     // API代理配置
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8005',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        // 增加超时时间，防止代理超时
+        timeout: 120000,  // 2分钟
+        // 配置代理错误处理，防止崩溃
+        configure: (proxy) => {
+          proxy.on('error', (err, req, res) => {
+            console.error('[Vite Proxy Error]', err.message)
+            // 返回错误响应而不是崩溃
+            if (res && !res.headersSent) {
+              res.writeHead(502, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: 'Proxy error', message: err.message }))
+            }
+          })
+        }
       }
+      // 注意：/download 路径不代理，直接访问 8001 端口
     },
     // 修复WebSocket HMR连接问题
     hmr: {

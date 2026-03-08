@@ -37,6 +37,31 @@ pip install -r requirements.txt -q
 echo "初始化数据库..."
 python init_db.py
 
-# 启动应用
-echo "启动 FastAPI 应用..."
-python main.py
+# 启动服务
+echo "启动服务..."
+
+# 启动独立下载服务 (8001端口)
+echo "启动独立下载服务 (端口 8001)..."
+python download_server.py &
+DOWNLOAD_PID=$!
+
+# 等待下载服务启动
+sleep 2
+
+# 启动主API服务 (8005端口)
+echo "启动主API服务 (端口 8005)..."
+python main.py &
+API_PID=$!
+
+# 显示进程信息
+echo "======================================"
+echo "服务启动完成"
+echo "下载服务 PID: $DOWNLOAD_PID (端口 8001)"
+echo "API服务 PID: $API_PID (端口 8005)"
+echo "======================================"
+
+# 等待任意一个服务退出
+wait $DOWNLOAD_PID $API_PID
+
+# 如果其中一个服务退出，终止另一个
+kill $DOWNLOAD_PID $API_PID 2>/dev/null
