@@ -13,6 +13,14 @@ export default defineConfig({
     }
   },
   server: {
+    // API代理配置
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false
+      }
+    },
     // 修复WebSocket HMR连接问题
     hmr: {
       overlay: false // 禁用错误覆盖层减少干扰

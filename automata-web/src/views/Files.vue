@@ -158,27 +158,22 @@
               </template>
             </el-table-column>
             
-            <el-table-column label="操作" width="250" fixed="right">
+            <el-table-column label="操作" width="200" fixed="right">
               <template #default="{ row }">
-                <el-dropdown trigger="click" @command="(command: string) => handleDownloadCommand(command, row)">
-                  <el-button type="primary" size="small" :icon="Download">
-                    下载
-                    <el-icon class="el-icon--right">
-                      <arrow-down />
-                    </el-icon>
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="normal">普通下载</el-dropdown-item>
-                      <el-dropdown-item command="chunked">分片下载</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+                <SmartDownloadButton
+                  :file-id="row.id"
+                  :file-name="row.original_name"
+                  :file-size="row.file_size"
+                  type="primary"
+                  size="small"
+                  text="下载"
+                />
                 <el-button 
                   type="danger" 
                   size="small"
                   :icon="Delete"
                   @click="deleteFile(row)"
+                  style="margin-left: 8px"
                 >
                   删除
                 </el-button>
@@ -201,22 +196,6 @@
         </el-card>
       </div>
     </div>
-
-    <!-- 分片下载弹窗 -->
-    <el-dialog
-      v-model="showChunkedDownload"
-      :title="`分片下载 - ${currentDownloadFile?.original_name}`"
-      width="600px"
-      destroy-on-close
-    >
-      <FileChunkedDownloader
-        v-if="currentDownloadFile"
-        :file-id="currentDownloadFile.id"
-        :file-name="currentDownloadFile.original_name"
-        @download-complete="handleChunkedDownloadComplete"
-        @download-error="handleChunkedDownloadError"
-      />
-    </el-dialog>
 
     <!-- 错误提示 -->
     <div v-if="filesStore.error" class="error-toast">
@@ -241,18 +220,16 @@
 // -->
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Download, Delete, Refresh, ArrowDown } from '@element-plus/icons-vue'
+import { Document, Delete, Refresh } from '@element-plus/icons-vue'
 import { useFilesStore } from '@/stores/files'
 import FileUploader from '@/components/FileUpload/FileUploader.vue'
-import FileChunkedDownloader from '@/components/FileChunkedDownloader.vue'
+import SmartDownloadButton from '@/components/SmartDownloadButton.vue'
 import { FileService } from '@/api'
 
 const filesStore = useFilesStore()
 
 // 状态
 const selectedFile = ref<File | null>(null)
-const showChunkedDownload = ref(false)
-const currentDownloadFile = ref<any>(null)
 const currentPage = ref<number>(1)
 const pageSize = ref<number>(20)
 
@@ -362,56 +339,6 @@ function clearSelection() {
   selectedFile.value = null
   uploadForm.fileType = ''
   uploadForm.description = ''
-}
-
-/**
- * 处理下载命令
- */
-function handleDownloadCommand(command: string, fileInfo: any) {
-  if (command === 'normal') {
-    downloadFile(fileInfo)
-  } else if (command === 'chunked') {
-    startChunkedDownload(fileInfo)
-  }
-}
-
-/**
- * 普通下载文件
- */
-async function downloadFile(fileInfo: any) {
-  try {
-    await filesStore.downloadFile(fileInfo.id, fileInfo.original_name)
-    ElMessage.success('文件下载已开始')
-  } catch (error) {
-    ElMessage.error('文件下载失败')
-    console.error('下载失败:', error)
-  }
-}
-
-/**
- * 开始分片下载
- */
-function startChunkedDownload(fileInfo: any) {
-  currentDownloadFile.value = fileInfo
-  showChunkedDownload.value = true
-}
-
-/**
- * 分片下载完成处理
- */
-function handleChunkedDownloadComplete() {
-  ElMessage.success('分片下载完成！')
-  showChunkedDownload.value = false
-  currentDownloadFile.value = null
-}
-
-/**
- * 分片下载错误处理
- */
-function handleChunkedDownloadError(error: string) {
-  ElMessage.error(`分片下载失败: ${error}`)
-  showChunkedDownload.value = false
-  currentDownloadFile.value = null
 }
 
 /**
@@ -546,9 +473,8 @@ function getProgressStatus(status: string): 'success' | 'exception' | 'warning' 
   return statusMap[status]
 }
 
-// 初始化WebSocket连接
+// 初始化
 onMounted(async () => {
-  await filesStore.initializeWebSocket()
   await loadFiles()
 })
 

@@ -30,6 +30,12 @@
 
     <!-- 上传进度 -->
     <div v-if="uploadProgress > 0 && uploadProgress < 100" class="upload-progress mt-3">
+      <div class="progress-header d-flex justify-content-between align-items-center mb-2">
+        <span>上传进度: {{ uploadProgress }}%</span>
+        <span v-if="uploadSpeed > 0" class="speed-indicator">
+          {{ formatSpeed(uploadSpeed) }}
+        </span>
+      </div>
       <div class="progress">
         <div 
           class="progress-bar" 
@@ -59,14 +65,46 @@
             <small class="text-muted">{{ formatFileSize(file.size) }}</small>
           </div>
         </div>
-        <button 
-          type="button" 
-          class="btn btn-sm btn-outline-danger"
-          @click="removeFile(index)"
-        >
-          <iconify-icon icon="mdi:close"></iconify-icon>
-        </button>
+        <div class="file-actions d-flex gap-2">
+          <button 
+            v-if="!isUploading"
+            type="button" 
+            class="btn btn-sm btn-outline-danger"
+            @click="removeFile(index)"
+          >
+            <iconify-icon icon="mdi:close"></iconify-icon>
+          </button>
+          <span v-if="isUploading" class="text-primary">
+            <iconify-icon icon="mdi:loading" class="spin"></iconify-icon>
+            上传中...
+          </span>
+        </div>
       </div>
+    </div>
+
+    <!-- 控制按钮 -->
+    <div v-if="selectedFiles.length > 0 && !autoUpload" class="upload-controls mt-3">
+      <button 
+        type="button" 
+        class="btn btn-success"
+        :disabled="!canUpload"
+        @click="uploadFiles"
+      >
+        <iconify-icon 
+          v-if="isUploading" 
+          icon="mdi:loading" 
+          class="spin me-1"
+        ></iconify-icon>
+        {{ isUploading ? '上传中...' : '开始上传' }}
+      </button>
+      <button 
+        v-if="!isUploading"
+        type="button" 
+        class="btn btn-secondary ms-2"
+        @click="selectedFiles = []"
+      >
+        清空
+      </button>
     </div>
 
     <!-- 错误信息 -->
@@ -77,20 +115,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { ElMessage, ElLoading } from 'element-plus'
 
 interface Props {
   allowedTypes?: string[]
   maxSize?: number // bytes
   multiple?: boolean
   autoUpload?: boolean
+  fileType?: string // 文件类型标识，用于后端识别
+  description?: string // 文件描述
 }
 
 const props = withDefaults(defineProps<Props>(), {
   allowedTypes: () => ['txt', 'csv', 'xlsx', 'xls'],
-  maxSize: 50 * 1024 * 1024, // 50MB
+  maxSize: 500 * 1024 * 1024, // 500MB
   multiple: false,
-  autoUpload: false
+  autoUpload: false,
+  fileType: 'dataset',
+  description: ''
 })
 
 const emit = defineEmits<{
@@ -107,10 +150,17 @@ const selectedFiles = ref<File[]>([])
 const isDragging = ref(false)
 const uploadProgress = ref(0)
 const errorMessage = ref('')
+const isUploading = ref(false)
+const uploadSpeed = ref(0) // 上传速度 (bytes/sec)
+const startTime = ref<number | null>(null)
 
 // 计算属性
 const totalSize = computed(() => {
   return selectedFiles.value.reduce((sum, file) => sum + file.size, 0)
+})
+
+const canUpload = computed(() => {
+  return selectedFiles.value.length > 0 && !isUploading.value
 })
 
 // 方法
@@ -188,43 +238,113 @@ const removeFile = (index: number) => {
 }
 
 const uploadFiles = async () => {
-  if (selectedFiles.value.length === 0) return
+  if (selectedFiles.value.length === 0 || isUploading.value) return
+
+  isUploading.value = true
+  uploadProgress.value = 0
+  startTime.value = Date.now()
+  errorMessage.value = ''
 
   try {
-    uploadProgress.value = 0
-    
-    // 调用实际的上传API
-    // 注意：这里需要父组件传入上传函数或者使用全局store
-    // 临时解决方案：触发upload-complete事件让父组件处理
     emit('upload-start', selectedFiles.value)
     
-    // 模拟上传进度（实际应该由API回调控制）
-    const interval = setInterval(() => {
-      if (uploadProgress.value < 90) {
-        uploadProgress.value += 10
+    // 逐个上传文件
+    const results = []
+    for (let i = 0; i < selectedFiles.value.length; i++) {
+      const file = selectedFiles.value[i]
+      if (!file) continue  // 类型守卫，确保 file 存在
+      const result = await uploadSingleFile(file, i)
+      results.push(result)
+      
+      // 更新整体进度
+      uploadProgress.value = Math.round(((i + 1) / selectedFiles.value.length) * 100)
+      emit('upload-progress', uploadProgress.value)
+    }
+
+    emit('upload-complete', { success: true, files: results })
+    ElMessage.success(`${selectedFiles.value.length} 个文件上传成功`)
+    
+    // 重置状态
+    setTimeout(() => {
+      uploadProgress.value = 0
+      selectedFiles.value = []
+      isUploading.value = false
+      uploadSpeed.value = 0
+    }, 1000)
+
+  } catch (error: any) {
+    isUploading.value = false
+    uploadProgress.value = 0
+    uploadSpeed.value = 0
+    errorMessage.value = `上传失败: ${error.message || '未知错误'}`
+    emit('upload-error', error)
+    ElMessage.error(errorMessage.value)
+  }
+}
+
+const uploadSingleFile = (file: File, index: number): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('file_type', props.fileType)
+    if (props.description) {
+      formData.append('description', props.description)
+    }
+
+    let lastUploaded = 0
+    const startTime = Date.now()
+
+    const xhr = new XMLHttpRequest()
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) {
+        const currentTime = Date.now()
+        const elapsedTime = (currentTime - startTime) / 1000 // 秒
+        const uploaded = event.loaded
+        const total = event.total
+        
+        // 计算上传速度
+        const bytesUploaded = uploaded - lastUploaded
+        const timeElapsed = (currentTime - startTime) / 1000
+        if (timeElapsed > 0) {
+          uploadSpeed.value = bytesUploaded / (currentTime - startTime) * 1000
+        }
+        lastUploaded = uploaded
+
+        // 计算当前文件的进度（占总进度的一部分）
+        const fileProgress = (uploaded / total) * 100
+        const overallProgress = ((index + fileProgress / 100) / selectedFiles.value.length) * 100
+        uploadProgress.value = Math.round(overallProgress)
         emit('upload-progress', uploadProgress.value)
       }
-    }, 200)
+    })
 
-    // 等待父组件处理上传
-    setTimeout(() => {
-      clearInterval(interval)
-      uploadProgress.value = 100
-      emit('upload-progress', 100)
-      emit('upload-complete', { success: true, files: selectedFiles.value })
-      
-      // 重置状态
-      setTimeout(() => {
-        uploadProgress.value = 0
-        selectedFiles.value = []
-      }, 1000)
-    }, 2000)
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 200) {
+        try {
+          const response = JSON.parse(xhr.responseText)
+          resolve(response)
+        } catch (e) {
+          resolve(xhr.responseText)
+        }
+      } else {
+        reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`))
+      }
+    })
 
-  } catch (error) {
-    uploadProgress.value = 0
-    errorMessage.value = '上传失败'
-    emit('upload-error', error as Error)
-  }
+    xhr.addEventListener('error', () => {
+      reject(new Error('网络错误'))
+    })
+
+    xhr.addEventListener('abort', () => {
+      reject(new Error('上传被取消'))
+    })
+
+    // 发送请求
+    xhr.open('POST', '/api/v1/files/upload')
+    xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('access_token')}`)
+    xhr.send(formData)
+  })
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -233,6 +353,10 @@ const formatFileSize = (bytes: number): string => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const formatSpeed = (bytesPerSec: number): string => {
+  return formatFileSize(bytesPerSec) + '/s'
 }
 
 const getFileIcon = (fileType: string): string => {
@@ -244,11 +368,19 @@ const getFileIcon = (fileType: string): string => {
 // 暴露方法给父组件
 defineExpose({
   upload: uploadFiles,
-  clear: () => { selectedFiles.value = [] }
+  clear: () => { selectedFiles.value = [] },
+  getSelectedFiles: () => selectedFiles.value
 })
 </script>
 
 <style scoped>
+.file-uploader {
+  padding: 20px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
 .upload-area {
   border: 2px dashed #dee2e6;
   border-radius: 8px;
@@ -276,7 +408,12 @@ defineExpose({
 }
 
 .file-item {
-  background-color: #f8f9fa;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.file-item:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .file-icon {
@@ -285,10 +422,53 @@ defineExpose({
 }
 
 .progress {
-  height: 8px;
+  height: 20px;
+  margin-bottom: 10px;
 }
 
 .progress-bar {
   transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+}
+
+.progress-header {
+  font-weight: 500;
+  color: #495057;
+}
+
+.speed-indicator {
+  font-size: 0.875rem;
+  color: #6c757d;
+  background-color: #e9ecef;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.upload-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.file-actions {
+  align-items: center;
+}
+
+.alert {
+  border-radius: 6px;
+  margin-top: 15px;
 }
 </style>

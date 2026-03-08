@@ -1,6 +1,8 @@
 """
 文件上传服务：处理文件上传、存储、元数据管理等业务逻辑
+包含安全验证、MD5去重、流式处理等功能
 """
+
 import os
 import hashlib
 import logging
@@ -9,6 +11,7 @@ from pathlib import Path
 import uuid
 from sqlalchemy.orm import Session
 from fastapi import UploadFile, HTTPException, status
+import mimetypes
 
 from api.models.file import File
 from api.models.user import User
@@ -26,9 +29,20 @@ class FileUploadService:
     # 审查上下文：
     # - 设计意图：将文件上传业务逻辑集中到服务层，便于复用和测试
     # - 已知局限：暂未实现文件预览、压缩等高级功能
-    # - 业务背景：docs/architecture/DESIGN.md - 文件管理模块设计
+    # - 业务背景：docs/architecture/file_upload_download_architecture.md - 文件管理模块设计
     # - 测试重点：请关注文件去重逻辑、磁盘操作原子性、用户权限验证
     # -->
+    
+    # 支持的MIME类型映射
+    SUPPORTED_MIME_TYPES = {
+        'text/plain': '.txt',
+        'text/csv': '.csv',
+        'application/vnd.ms-excel': '.xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+        'application/octet-stream': '.bin',  # 通用二进制文件
+        'application/x-python-code': '.py',
+        'application/json': '.json'
+    }
     
     def __init__(self, db: Session, user: User):
         self.db = db
@@ -36,6 +50,72 @@ class FileUploadService:
         self.upload_dir = Path(settings.UPLOAD_DIR)
         self._ensure_upload_directory()
     
+    def _validate_file_type_advanced(self, file: UploadFile) -> Tuple[bool, str]:
+        """
+        高级文件类型验证（多重检查）
+        
+        Args:
+            file: 上传的文件对象
+            
+        Returns:
+            (is_valid, error_message) 元组
+        """
+        # <!-- 
+        # 审查上下文：
+        # - 设计意图：实现多层次文件类型验证，提高安全性
+        # - 已知局限：魔数检测需要读取文件内容，增加处理时间
+        # - 业务背景：docs/architecture/file_upload_download_architecture.md - 安全性设计
+        # - 测试重点：请验证各种文件类型的识别准确性
+        # -->
+        
+        filename = file.filename or ""
+        content_type = file.content_type or ""
+        
+        # 1. 扩展名检查
+        if '.' not in filename:
+            return False, "文件必须有扩展名"
+            
+        extension = filename.split('.')[-1].lower()
+        if extension not in settings.ALLOWED_FILE_TYPES:
+            return False, f"不支持的文件扩展名: {extension}"
+        
+        # 2. MIME类型检查
+        if content_type:
+            # 检查是否在支持的MIME类型中
+            if content_type in self.SUPPORTED_MIME_TYPES:
+                expected_ext = self.SUPPORTED_MIME_TYPES[content_type][1:]  # 移除点号
+                if extension != expected_ext:
+                    logger.warning(f"MIME类型与扩展名不匹配: {content_type} vs {extension}")
+            elif not content_type.startswith('application/'):
+                # 对于非应用类型，进行严格匹配
+                guessed_type, _ = mimetypes.guess_type(filename)
+                if guessed_type and guessed_type != content_type:
+                    logger.warning(f"MIME类型猜测不匹配: 声称={content_type}, 猜测={guessed_type}")
+        
+        # 3. 文件内容魔数检查（可选增强）
+        if hasattr(settings, 'STRICT_FILE_VALIDATION') and settings.STRICT_FILE_VALIDATION:
+            try:
+                # 读取文件头部进行魔数检测
+                file.file.seek(0)
+                header = file.file.read(1024)  # 读取前1KB
+                file.file.seek(0)  # 重置文件指针
+                
+                # 简单的魔数检查示例
+                magic_numbers = {
+                    b'PK\x03\x04': ['.zip', '.xlsx', '.docx'],  # ZIP格式
+                    b'\x89PNG\r\n\x1a\n': ['.png'],  # PNG图片
+                    b'%PDF': ['.pdf'],  # PDF文档
+                }
+                
+                for magic, exts in magic_numbers.items():
+                    if header.startswith(magic) and f'.{extension}' not in exts:
+                        return False, f"文件内容与扩展名不符: 检测到{exts[0]}格式但扩展名为.{extension}"
+                        
+            except Exception as e:
+                logger.warning(f"魔数检查失败: {e}")
+        
+        return True, ""
+
     def _validate_file_path(self, file_path: str) -> bool:
         """
         强化的文件路径安全性验证，防止路径遍历攻击
@@ -223,7 +303,7 @@ class FileUploadService:
     
     def upload_file(self, file: UploadFile, request: FileUploadRequest, progress_callback=None) -> File:
         """
-        上传文件并保存元数据
+        上传文件并保存元数据（增强安全版本）
         
         Args:
             file: 上传的文件对象
@@ -240,39 +320,26 @@ class FileUploadService:
         # 审查上下文：
         # - 设计意图：实现带并发控制的安全文件上传流程，防止竞态条件
         # - 已知局限：使用数据库排他锁，可能影响高并发场景性能，但保证数据一致性
-        # - 业务背景：解决Warning级别的并发上传安全问题
-        # - 测试重点：请验证多用户同时上传相同文件时的一致性
+        # - 业务背景：docs/architecture/file_upload_download_architecture.md - 安全上传流程
+        # - 测试重点：请验证多用户同时上传相同文件时的一致性，文件类型验证准确性
         # -->
         
-        # 1. 验证文件类型（在流式读取前进行基本检查）
-        file_extension = None
-        if file.filename and '.' in file.filename:
-            file_extension = file.filename.split('.')[-1].lower()
-        
-        content_type_extension = None
-        if file.content_type:
-            mime_to_ext = {
-                'text/plain': 'txt',
-                'application/vnd.ms-excel': 'xls',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-                'text/csv': 'csv'
-            }
-            content_type_extension = mime_to_ext.get(file.content_type, file.content_type.split('/')[-1].lower())
-        
-        effective_extension = content_type_extension or file_extension
-        if effective_extension not in settings.ALLOWED_FILE_TYPES:
+        # 1. 高级文件类型验证
+        is_valid, error_msg = self._validate_file_type_advanced(file)
+        if not is_valid:
+            logger.warning(f"文件类型验证失败: {error_msg}, 文件名: {file.filename}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"不支持的文件类型: {effective_extension}"
+                detail=error_msg
             )
         
         # 2. 重置文件指针到开头
         file.file.seek(0)
         
-        # 3. 流式验证大小限制并计算MD5哈希
+        # 3. 流式验证大小限制并计算 MD5 哈希（已包含大小检查）
         md5_hash, actual_file_size = self._validate_and_hash_file(file, progress_callback)
-        
-        # 5. 使用数据库事务和排他锁防止竞态条件
+                
+        # 4. 使用数据库事务和排他锁防止竞态条件
         try:
             # 先尝试获取文件记录的排他锁（仅针对当前用户的相同文件）
             existing_file = self.db.query(File).filter(

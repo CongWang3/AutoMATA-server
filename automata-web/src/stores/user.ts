@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { AuthService } from '@/api/auth'
+import { webSocketManager } from '@/utils/websocket-manager'
 import type { UserInfo } from '@/api/types'
 
 export interface UserState {
@@ -64,6 +65,12 @@ export const useUserStore = defineStore('user', () => {
       userInfo.value = response.user
       
       console.log('✅ 用户登录成功:', response.user.username)
+      
+      // 登录成功后建立WebSocket连接
+      console.log('🔌 用户登录成功，建立WebSocket连接...')
+      webSocketManager.setConnection(true).catch(err => {
+        console.warn('⚠️ WebSocket连接失败，但不影响登录:', err)
+      })
     } catch (err) {
       error.value = err instanceof Error ? err.message : '登录失败'
       console.error('❌ 登录失败:', error.value)
@@ -122,6 +129,10 @@ export const useUserStore = defineStore('user', () => {
    */
   async function logout(): Promise<void> {
     try {
+      // 断开WebSocket连接
+      console.log('🔌 用户登出，断开WebSocket连接...')
+      webSocketManager.setConnection(false)
+      
       await AuthService.logout()
       userInfo.value = null
       error.value = null
@@ -159,6 +170,12 @@ export const useUserStore = defineStore('user', () => {
           if (import.meta.env.DEV) {
             console.log('✅ 从存储初始化用户状态:', storedUserInfo.username)
           }
+          
+          // 已登录用户自动建立WebSocket连接
+          console.log('🔌 已登录用户，建立WebSocket连接...')
+          webSocketManager.setConnection(true).catch(err => {
+            console.warn('⚠️ WebSocket连接失败:', err)
+          })
         }
       } else {
         // 清除过期的认证信息

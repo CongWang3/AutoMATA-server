@@ -107,7 +107,7 @@ export class FileService {
    */
   static async getFileInfo(fileId: string): Promise<FileInfo> {
     try {
-      const response = await apiClient.get<FileInfo>(`/files/${fileId}`)
+      const response = await apiClient.get<FileInfo>(`/v1/files/${fileId}`)
       return response
     } catch (error) {
       console.error('获取文件详情失败:', error)

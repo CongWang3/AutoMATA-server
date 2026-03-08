@@ -21,6 +21,7 @@ export class WebSocketManager {
   
   // 需要实时功能的路由
   private readonly REALTIME_ROUTES = [
+    '/dashboard',
     '/files',
     '/model/train',
     '/analysis'

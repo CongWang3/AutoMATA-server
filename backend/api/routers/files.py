@@ -1,7 +1,7 @@
 """
 文件上传路由：处理文件上传、下载、管理等接口
 """
-from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, HTTPException, WebSocket, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, HTTPException, WebSocket, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Set
@@ -368,6 +368,77 @@ def list_files(
         ) from e
 
 
+@router.get("/public/download/{file_id}")
+async def public_download_file(
+    file_id: str,
+    token: str = Query(...),
+    uid: int = Query(...),
+    t: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    公开下载端点（带临时token验证）
+    
+    使用异步流式传输，支持大文件下载，不阻塞服务器其他请求
+    """
+    import time
+    import hmac
+    import hashlib
+    import urllib.parse
+    from config.settings import settings
+    from pathlib import Path
+    
+    # 验证时间戳（5分钟有效期）
+    current_time = int(time.time())
+    if current_time - t > 300:
+        raise HTTPException(status_code=410, detail="下载链接已过期，请重新获取")
+    
+    # 验证签名
+    secret = settings.SECRET_KEY.encode()
+    message = f"{file_id}:{uid}:{t}".encode()
+    expected_signature = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
+    
+    if not hmac.compare_digest(token, expected_signature):
+        raise HTTPException(status_code=403, detail="无效的下载链接")
+    
+    # 获取文件信息后立即关闭数据库会话
+    from api.models.file import File as FileModel
+    db_file = db.query(FileModel).filter(FileModel.id == file_id).first()
+    
+    if not db_file:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    # 保存需要的文件信息
+    file_path_str = db_file.file_path
+    original_name = db_file.original_name
+    file_size = Path(file_path_str).stat().st_size if Path(file_path_str).exists() else 0
+    
+    # 显式关闭数据库会话
+    db.close()
+    
+    file_path = Path(file_path_str)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    # 处理中文文件名
+    encoded_filename = urllib.parse.quote(original_name, safe='')
+    
+    logger.info(f"[DIRECT_DOWNLOAD] 开始下载: file={file_id}, user={uid}, size={file_size}")
+    
+    # 使用 FileResponse 代替 StreamingResponse，更高效
+    from fastapi.responses import FileResponse as FastAPIFileResponse
+    
+    return FastAPIFileResponse(
+        path=file_path,
+        filename=original_name,
+        media_type="application/octet-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Accept-Ranges": "bytes"
+        }
+    )
+
+
 @router.get("/{file_id}", response_model=FileResponse)
 def get_file_info(
     file_id: str,
@@ -692,3 +763,62 @@ def delete_file(
             status_code=500,
             detail="文件标记删除失败"
         )
+
+
+@router.get("/{file_id}/direct-link")
+def get_direct_download_link(
+    file_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    获取直接下载链接（HMAC签名验证）
+    
+    返回一个带签名和过期时间的直接下载URL，
+    浏览器可以直接从该URL下载，不占用前端资源
+    """
+    import time
+    import hmac
+    import hashlib
+    import urllib.parse
+    from config.settings import settings
+    
+    # 获取文件信息
+    service = FileUploadService(db, current_user)
+    db_file = service.get_file_by_id(file_id)
+    
+    if not db_file:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    # 生成签名
+    timestamp = int(time.time())
+    uid = current_user.id
+    secret = settings.SECRET_KEY.encode()
+    message = f"{file_id}:{uid}:{timestamp}".encode()
+    signature = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
+    
+    # 确定基础URL
+    # 检查是否通过Vite代理访问（开发环境）
+    forwarded_host = request.headers.get("x-forwarded-host", "")
+    forwarded_proto = request.headers.get("x-forwarded-proto", "http")
+    
+    # 如果是Vite代理，直接返回后端地址
+    if ":5173" in forwarded_host or ":5173" in request.headers.get("host", ""):
+        base_url = "http://localhost:8000"
+        logger.info(f"[DIRECT_LINK] 检测到Vite代理，使用直连后端URL: {base_url}")
+    else:
+        base_url = f"{forwarded_proto}://{request.headers.get('host', 'localhost:8000')}"
+        logger.info(f"[DIRECT_LINK] 使用标准URL: {base_url}")
+    
+    # 构建下载URL
+    download_url = f"{base_url}/api/v1/files/public/download/{file_id}?token={signature}&uid={uid}&t={timestamp}"
+    
+    logger.info(f"[DIRECT_LINK] 生成下载链接: file={db_file.original_name}, user={uid}")
+    
+    return {
+        "download_url": download_url,
+        "file_name": db_file.original_name,
+        "file_size": db_file.file_size,
+        "expires_in": 300  # 5分钟有效期
+    }

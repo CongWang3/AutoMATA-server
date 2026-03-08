@@ -184,5 +184,5 @@ if __name__ == "__main__":
         "main:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=settings.DEBUG
+        reload=False  # 禁用文件重载避免监视器冲突
     )
