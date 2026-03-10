@@ -9,6 +9,7 @@ export * from './types'
 export { AuthService } from './auth'
 export { FileService } from './files'
 export { webSocketService, WebSocketService } from './websocket'
+export { DataProcessAPI } from './data-process'
 
 // 业务API
 export { trainingApi, TASK_STATUS, MODEL_PARAMETERS } from './training'

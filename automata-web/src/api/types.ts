@@ -56,9 +56,13 @@ export interface FileInfo {
   file_size: number
   file_type: string
   md5_hash: string
-  uploaded_by: number
-  upload_time: string
-  delete_marked_at: string | null
+  uploaded_by?: number
+  upload_time?: string      // 兼容旧版本
+  created_at?: string       // 新版本字段
+  updated_at?: string
+  delete_marked_at?: string | null
+  download_count?: number
+  is_public?: boolean
 }
 
 export interface FileListResponse {

@@ -1,0 +1,40 @@
+nohup: ignoring input
+INFO:__main__:==================================================
+INFO:__main__:独立下载服务器启动
+INFO:__main__:端口: 8001
+INFO:__main__:数据库: localhost/automata
+INFO:__main__:==================================================
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:18:36:37 +0800] "GET /health HTTP/1.1" 200 209 "-" "curl/7.68.0"
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:18:48:22 +0800] "GET /health HTTP/1.1" 200 209 "-" "curl/7.68.0"
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:18:52:31 +0800] "GET /health HTTP/1.1" 200 209 "-" "curl/7.68.0"
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:18:56:19 +0800] "GET /health HTTP/1.1" 200 209 "-" "curl/7.68.0"
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:18:58:01 +0800] "GET /health HTTP/1.1" 200 209 "-" "curl/7.68.0"
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:19:00:24 +0800] "GET /health HTTP/1.1" 200 209 "-" "curl/7.68.0"
+INFO:__main__:[JOB DOWNLOAD] 请求: job_id=20260310192316_e881e3db, uid=261
+INFO:__main__:[JOB DOWNLOAD] 开始传输: processed.txt, 大小: 222
+INFO:__main__:[JOB DOWNLOAD] 传输完成: processed.txt
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:19:23:22 +0800] "GET /job-result/20260310192316_e881e3db?uid=261&t=1773141802&token=39a76449f9fa36f7593c2eabbdda610e HTTP/1.1" 200 526 "http://localhost:5173/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0"
+INFO:__main__:[JOB DOWNLOAD] 请求: job_id=20260310193051_1e39e77c, uid=261
+INFO:__main__:[JOB DOWNLOAD] 开始传输: processed.txt, 大小: 213
+INFO:__main__:[JOB DOWNLOAD] 传输完成: processed.txt
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:19:30:55 +0800] "GET /job-result/20260310193051_1e39e77c?uid=261&t=1773142255&token=b53159ba0edb9cd345653655ac2d2586 HTTP/1.1" 200 517 "http://localhost:5173/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0"
+INFO:__main__:[JOB DOWNLOAD] 请求: job_id=20260310193207_fd26eb9d, uid=261
+INFO:__main__:[JOB DOWNLOAD] 开始传输: processed.txt, 大小: 213
+INFO:__main__:[JOB DOWNLOAD] 传输完成: processed.txt
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:19:32:12 +0800] "GET /job-result/20260310193207_fd26eb9d?uid=261&t=1773142331&token=23e0283422cec8eb00fa05a20f7e72b1 HTTP/1.1" 200 517 "http://localhost:5173/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0"
+INFO:__main__:[JOB DOWNLOAD] 请求: job_id=20260310193324_38ab4618, uid=261
+INFO:__main__:[JOB DOWNLOAD] 开始传输: processed.txt, 大小: 213
+INFO:__main__:[JOB DOWNLOAD] 传输完成: processed.txt
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:19:33:30 +0800] "GET /job-result/20260310193324_38ab4618?uid=261&t=1773142409&token=26c116645a650217a7e67dc6e6f0016b HTTP/1.1" 200 517 "http://localhost:5173/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0"
+INFO:__main__:[JOB DOWNLOAD] 请求: job_id=20260310200426_4feea889, uid=261
+INFO:__main__:[JOB DOWNLOAD] 开始传输: processed.txt, 大小: 672
+INFO:__main__:[JOB DOWNLOAD] 传输完成: processed.txt
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:20:04:31 +0800] "GET /job-result/20260310200426_4feea889?uid=261&t=1773144271&token=8014e81b99ffbdf71b7ea30880b378b0 HTTP/1.1" 200 976 "http://localhost:5173/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0"
+INFO:__main__:[JOB DOWNLOAD] 请求: job_id=20260310201025_1b302ec0, uid=261
+INFO:__main__:[JOB DOWNLOAD] 开始传输: processed.txt, 大小: 672
+INFO:__main__:[JOB DOWNLOAD] 传输完成: processed.txt
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:20:10:42 +0800] "GET /job-result/20260310201025_1b302ec0?uid=261&t=1773144642&token=927e6ecc1ec1532eaff0459db48eae79 HTTP/1.1" 200 976 "http://localhost:5173/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0"
+INFO:__main__:[JOB DOWNLOAD] 请求: job_id=20260310204637_7048b7d6, uid=261
+INFO:__main__:[JOB DOWNLOAD] 开始传输: processed.txt, 大小: 676
+INFO:__main__:[JOB DOWNLOAD] 传输完成: processed.txt
+INFO:aiohttp.access:127.0.0.1 [10/Mar/2026:20:47:55 +0800] "GET /job-result/20260310204637_7048b7d6?uid=261&t=1773146874&token=efc833bf74d779756748728f180dcdce HTTP/1.1" 200 980 "http://localhost:5173/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0"

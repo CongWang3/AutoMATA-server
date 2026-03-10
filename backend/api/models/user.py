@@ -29,7 +29,7 @@ class User(Base):
     last_login_at = Column(DateTime, comment="最后登录时间")
     
     # 关联关系
-    jobs = relationship("Job", back_populates="creator", cascade="all, delete-orphan")
+    jobs = relationship("Job", back_populates="user", cascade="all, delete-orphan")
     files = relationship("File", back_populates="uploader", cascade="all, delete-orphan")
     
     def __repr__(self):

@@ -18,6 +18,7 @@ export class WebSocketManager {
   private checkDebounceTimer: number | null = null
   private lastCheckTime = 0
   private readonly CHECK_DEBOUNCE_DELAY = 1000 // 1秒防抖延迟
+  private statusChangeListeners: Set<() => void> = new Set()
   
   // 需要实时功能的路由
   private readonly REALTIME_ROUTES = [
@@ -34,6 +35,25 @@ export class WebSocketManager {
       WebSocketManager.instance = new WebSocketManager()
     }
     return WebSocketManager.instance
+  }
+
+  /**
+   * 订阅状态变化
+   * @param listener 状态变化监听器
+   * @returns 取消订阅的函数
+   */
+  onStatusChange(listener: () => void): () => void {
+    this.statusChangeListeners.add(listener)
+    return () => {
+      this.statusChangeListeners.delete(listener)
+    }
+  }
+
+  /**
+   * 通知状态变化
+   */
+  private notifyStatusChange(): void {
+    this.statusChangeListeners.forEach(listener => listener())
   }
 
   /**
@@ -80,8 +100,10 @@ export class WebSocketManager {
   private async checkAndManageConnection(): Promise<void> {
     if (!this.router) return
 
-    const currentPath = this.router.currentRoute.value.path
-    const needsRealtime = this.needsRealtimeFeatures(currentPath)
+    // 基于认证状态而非路由判断连接需求
+    const isAuthenticated = localStorage.getItem('access_token') !== null
+    const tokenExpiry = localStorage.getItem('token_expiry')
+    const isTokenExpired = tokenExpiry ? Date.now() >= parseInt(tokenExpiry, 10) : true
     
     // 记录检查时间，避免过于频繁的检查
     const now = Date.now()
@@ -93,12 +115,12 @@ export class WebSocketManager {
     
     // 开发环境下减少连接状态检查日志
     if (import.meta.env.DEV) {
-      console.log(`🔍 连接状态检查 - 当前路径: ${currentPath}, 需要实时: ${needsRealtime}, 已激活: ${this.isActive}`)
+      console.log(`🔍 连接状态检查 - 已认证: ${isAuthenticated}, token过期: ${isTokenExpired}, 已激活: ${this.isActive}`)
     }
     
-    // 更智能的连接管理逻辑
-    if (needsRealtime) {
-      // 需要实时功能的页面
+    // 基于认证状态的连接管理逻辑
+    if (isAuthenticated && !isTokenExpired) {
+      // 已认证用户自动建立连接
       if (!this.isActive) {
         if (import.meta.env.DEV) console.log('🔌 需要启用实时连接')
         await this.connect()
@@ -109,7 +131,7 @@ export class WebSocketManager {
         if (import.meta.env.DEV) console.log('✅ 实时连接正常，无需操作')
       }
     } else {
-      // 不需要实时功能的页面
+      // 未认证用户断开连接
       if (this.isActive) {
         if (import.meta.env.DEV) console.log('🔌 需要禁用实时连接')
         await this.disconnect()
@@ -148,10 +170,12 @@ export class WebSocketManager {
       })
       
       this.isActive = true
+      this.notifyStatusChange()
       console.log('✅ WebSocket连接建立成功')
     } catch (error) {
       console.error('❌ WebSocket连接失败:', error)
       this.isActive = false
+      this.notifyStatusChange()
     }
   }
 
@@ -216,9 +240,11 @@ export class WebSocketManager {
       console.log('🔌 断开WebSocket连接...')
       webSocketService.disconnect()
       this.isActive = false
+      this.notifyStatusChange()
       console.log('✅ WebSocket连接已断开')
     } catch (error) {
       console.error('❌ WebSocket断开失败:', error)
+      this.notifyStatusChange()
     }
   }
 

@@ -153,7 +153,7 @@
                       {{ getFileTypeText(file.file_type) }}
                     </el-tag>
                     <span class="file-size">{{ formatFileSize(file.file_size) }}</span>
-                    <span class="file-time">{{ formatDate(file.upload_time) }}</span>
+                    <span class="file-time">{{ getFileUploadTime(file) }}</span>
                   </div>
                 </div>
               </div>
@@ -239,6 +239,7 @@ import { useFilesStore } from '@/stores/files'
 import { webSocketService } from '@/api'
 import { webSocketManager } from '@/utils/websocket-manager'
 import { FileService } from '@/api'
+import { getFileUploadTime } from '@/utils/date-utils'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -324,8 +325,8 @@ function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('zh-CN')
 }
 
-function getFileTypeTagType(fileType: string): '' | 'success' | 'warning' | 'danger' | 'info' {
-  const typeMap: Record<string, any> = {
+function getFileTypeTagType(fileType: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' {
+  const typeMap: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
     'dataset': 'primary',
     'train': 'success',
     'validation': 'warning',

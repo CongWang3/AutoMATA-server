@@ -81,6 +81,31 @@ def get_file_path_from_db(file_id: str) -> Tuple[Optional[str], Optional[str]]:
         return None, None
 
 
+def get_job_result_path(job_id: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    从数据库获取任务结果文件路径
+    
+    Args:
+        job_id: 任务ID
+        
+    Returns:
+        (文件路径, 原始文件名) 元组，如果未找到则返回 (None, None)
+    """
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT result_file, status FROM jobs WHERE job_id = :job_id"),
+                {"job_id": job_id}
+            )
+            row = result.fetchone()
+            if row and row[0]:
+                return row[0], f"{job_id}_processed.txt"
+            return None, None
+    except Exception as e:
+        logger.exception(f"数据库查询错误: {e}")
+        return None, None
+
+
 def verify_signature(file_id: str, uid: int, timestamp: int, token: str) -> bool:
     """验证 HMAC 签名"""
     secret = settings.SECRET_KEY.encode()
@@ -199,6 +224,102 @@ async def handle_download(request: web.Request) -> web.StreamResponse:
         return web.Response(text="下载服务内部错误", status=500)
 
 
+async def handle_job_result_download(request: web.Request) -> web.StreamResponse:
+    """
+    处理任务结果文件下载
+    
+    Args:
+        request: HTTP请求对象
+        
+    Returns:
+        StreamResponse响应对象
+    """
+    try:
+        job_id = request.match_info.get('job_id')
+        token = request.query.get('token', '')
+        uid = _parse_int_param(request, 'uid')
+        timestamp = _parse_int_param(request, 't')
+        
+        # 参数验证
+        if uid is None or timestamp is None:
+            logger.warning(f"[JOB DOWNLOAD] 非法参数: uid={request.query.get('uid')}, t={request.query.get('t')}")
+            return web.Response(text="请求参数错误", status=400)
+        
+        logger.info(f"[JOB DOWNLOAD] 请求: job_id={job_id}, uid={uid}")
+        
+        # 验证时间戳（5分钟有效期）
+        current_time = int(time.time())
+        time_diff = current_time - timestamp
+        if abs(time_diff) > 300 + MAX_SKEW:
+            logger.warning(f"[JOB DOWNLOAD] 链接时间戳异常或已过期: diff={time_diff}秒")
+            return web.Response(text="下载链接已过期或无效", status=410)
+        
+        # 验证签名
+        if not verify_signature(job_id, uid, timestamp, token):
+            logger.warning(f"[JOB DOWNLOAD] 签名验证失败")
+            return web.Response(text="无效的下载链接", status=403)
+        
+        # 从数据库获取任务结果文件路径
+        file_path_str, original_name = get_job_result_path(job_id)
+        
+        if not file_path_str:
+            logger.info(f"[JOB DOWNLOAD] 任务结果不存在: {job_id}")
+            return web.Response(text="任务结果不存在", status=404)
+        
+        file_path = Path(file_path_str)
+        if not file_path.exists():
+            logger.error(f"[JOB DOWNLOAD] 文件路径不存在: {file_path}")
+            return web.Response(text="文件不存在", status=404)
+        
+        file_size = file_path.stat().st_size
+        encoded_filename = urllib.parse.quote(original_name, safe='')
+        
+        logger.info(f"[JOB DOWNLOAD] 开始传输: {file_path.name}, 大小: {file_size}")
+        
+        # 设置响应头
+        origin = request.headers.get('Origin', '')
+        allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
+        
+        response = web.StreamResponse(
+            status=200,
+            headers={
+                'Content-Type': 'text/plain',
+                'Content-Length': str(file_size),
+                'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}",
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': allow_origin,
+            }
+        )
+        
+        await response.prepare(request)
+        
+        # 流式传输
+        chunk_size = 64 * 1024
+        rate_limit = 5 * 1024 * 1024
+        chunks_per_second = rate_limit // chunk_size
+        delay_per_chunk = 1.0 / chunks_per_second if chunks_per_second > 0 else 0.01
+        
+        try:
+            with open(file_path, 'rb') as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    await response.write(chunk)
+                    await asyncio.sleep(delay_per_chunk)
+            
+            logger.info(f"[JOB DOWNLOAD] 传输完成: {file_path.name}")
+        except Exception as e:
+            logger.exception(f"[JOB DOWNLOAD] 传输错误: {e}")
+            return web.Response(text="文件传输失败", status=500)
+            
+        return response
+        
+    except Exception as e:
+        logger.exception(f"[JOB DOWNLOAD] 未处理异常: {e}")
+        return web.Response(text="下载服务内部错误", status=500)
+
+
 async def handle_cors_preflight(request: web.Request) -> web.Response:
     """
     处理 CORS 预检请求
@@ -235,6 +356,8 @@ def create_app() -> web.Application:
     app.router.add_get('/health', health_check)
     app.router.add_get('/download/{file_id}', handle_download)
     app.router.add_options('/download/{file_id}', handle_cors_preflight)
+    app.router.add_get('/job-result/{job_id}', handle_job_result_download)
+    app.router.add_options('/job-result/{job_id}', handle_cors_preflight)
     
     return app
 

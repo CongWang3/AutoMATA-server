@@ -115,13 +115,13 @@ export class ApiClient {
   }
 
   // POST请求
-  public async post<T = any>(url: string, data?: any): Promise<T> {
-    return this.request<T>({ method: 'POST', url, data })
+  public async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({ method: 'POST', url, data, ...config })
   }
 
   // PUT请求
-  public async put<T = any>(url: string, data?: any): Promise<T> {
-    return this.request<T>({ method: 'PUT', url, data })
+  public async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({ method: 'PUT', url, data, ...config })
   }
 
   // DELETE请求
@@ -130,8 +130,8 @@ export class ApiClient {
   }
 
   // PATCH请求
-  public async patch<T = any>(url: string, data?: any): Promise<T> {
-    return this.request<T>({ method: 'PATCH', url, data })
+  public async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({ method: 'PATCH', url, data, ...config })
   }
 
   // 获取原始axios实例（用于特殊情况）

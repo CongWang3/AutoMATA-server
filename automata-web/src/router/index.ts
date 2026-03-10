@@ -40,22 +40,26 @@ const router = createRouter({
     {
       path: '/data-process/genome',
       name: 'genome',
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/DataProcess/Genome.vue'),
+      meta: { requiresAuth: true }
     },
     {
       path: '/data-process/transcriptome',
       name: 'transcriptome',
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/DataProcess/Transcriptome.vue'),
+      meta: { requiresAuth: true }
     },
     {
       path: '/data-process/protein',
       name: 'protein',
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/AboutView.vue'),
+      meta: { requiresAuth: true }
     },
     {
       path: '/data-process/integration',
       name: 'integration',
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/AboutView.vue'),
+      meta: { requiresAuth: true }
     },
     // 模型相关路由
     {

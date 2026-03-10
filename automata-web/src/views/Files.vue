@@ -154,7 +154,7 @@
             
             <el-table-column prop="upload_time" label="上传时间" width="180">
               <template #default="{ row }">
-                {{ formatDate(row.upload_time) }}
+                {{ getFileUploadTime(row) }}
               </template>
             </el-table-column>
             
@@ -225,6 +225,7 @@ import { useFilesStore } from '@/stores/files'
 import FileUploader from '@/components/FileUpload/FileUploader.vue'
 import SmartDownloadButton from '@/components/SmartDownloadButton.vue'
 import { FileService } from '@/api'
+import { getFileUploadTime } from '@/utils/date-utils'
 
 const filesStore = useFilesStore()
 
@@ -402,7 +403,7 @@ function formatFileSize(bytes: number): string {
 }
 
 /**
- * 格式化日期
+ * 格式化日期（保持向后兼容）
  */
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleString('zh-CN')
@@ -411,7 +412,7 @@ function formatDate(dateString: string): string {
 /**
  * 获取文件类型标签类型
  */
-function getFileTypeTagType(fileType: string): '' | 'success' | 'warning' | 'danger' | 'info' {
+function getFileTypeTagType(fileType: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' {
   const typeMap: Record<string, any> = {
     'dataset': 'primary',
     'train': 'success',
@@ -439,7 +440,7 @@ function getFileTypeText(fileType: string): string {
 /**
  * 获取状态标签类型
  */
-function getStatusTagType(status: string): '' | 'success' | 'warning' | 'danger' | 'info' {
+function getStatusTagType(status: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' {
   const typeMap: Record<string, any> = {
     'pending': 'info',
     'uploading': 'warning',

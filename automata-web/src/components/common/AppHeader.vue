@@ -219,7 +219,7 @@
         <div class="user-dropdown" v-if="userStore.userInfo">
           <el-dropdown @command="handleUserCommand">
             <div class="user-trigger d-flex align-items-center gap-2">
-              <el-avatar :size="32" :src="userStore.userInfo.avatar_url">
+              <el-avatar :size="32" :src="userStore.userInfo.avatar_url ?? undefined">
                 {{ userStore.userInfo.username.charAt(0).toUpperCase() }}
               </el-avatar>
               <span class="username d-none d-md-inline">
@@ -444,7 +444,7 @@
           <div class="mobile-user-info mt-4 pt-4 border-top" v-if="userStore.userInfo">
             <div class="user-card">
               <div class="user-avatar">
-                <el-avatar :size="48" :src="userStore.userInfo.avatar_url">
+                <el-avatar :size="48" :src="userStore.userInfo.avatar_url ?? undefined">
                   {{ userStore.userInfo.username.charAt(0).toUpperCase() }}
                 </el-avatar>
               </div>
@@ -473,7 +473,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useFilesStore } from '@/stores/files'
@@ -497,6 +497,47 @@ const router = useRouter()
 const userStore = useUserStore()
 const filesStore = useFilesStore()
 
+// 定义 Element Plus Tag 类型别名
+type TagType = 'success' | 'danger' | 'warning' | 'info' | 'primary'
+
+// 定义状态对象接口
+interface StatusObject {
+  text: string
+  type: TagType
+}
+
+// WebSocket 状态响应式引用
+const wsStatus = ref({
+  isActive: false,
+  isConnected: false
+})
+
+let unsubscribeStatusChange: (() => void) | null = null
+
+// 更新 WebSocket 状态
+function updateWsStatus() {
+  const status = webSocketManager.getStatus()
+  wsStatus.value.isActive = status.isActive
+  wsStatus.value.isConnected = status.isConnected
+}
+
+onMounted(() => {
+  // 初始化状态
+  updateWsStatus()
+  
+  // 订阅状态变化
+  unsubscribeStatusChange = webSocketManager.onStatusChange(() => {
+    updateWsStatus()
+  })
+})
+
+onUnmounted(() => {
+  // 取消订阅
+  if (unsubscribeStatusChange) {
+    unsubscribeStatusChange()
+  }
+})
+
 // <!-- 
 // 审查上下文：
 // - 设计意图：使用环境变量配置Logo路径，避免硬编码外部资源URL
@@ -509,25 +550,23 @@ const logoPath = computed(() => {
 })
 
 // 状态计算属性
-const webSocketStatus = computed(() => {
-  // 使用WebSocket管理器的状态
-  const managerStatus = webSocketManager.getStatus()
-  if (managerStatus.isActive && managerStatus.isConnected) {
+const webSocketStatus = computed((): StatusObject => {
+  if (wsStatus.value.isActive && wsStatus.value.isConnected) {
     return { text: '已连接', type: 'success' }
-  } else if (managerStatus.isActive && !managerStatus.isConnected) {
+  } else if (wsStatus.value.isActive && !wsStatus.value.isConnected) {
     return { text: '连接中', type: 'warning' }
   } else {
     return { text: '已断开', type: 'danger' }
   }
 })
 
-const authStatus = computed(() => {
+const authStatus = computed((): StatusObject => {
   return userStore.isAuthenticated 
     ? { text: '已认证', type: 'success' }
     : { text: '未认证', type: 'warning' }
 })
 
-const connectionStatus = computed(() => {
+const connectionStatus = computed((): StatusObject => {
   const managerStatus = webSocketManager.getStatus()
   return managerStatus.isActive && managerStatus.isConnected
     ? { text: '已连接', type: 'success' }

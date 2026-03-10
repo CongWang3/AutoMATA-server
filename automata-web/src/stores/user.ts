@@ -88,10 +88,15 @@ export const useUserStore = defineStore('user', () => {
       loading.value = true
       error.value = null
       
+      // 1. 先执行注册
       const user = await AuthService.register({ username, email, password })
       userInfo.value = user
       
-      console.log('✅ 用户注册成功:', user.username)
+      // 2. 注册成功后立即自动登录（获取 token）
+      console.log('🔐 正在自动登录...')
+      await login(username, password)
+      
+      console.log('✅ 自动登录成功，已获取 token')
     } catch (err) {
       error.value = err instanceof Error ? err.message : '注册失败'
       console.error('❌ 注册失败:', error.value)

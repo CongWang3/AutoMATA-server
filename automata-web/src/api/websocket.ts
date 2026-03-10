@@ -21,6 +21,7 @@ export class WebSocketService {
   
   // 回调函数
   private onProgressCallback: ((message: WebSocketProgressMessage) => void) | null = null
+  private onTaskStatusCallback: ((message: any) => void) | null = null
   private onOpenCallback: (() => void) | null = null
   private onCloseCallback: (() => void) | null = null
   private onErrorCallback: ((error: Event) => void) | null = null
@@ -39,11 +40,84 @@ export class WebSocketService {
   }
 
   /**
-   * 建立WebSocket连接
-   * @param baseUrl 基础URL（可选，默认从环境变量获取）
+   * 连接到任务状态 WebSocket
+   * @param baseUrl 基础URL（可选）
    * @returns 连接Promise
    */
-  connect(baseUrl?: string): Promise<void> {
+  async connectTaskStatus(baseUrl?: string): Promise<void> {
+    // <!-- 
+    // 审查上下文：
+    // - 设计意图：为任务状态监控提供专用的 WebSocket 连接
+    // - 已知局限：复用现有的连接管理逻辑，避免重复代码
+    // - 业务背景：与文件上传 WebSocket 共享基础设施但独立管理
+    // - 测试重点：连接建立、认证流程、消息路由
+    // -->
+    
+    console.log('🔌 开始任务状态 WebSocket 连接...')
+    
+    // 如果启用了直接 API 连接，使用后端地址而不是 Vite代理
+    const useDirectAPI = import.meta.env.VITE_DIRECT_API === 'true'
+    const base = baseUrl || (useDirectAPI 
+      ? 'ws://localhost:8005' 
+      : import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8005')
+    const token = AuthService.getAuthToken()
+      
+    if (!token) {
+      throw new Error('未找到认证 token')
+    }
+
+    const wsUrl = `${base}/api/v1/tasks/ws/status`
+    
+    try {
+      this.ws = new WebSocket(wsUrl)
+      
+      return new Promise((resolve, reject) => {
+        this.ws!.onopen = (event) => {
+          console.log('🟢 任务状态 WebSocket 连接已建立')
+          this.reconnectAttempts = 0
+          this.startHeartbeat()
+          
+          // 发送认证token
+          this.sendMessage({ type: 'auth', token })
+          
+          this.onOpenCallback?.()
+          resolve()
+        }
+
+        this.ws!.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            this.handleMessage(data)
+          } catch (error) {
+            console.error('解析任务状态 WebSocket 消息失败:', error)
+          }
+        }
+
+        this.ws!.onclose = (event) => {
+          console.log('🔴 任务状态 WebSocket 连接已关闭', event.code, event.reason)
+          this.stopHeartbeat()
+          this.onCloseCallback?.()
+        }
+
+        this.ws!.onerror = (error) => {
+          console.error('❌ 任务状态 WebSocket 错误:', error)
+          this.onErrorCallback?.(error)
+          reject(error)
+        }
+      })
+      
+    } catch (error) {
+      console.error('建立任务状态 WebSocket 连接失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 连接到 WebSocket
+   * @param baseUrl 基础URL（可选）
+   * @returns 连接Promise
+   */
+  async connect(baseUrl?: string): Promise<void> {
     console.log('🔌 开始 WebSocket 连接...')
     return new Promise((resolve, reject) => {
       // 如果已经连接，直接返回
@@ -171,6 +245,12 @@ export class WebSocketService {
       case 'heartbeat_response':
         this.handleHeartbeatResponse()
         break
+      case 'connected':
+        this.handleConnectedMessage(data)
+        break
+      case 'pong':
+        this.handlePongMessage(data)
+        break
       default:
         console.log('收到未知消息类型:', data.event, data)
     }
@@ -191,7 +271,35 @@ export class WebSocketService {
    */
   private handleTaskStatusMessage(message: any): void {
     console.log('📊 任务状态更新:', message)
-    // 可以在这里添加任务状态处理逻辑
+    
+    const { job_id, status, progress, result_file, error_message } = message.data || {}
+    
+    // 显示进度更新
+    if (progress !== undefined) {
+      console.log(`🎯 任务 ${job_id} 进度: ${progress}%`)
+    }
+    
+    // 显示状态变化
+    switch (status) {
+      case 'PROCESSING':
+        console.log(`🔄 任务 ${job_id} 正在处理中...`)
+        break
+      case 'COMPLETED':
+        console.log(`✅ 任务 ${job_id} 已完成!`)
+        if (result_file) {
+          console.log(`📁 结果文件: ${result_file}`)
+        }
+        break
+      case 'FAILED':
+        console.log(`❌ 任务 ${job_id} 失败!`)
+        if (error_message) {
+          console.log(`💬 错误信息: ${error_message}`)
+        }
+        break
+    }
+    
+    // 调用回调函数（如果设置了的话）
+    this.onTaskStatusCallback?.(message.data)
   }
 
   /**
@@ -202,6 +310,24 @@ export class WebSocketService {
     if (this.heartbeatTimeout) {
       clearTimeout(this.heartbeatTimeout)
     }
+  }
+
+  /**
+   * 处理连接确认消息
+   */
+  private handleConnectedMessage(data: any): void {
+    console.log('✅ WebSocket 连接已确认:', data.message || '连接成功')
+    if (data.user_id) {
+      console.log('👤 用户ID:', data.user_id)
+    }
+  }
+
+  /**
+   * 处理心跳响应消息
+   */
+  private handlePongMessage(data: any): void {
+    // pong 是服务器对心跳的响应，连接正常
+    console.debug('💓 收到心跳响应')
   }
 
   /**
@@ -262,6 +388,14 @@ export class WebSocketService {
    */
   setOnProgress(callback: (message: WebSocketProgressMessage) => void): void {
     this.onProgressCallback = callback
+  }
+
+  /**
+   * 设置任务状态回调
+   * @param callback 回调函数
+   */
+  setOnTaskStatus(callback: (message: any) => void): void {
+    this.onTaskStatusCallback = callback
   }
 
   /**

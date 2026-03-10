@@ -112,10 +112,43 @@ def get_current_admin_user(
     return current_user
 
 
-# <!-- 
-# 审查上下文：
-# - 设计意图：使用 FastAPI 依赖注入系统，实现声明式认证
-# - 已知局限：HTTPBearer 方案较简单，生产环境可考虑 OAuth2PasswordBearer
-# - 业务背景：docs/architecture/DESIGN.md - 前后端分离的认证架构
-# - 测试重点：请验证各种认证场景（普通用户、管理员、禁用用户、无效token）
-# -->
+def get_current_user_from_websocket(token: str, db: Session) -> User:
+    """
+    从 WebSocket 连接中获取当前认证用户
+    
+    Args:
+        token: JWT 认证令牌
+        db: 数据库会话
+        
+    Returns:
+        当前用户对象
+        
+    Raises:
+        HTTPException: 认证失败时抛出 401 错误
+    """
+    # <!-- 
+    # 审查上下文：
+    # - 设计意图：为 WebSocket 连接提供认证支持，复用现有的认证逻辑
+    # - 已知局限：与 HTTP 认证共享相同的 AuthService，保持一致性
+    # - 业务背景：WebSocket 连接需要与 HTTP API 相同的认证机制
+    # - 测试重点：请验证 WebSocket 认证流程、token 解析、用户查询
+    # -->
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.debug(f"[WS Auth] 开始验证token: {token[:20]}...")
+        auth_service = AuthService(db)
+        user = auth_service.get_current_user(token)
+        logger.debug(f"[WS Auth] Token验证成功，用户ID: {user.id}")
+        return user
+    except HTTPException as e:
+        logger.warning(f"[WS Auth] Token验证失败: {e.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"[WS Auth] Token验证过程中发生未预期错误: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="认证服务异常"
+        ) from e

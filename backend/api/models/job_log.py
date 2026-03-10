@@ -24,7 +24,7 @@ class JobLog(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment="日志 ID")
     job_id = Column(
-        String(36), 
+        Integer, 
         ForeignKey("jobs.id", ondelete="CASCADE"), 
         nullable=False, 
         index=True, 
