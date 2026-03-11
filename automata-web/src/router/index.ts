@@ -52,7 +52,7 @@ const router = createRouter({
     {
       path: '/data-process/protein',
       name: 'protein',
-      component: () => import('../views/AboutView.vue'),
+      component: () => import('../views/DataProcess/Protein.vue'),
       meta: { requiresAuth: true }
     },
     {

@@ -3,17 +3,18 @@
     <!-- 数据处理表单 -->
     <DataProcessForm
       ref="formComponent"
-      title="转录组数据处理"
-      subtitle="Transcriptome Data Processing"
-      tag-type="success"
-      file-label="1. 上传 mRNA 表达数据"
+      title="蛋白质数据处理"
+      subtitle="Protein Data Processing"
+      tag-type="warning"
+      file-label="1. 上传蛋白质表达数据"
       file-tip="仅支持 txt、csv、tsv 格式的文件"
-      nomenclature-label="2. mRNA 命名方式"
-      nomenclature-placeholder="请选择 mRNA 命名方式"
+      nomenclature-label="2. 蛋白质命名方式"
+      nomenclature-placeholder="请选择蛋白质命名方式"
       :nomenclature-options="[
-        { label: 'Refseq Accession (e.g. NM_001422116)', value: 'Refseq' },
-        { label: 'Ensembl ID (e.g. ENST00000641515)', value: 'EnsemblID' },
-        { label: 'Transcript name (e.g. OR4F5-201)', value: 'Transcript_name' }
+        { label: 'UniProt Entry', value: 'Entry' },
+        { label: 'RefSeq Accession', value: 'RefSeq' },
+        { label: 'AlphaFoldDB ID', value: 'AlphaFoldDB' },
+        { label: 'Ensembl ID', value: 'Ensembl' }
       ]"
       :species-options="[
         { label: 'Homo sapiens', value: 'homo_sapiens' },
@@ -22,9 +23,9 @@
         { label: 'Drosophila melanogaster', value: 'drosophila_melanogaster' }
       ]"
       :on-submit="handleSubmit"
-      example-data-url="/example/test_refseq_fpkm_mrna.txt"
-      example-file-name="refseq_accession_fpkm2TPM_mrna.txt"
-      example-note="示例数据包含Refseq mRNA标识符，请选择对应物种查看结果"
+      example-data-url="/example/test_protein_refseq.txt"
+      example-file-name="protein_refseq_example.txt"
+      example-note="示例数据包含RefSeq蛋白质标识符，请选择对应物种查看结果"
       @submit-success="handleSuccess"
     />
     
@@ -58,14 +59,13 @@ import { ref, reactive, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormData } from '@/types/dataProcess'
 import { DataProcessAPI } from '@/api'
-import TaskResultDisplay from '@/components/TaskResultDisplay.vue'
 
 // <!-- 
 // 审查上下文：
-// - 设计意图：使用可复用的 DataProcessForm 组件简化代码，遵循 DRY 原则
-// - 已知局限：保持与原组件相同的 API 接口，确保向后兼容
-// - 业务背景：重构转录组数据处理页面以提高代码复用性和可维护性
-// - 测试重点：请验证表单功能、API 调用和用户交互流程
+// - 设计意图：实现蛋白质数据处理功能，支持多种蛋白质命名方式和物种
+// - 已知局限：需要相应的数据库表支持蛋白质标识符到基因符号的映射
+// - 业务背景：提供与基因组、转录组类似的蛋白质数据标准化处理功能
+// - 测试重点：请验证不同命名方式的处理、物种支持、结果文件生成
 // -->
 
 const formComponent = ref()
@@ -78,8 +78,7 @@ const jobProgress = ref(0)
 
 // 任务参数
 const jobParams = reactive({
-  gene_nomenclature: '',
-  data_type: '',
+  protein_nomenclature: '',
   organism: ''
 })
 
@@ -128,30 +127,17 @@ const disconnectWebSocket = () => {
 }
 
 const handleSubmit = async (formData: FormData) => {
-  console.log('📥 开始处理转录组数据提交:', formData)
-  
   // 构造 FormData
   const requestData = new FormData()
   requestData.append('file', formData.file!)
-  requestData.append('mrna_nomenclature', formData.nomenclature)
-  requestData.append('data_type', formData.dataType)
+  requestData.append('protein_nomenclature', formData.nomenclature)
   requestData.append('organism', formData.organism)
   if (formData.email) {
     requestData.append('email', formData.email)
   }
   
-  console.log('📦 构造的请求数据:', {
-    fileName: formData.file?.name,
-    fileSize: formData.file?.size,
-    mrna_nomenclature: formData.nomenclature,
-    data_type: formData.dataType,
-    organism: formData.organism,
-    email: formData.email
-  })
-  
   // 保存参数用于结果显示
-  jobParams.gene_nomenclature = formData.nomenclature
-  jobParams.data_type = formData.dataType
+  jobParams.protein_nomenclature = formData.nomenclature
   jobParams.organism = formData.organism
   
   // 连接 WebSocket（如果还没有连接）
@@ -159,32 +145,19 @@ const handleSubmit = async (formData: FormData) => {
     await connectWebSocket()
   }
   
-  try {
-    console.log('🚀 发送API请求到: /v1/data-process/transcriptome')
-    const result = await DataProcessAPI.processTranscriptome(requestData)
-    console.log('✅ API响应成功:', result)
-    
-    // 打开结果弹窗
-    currentJobId.value = result.job_id
-    jobStatus.value = 'SUBMITTED'
-    jobProgress.value = 0
-    showResultDialog.value = true
-    
-    return result
-  } catch (error: any) {
-    console.error('❌ API请求失败:', error)
-    console.error('❌ 错误详情:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status,
-      statusText: error.response?.statusText
-    })
-    throw error
-  }
+  const result = await DataProcessAPI.processProtein(requestData)
+  
+  // 打开结果弹窗
+  currentJobId.value = result.job_id
+  jobStatus.value = 'SUBMITTED'
+  jobProgress.value = 0
+  showResultDialog.value = true
+  
+  return result
 }
 
 const handleSuccess = (result: any) => {
-  ElMessage.success('转录组数据处理任务已提交')
+  ElMessage.success('蛋白质数据处理任务已提交')
 }
 
 const handleStatusChange = (status: string) => {
