@@ -38,7 +38,7 @@
               <td class="line" :style="lineStyle">Running</td>
               <td>
                 <img 
-                  v-if="status === 'PROCESSING' || status === 'Processing'" 
+                  v-if="status.toUpperCase() === 'PROCESSING'" 
                   :src="progressBarUrl" 
                   :height="imageHeight" 
                   alt="Processing..."
@@ -73,18 +73,22 @@
               <td class="line" :style="lineStyle">JobID</td>
               <td>{{ jobId }}</td>
             </tr>
-            <tr>
-              <td class="line" :style="lineStyle">Gene Nomenclature</td>
-              <td>{{ params.gene_nomenclature }}</td>
-            </tr>
-            <tr class="odd" :style="oddRowStyle">
-              <td class="line" :style="lineStyle">Input Data Type</td>
-              <td>{{ params.data_type }}</td>
-            </tr>
-            <tr>
-              <td class="line" :style="lineStyle">Organism</td>
-              <td>{{ params.organism }}</td>
-            </tr>
+            <!-- 非精简模式下显示详细参数行（Genome / Transcriptome 保持不变） -->
+            <template v-if="!props.compact">
+              <tr>
+                <td class="line" :style="lineStyle">Gene Nomenclature</td>
+                <td>{{ params.gene_nomenclature }}</td>
+              </tr>
+              <tr class="odd" :style="oddRowStyle">
+                <td class="line" :style="lineStyle">Input Data Type</td>
+                <td>{{ params.data_type }}</td>
+              </tr>
+              <tr>
+                <td class="line" :style="lineStyle">Organism</td>
+                <td>{{ params.organism }}</td>
+              </tr>
+            </template>
+            <!-- 最终结果行：所有场景都保留 -->
             <tr class="odd" :style="oddRowStyle">
               <td class="line" :style="lineStyle">Data Process Result</td>
               <td>
@@ -124,18 +128,22 @@
               <td class="line" :style="lineStyle">JobID</td>
               <td>{{ jobId }}</td>
             </tr>
-            <tr>
-              <td class="line" :style="lineStyle">Gene Nomenclature</td>
-              <td>{{ params.gene_nomenclature }}</td>
-            </tr>
-            <tr class="odd" :style="oddRowStyle">
-              <td class="line" :style="lineStyle">Input Data Type</td>
-              <td>{{ params.data_type }}</td>
-            </tr>
-            <tr>
-              <td class="line" :style="lineStyle">Organism</td>
-              <td>{{ params.organism }}</td>
-            </tr>
+            <!-- 非精简模式下显示详细参数行（Genome / Transcriptome 保持不变） -->
+            <template v-if="!props.compact">
+              <tr>
+                <td class="line" :style="lineStyle">Gene Nomenclature</td>
+                <td>{{ params.gene_nomenclature }}</td>
+              </tr>
+              <tr class="odd" :style="oddRowStyle">
+                <td class="line" :style="lineStyle">Input Data Type</td>
+                <td>{{ params.data_type }}</td>
+              </tr>
+              <tr>
+                <td class="line" :style="lineStyle">Organism</td>
+                <td>{{ params.organism }}</td>
+              </tr>
+            </template>
+            <!-- 最终结果行：所有场景都保留 -->
             <tr class="odd" :style="oddRowStyle">
               <td class="line" :style="lineStyle">Data Process Result</td>
               <td class="error-message">Processing failure! {{ errorMessage }}</td>
@@ -188,13 +196,20 @@ interface Props {
     data_type: string
     organism: string
   }
+  /**
+   * 是否使用精简结果表格（仅显示 JobID 和 Data Process Result 两行）
+   * - 用于 Integration 多组学整合，保持与原 integration.php 一致
+   * - 默认为 false，Genome / Transcriptome 继续显示完整信息
+   */
+  compact?: boolean
   initialStatus?: TaskStatus
   initialProgress?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   initialStatus: 'WAITING' as TaskStatus,
-  initialProgress: 0
+  initialProgress: 0,
+  compact: false
 })
 
 const emit = defineEmits<{
@@ -238,23 +253,15 @@ watch(() => props.jobId, (newJobId) => {
   }
 })
 
-// 样式定义（响应式布局）
-const tableStyle = computed(() => ({
-  width: '100%',
-  maxWidth: '100%',
-  textAlign: 'center',
-  lineHeight: '50px',
-  borderCollapse: 'collapse'
-}))
+// 样式定义（响应式布局）——返回行内样式字符串，避免 TS 对 CSSProperties 的严格校验问题
+const tableStyle = computed(
+  () =>
+    'width: 100%; max-width: 100%; text-align: center; line-height: 50px; border-collapse: collapse;'
+)
 
-const oddRowStyle = computed(() => ({
-  backgroundColor: '#F7F7F7'
-}))
+const oddRowStyle = computed(() => 'background-color: #F7F7F7;')
 
-const lineStyle = computed(() => ({
-  borderRight: '1px solid #c0c0c0',
-  width: '50%'
-}))
+const lineStyle = computed(() => 'border-right: 1px solid #c0c0c0; width: 50%;')
 
 // 响应式图像高度
 const imageHeight = computed(() => {

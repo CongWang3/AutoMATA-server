@@ -320,6 +320,74 @@ async def handle_job_result_download(request: web.Request) -> web.StreamResponse
         return web.Response(text="下载服务内部错误", status=500)
 
 
+async def handle_example_download(request: web.Request) -> web.StreamResponse:
+    """
+    下载示例文件（不需要鉴权），用于前端示例数据下载
+    
+    访问路径示例：
+    - /example/train_example/jobID_pheno.txt
+    - /example/train_example/jobID_omics_1.txt
+    
+    映射到文件系统路径：
+    - /xp/www/AutoMATA/example/train_example/jobID_pheno.txt
+    """
+    try:
+        # {filepath:.*} 会把 "train_example/jobID_pheno.txt" 这样的相对路径整体匹配进来
+        rel_path = request.match_info.get('filepath', '')
+        if not rel_path:
+            return web.Response(text="示例文件路径为空", status=400)
+        
+        base_dir = Path("/xp/www/AutoMATA/example").resolve()
+        target_path = (base_dir / rel_path).resolve()
+        
+        # 防止路径穿越攻击：必须保证目标路径仍在 base_dir 下
+        if not str(target_path).startswith(str(base_dir)):
+            logger.warning(f"[EXAMPLE] 非法示例路径: {target_path}")
+            return web.Response(text="非法示例路径", status=400)
+        
+        if not target_path.exists():
+            logger.warning(f"[EXAMPLE] 示例文件不存在: {target_path}")
+            return web.Response(text="示例文件不存在", status=404)
+        
+        file_size = target_path.stat().st_size
+        filename = target_path.name
+        encoded_filename = urllib.parse.quote(filename, safe='')
+        
+        origin = request.headers.get('Origin', '')
+        allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
+        
+        response = web.StreamResponse(
+            status=200,
+            headers={
+                'Content-Type': 'text/plain',
+                'Content-Length': str(file_size),
+                'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}",
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': allow_origin,
+            }
+        )
+        
+        await response.prepare(request)
+        
+        chunk_size = 64 * 1024
+        try:
+            with open(target_path, 'rb') as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    await response.write(chunk)
+            logger.info(f"[EXAMPLE] 示例文件传输完成: {target_path}")
+        except Exception as e:
+            logger.exception(f"[EXAMPLE] 示例文件传输错误: {e}")
+            return web.Response(text="示例文件传输失败", status=500)
+        
+        return response
+    except Exception as e:
+        logger.exception(f"[EXAMPLE] 未处理异常: {e}")
+        return web.Response(text="示例下载服务内部错误", status=500)
+
+
 async def handle_cors_preflight(request: web.Request) -> web.Response:
     """
     处理 CORS 预检请求
@@ -358,6 +426,9 @@ def create_app() -> web.Application:
     app.router.add_options('/download/{file_id}', handle_cors_preflight)
     app.router.add_get('/job-result/{job_id}', handle_job_result_download)
     app.router.add_options('/job-result/{job_id}', handle_cors_preflight)
+    # 示例文件下载，支持子目录路径（如 /example/train_example/jobID_pheno.txt）
+    app.router.add_get('/example/{filepath:.*}', handle_example_download)
+    app.router.add_options('/example/{filepath:.*}', handle_cors_preflight)
     
     return app
 

@@ -58,7 +58,7 @@ const router = createRouter({
     {
       path: '/data-process/integration',
       name: 'integration',
-      component: () => import('../views/AboutView.vue'),
+      component: () => import('../views/DataProcess/Integration.vue'),
       meta: { requiresAuth: true }
     },
     // 模型相关路由

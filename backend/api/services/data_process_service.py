@@ -13,10 +13,11 @@ from fastapi import UploadFile, HTTPException
 
 from sqlalchemy.orm import Session
 from api.models.user import User
-from api.models.job import Job
+from api.models.job import Job, JobType, JobStatus
 from api.schemas.data_process import (
     GenomeProcessResponse,
-    TranscriptomeProcessResponse
+    TranscriptomeProcessResponse,
+    IntegrationProcessResponse
 )
 from api.utils.file_utils import save_uploaded_file
 from api.websocket.task_manager import task_status_manager
@@ -75,8 +76,10 @@ class DataProcessService:
             job = Job(
                 job_id=job_id,
                 user_id=self.user.id,
-                job_type="genome_process",
-                status="Submitted",
+                # job_type="genome_process",
+                # status="Submitted",
+                job_type=JobType.GENOME_PROCESS,
+                status=JobStatus.SUBMITTED,
                 input_params=json.dumps({
                     "gene_nomenclature": gene_nomenclature,
                     "data_type": data_type,
@@ -139,8 +142,10 @@ class DataProcessService:
             job = Job(
                 job_id=job_id,
                 user_id=self.user.id,
-                job_type="transcriptome_process",
-                status="Submitted",
+                # job_type="transcriptome_process",
+                # status="Submitted",
+                job_type=JobType.TRANSCRIPTOME_PROCESS,
+                status=JobStatus.SUBMITTED,
                 input_params=json.dumps({
                     "mrna_nomenclature": mrna_nomenclature,
                     "data_type": data_type,
@@ -167,6 +172,81 @@ class DataProcessService:
             
         except Exception as e:
             logger.error(f"转录组数据处理服务失败: {str(e)}")
+            self.db.rollback()
+            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+    
+    async def process_integration_data(
+        self,
+        pheno_file: UploadFile,
+        file_1: UploadFile,
+        file_2: UploadFile,
+        file_3: UploadFile,
+        email: Optional[str] = None
+    ) -> IntegrationProcessResponse:
+        """
+        处理多组学数据整合
+        
+        Args:
+            pheno_file: 表型数据文件
+            file_1: 组学数据文件1
+            file_2: 组学数据文件2
+            file_3: 组学数据文件3
+            email: 用户邮箱
+            
+        Returns:
+            处理结果响应
+        """
+        try:
+            # 生成任务ID
+            job_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+            
+            # 保存上传文件
+            pheno_saved = await save_uploaded_file(pheno_file, self.upload_dir, f"{job_id}_pheno")
+            file1_saved = await save_uploaded_file(file_1, self.upload_dir, f"{job_id}_omics_1")
+            file2_saved = await save_uploaded_file(file_2, self.upload_dir, f"{job_id}_omics_2")
+            file3_saved = await save_uploaded_file(file_3, self.upload_dir, f"{job_id}_omics_3")
+            
+            # 创建任务记录（注意：Path 需要转成字符串才能进行 JSON 序列化）
+            job = Job(
+                job_id=job_id,
+                user_id=self.user.id,
+                job_type=JobType.INTEGRATION_PROCESS,
+                status=JobStatus.SUBMITTED,
+                input_params=json.dumps(
+                    {
+                        "email": email,
+                        "pheno_file": str(pheno_saved),
+                        "file_1": str(file1_saved),
+                        "file_2": str(file2_saved),
+                        "file_3": str(file3_saved),
+                    },
+                    ensure_ascii=False,
+                ),
+                created_at=datetime.now(),
+            )
+            self.db.add(job)
+            self.db.commit()
+            
+            # 异步处理数据
+            asyncio.create_task(
+                self._execute_integration_processing(
+                    job_id=job_id,
+                    pheno_path=pheno_saved,
+                    file1_path=file1_saved,
+                    file2_path=file2_saved,
+                    file3_path=file3_saved,
+                    email=email,
+                )
+            )
+            
+            return IntegrationProcessResponse(
+                job_id=job_id,
+                status="Submitted",
+                message="多组学数据整合任务已提交",
+                created_at=datetime.now(),
+            )
+        except Exception as e:
+            logger.error(f"多组学数据整合服务失败: {str(e)}")
             self.db.rollback()
             raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
     
@@ -429,6 +509,145 @@ class DataProcessService:
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
                 job.status = "Failed"
+                job.error_message = str(e)
+                job.updated_at = datetime.now()
+                self.db.commit()
+
+    async def _execute_integration_processing(
+        self,
+        job_id: str,
+        pheno_path: Path,
+        file1_path: Path,
+        file2_path: Path,
+        file3_path: Path,
+        email: Optional[str],
+    ):
+        """执行多组学数据整合（调用 Python integration.py 脚本）"""
+        try:
+            # 更新任务状态
+            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            if job:
+                job.status = JobStatus.PROCESSING
+                job.updated_at = datetime.now()
+                self.db.commit()
+                
+                # 通过 WebSocket 推送状态更新
+                try:
+                    await task_status_manager.send_task_status(
+                        str(self.user.id),
+                        {
+                            "job_id": job_id,
+                            "status": JobStatus.PROCESSING.value,
+                            "progress": 0,
+                            "message": "开始进行多组学数据整合",
+                        },
+                    )
+                except Exception as e:
+                    logger.debug(f"WebSocket 状态推送失败: {e}")
+            
+            # 准备 Jobs 目录及输入文件（与原 PHP 实现保持一致）
+            jobs_dir = Path("/xp/www/AutoMATA/download_data/Jobs") / job_id
+            jobs_dir.mkdir(parents=True, exist_ok=True)
+            result_dir = jobs_dir / "result"
+            result_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 目标文件路径（integration.py 期望的命名）
+            pheno_file = jobs_dir / f"{job_id}_pheno.txt"
+            omics1_file = jobs_dir / f"{job_id}_omics_1.txt"
+            omics2_file = jobs_dir / f"{job_id}_omics_2.txt"
+            omics3_file = jobs_dir / f"{job_id}_omics_3.txt"
+            output_file = jobs_dir / f"{job_id}_result.txt"
+            
+            # 将上传文件拷贝到 Jobs 目录并改名
+            import shutil
+            
+            shutil.copy2(str(pheno_path), str(pheno_file))
+            shutil.copy2(str(file1_path), str(omics1_file))
+            shutil.copy2(str(file2_path), str(omics2_file))
+            shutil.copy2(str(file3_path), str(omics3_file))
+            
+            # 构建 Python 脚本命令（与 integration.php 保持一致）
+            python_exec = "/opt/anaconda/envs/automata/bin/python"
+            script_path = "/xp/www/AutoMATA/code/train_model/integration.py"
+            
+            cmd = [
+                python_exec,
+                script_path,
+                "--jobID",
+                job_id,
+                "--pheno_file",
+                str(pheno_file),
+                "--file_1",
+                str(omics1_file),
+                "--file_2",
+                str(omics2_file),
+                "--file_3",
+                str(omics3_file),
+                "--output_file",
+                str(output_file),
+            ]
+            
+            import subprocess
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=os.getcwd(),
+            )
+            
+            # 更新任务结果
+            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            if job:
+                if result.returncode == 0:
+                    job.status = JobStatus.COMPLETED
+                    job.result_file = str(output_file)
+                    job.output_params = json.dumps(
+                        {"stdout": result.stdout}, ensure_ascii=False
+                    )
+                    
+                    # 推送完成状态
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(self.user.id),
+                            {
+                                "job_id": job_id,
+                                "status": JobStatus.COMPLETED.value,
+                                "progress": 100,
+                                "result_file": job.result_file,
+                                "message": "多组学数据整合完成",
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket 状态推送失败: {e}")
+                else:
+                    job.status = JobStatus.FAILED
+                    job.error_message = result.stderr or "Integration 脚本执行失败"
+                    
+                    # 推送失败状态
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(self.user.id),
+                            {
+                                "job_id": job_id,
+                                "status": JobStatus.FAILED.value,
+                                "progress": 0,
+                                "error_message": job.error_message,
+                                "message": "多组学数据整合失败",
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket 状态推送失败: {e}")
+                
+                job.updated_at = datetime.now()
+                self.db.commit()
+                logger.info(f"多组学数据整合完成：job_id={job_id}, status={job.status}")
+        
+        except Exception as e:
+            logger.error(f"多组学数据整合执行失败: job_id={job_id}, error={str(e)}")
+            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            if job:
+                job.status = JobStatus.FAILED
                 job.error_message = str(e)
                 job.updated_at = datetime.now()
                 self.db.commit()

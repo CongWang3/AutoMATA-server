@@ -26,6 +26,13 @@ interface TranscriptomeProcessResponse extends BaseApiResponse {
   created_at: string
 }
 
+interface IntegrationProcessResponse extends BaseApiResponse {
+  job_id: string
+  status: string
+  message: string
+  created_at: string
+}
+
 export class DataProcessAPI {
   /**
    * 基因组数据处理
@@ -63,6 +70,26 @@ export class DataProcessAPI {
       )
     } catch (error) {
       console.error('转录组数据处理失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 多组学数据整合
+   */
+  static async processIntegration(formData: FormData): Promise<IntegrationProcessResponse> {
+    try {
+      return await apiClient.post<IntegrationProcessResponse>(
+        '/v1/data-process/integration',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      )
+    } catch (error) {
+      console.error('多组学数据整合失败:', error)
       throw error
     }
   }

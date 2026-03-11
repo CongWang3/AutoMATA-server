@@ -1,5 +1,7 @@
 import pandas as pd
 import argparse
+from sklearn.impute import KNNImputer  # 二审
+import numpy as np    # 二审
 
 # 按照样本名称拼接, 缺失值赋0
 
@@ -55,8 +57,22 @@ pheno_df = pheno_df.rename(columns={pheno_df.columns[0]: 'Sample'})  # 修改列
 merged_df = pd.merge(merged_df, pheno_df, on='Sample', how='outer')
 del pheno_df
 
-# 缺失值赋0
-merged_df.fillna('0')
+# 缺失值用KNN填充 二审
+# merged_df.fillna('0')
+if merged_df.isna().sum().sum() > 0:
+    numeric_cols = merged_df.select_dtypes(include=[np.number]).columns.tolist()  # 数值列
+    non_numeric_cols = merged_df.select_dtypes(exclude=[np.number]).columns.tolist()  # 非数值列
+    imputer = KNNImputer(n_neighbors=10, weights='uniform')
+    imputed_array = imputer.fit_transform(merged_df[numeric_cols])
+    # 创建填充后的DataFrame
+    merged_df_imputed = pd.DataFrame(imputed_array, 
+                                        columns=numeric_cols,
+                                        index=merged_df.index)
+    # 重新合并非数值列
+    merged_df_imputed = pd.concat([merged_df_imputed, 
+                                        merged_df[non_numeric_cols]], axis=1)
+    merged_df = merged_df_imputed
+    del merged_df_imputed
 
 # 保存文件
 merged_df.to_csv(output_file, sep='\t', index=False)

@@ -11,12 +11,13 @@ from config.database import Base
 
 class JobType(str, enum.Enum):
     """任务类型枚举"""
-    GENOME_PROCESS = "GENOME_PROCESS"
-    TRANSCRIPTOME_PROCESS = "TRANSCRIPTOME_PROCESS"
-    PROTEIN_PROCESS = "PROTEIN_PROCESS"
-    INTEGRATION_PROCESS = "INTEGRATION_PROCESS"
-    MODEL_TRAIN = "MODEL_TRAIN"
-    DATA_ANALYSIS = "DATA_ANALYSIS"
+    # 大写字符串改为小写
+    GENOME_PROCESS = "genome_process"
+    TRANSCRIPTOME_PROCESS = "transcriptome_process"
+    PROTEIN_PROCESS = "protein_process"
+    INTEGRATION_PROCESS = "integration_process"
+    MODEL_TRAIN = "model_train"
+    DATA_ANALYSIS = "data_analysis"
     
     def __str__(self):
         return self.value

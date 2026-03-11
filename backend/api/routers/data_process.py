@@ -21,6 +21,10 @@ from api.schemas.data_process import (
     GenomeProcessResponse,
     TranscriptomeProcessRequest,
     TranscriptomeProcessResponse,
+    ProteinProcessRequest,
+    ProteinProcessResponse,
+    IntegrationProcessRequest,
+    IntegrationProcessResponse,
     DataProcessStatusResponse,
     JobListItem,
     JobListResponse
@@ -105,7 +109,7 @@ async def process_genome_data(
                 detail=f"支持的物种: {', '.join(valid_organisms)}"
             )
         
-        # 调用服务层处理
+        # 调用服务层处理 执行脚本
         service = DataProcessService(db, current_user)
         result = await service.process_genome_data(
             file=file,
@@ -207,6 +211,139 @@ async def process_transcriptome_data(
         raise HTTPException(status_code=500, detail="数据库操作失败")
     except Exception as e:
         logger.error(f"转录组数据处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+
+
+@router.post("/protein", response_model=ProteinProcessResponse)
+async def process_protein_data(
+    file: UploadFile = File(...),
+    protein_nomenclature: str = Form(...),
+    organism: str = Form(...),
+    email: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    蛋白质数据处理接口
+    
+    将蛋白质表达数据转换为log2(表达值+1)格式，并提供对应的基因符号
+    
+    Args:
+        file: 上传的蛋白质表达数据文件
+        protein_nomenclature: 蛋白质命名方式 (Entry, RefSeq, AlphaFoldDB, Ensembl)
+        organism: 物种 (homo_sapiens, bos_taurus, mus_musculus, drosophila_melanogaster)
+        email: 可选的用户邮箱
+        db: 数据库会话
+        current_user: 当前认证用户
+        
+    Returns:
+        处理任务信息
+    """
+    try:
+        # 验证文件类型
+        if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
+            raise HTTPException(
+                status_code=400, 
+                detail="只支持 txt、csv、tsv 格式的文件"
+            )
+        
+        # 验证参数
+        valid_nomenclatures = ["Entry", "RefSeq", "AlphaFoldDB", "Ensembl"]
+        valid_organisms = [
+            "homo_sapiens", "bos_taurus", "mus_musculus", "drosophila_melanogaster"
+        ]
+        
+        if protein_nomenclature not in valid_nomenclatures:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"蛋白质命名方式必须是: {', '.join(valid_nomenclatures)}"
+            )
+            
+        if organism not in valid_organisms:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"支持的物种: {', '.join(valid_organisms)}"
+            )
+        
+        # 调用服务层处理
+        service = DataProcessService(db, current_user)
+        result = await service.process_protein_data(
+            file=file,
+            protein_nomenclature=protein_nomenclature,
+            organism=organism,
+            email=email
+        )
+        
+        logger.info(f"蛋白质数据处理任务已提交: job_id={result.job_id}, user={current_user.username}")
+        return result
+        
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        logger.error(f"数据库错误：{str(e)}")
+        raise HTTPException(status_code=500, detail="数据库操作失败")
+    except Exception as e:
+        logger.error(f"蛋白质数据处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+
+
+@router.post("/integration", response_model=IntegrationProcessResponse)
+async def process_integration_data(
+    pheno_file: UploadFile = File(...),
+    file_1: UploadFile = File(...),
+    file_2: UploadFile = File(...),
+    file_3: UploadFile = File(...),
+    email: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    多组学数据整合接口
+    
+    将基因组 / 转录组 / 蛋白质等多组学数据按样本名进行整合，缺失值填充为 0
+    
+    Args:
+        pheno_file: 表型数据文件
+        file_1: 组学数据文件1
+        file_2: 组学数据文件2
+        file_3: 组学数据文件3
+        email: 可选邮箱，用于结果通知
+        db: 数据库会话
+        current_user: 当前认证用户
+        
+    Returns:
+        处理任务信息
+    """
+    try:
+        # 基本文件类型校验（后端仍保留安全兜底）
+        files = [pheno_file, file_1, file_2, file_3]
+        for f in files:
+            if not f.filename or not f.filename.endswith(('.txt', '.csv', '.tsv')):
+                raise HTTPException(
+                    status_code=400,
+                    detail="所有文件仅支持 txt、csv、tsv 格式",
+                )
+        
+        service = DataProcessService(db, current_user)
+        result = await service.process_integration_data(
+            pheno_file=pheno_file,
+            file_1=file_1,
+            file_2=file_2,
+            file_3=file_3,
+            email=email,
+        )
+        
+        logger.info(
+            f"多组学数据整合任务已提交: job_id={result.job_id}, user={current_user.username}"
+        )
+        return result
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        logger.error(f"数据库错误：{str(e)}")
+        raise HTTPException(status_code=500, detail="数据库操作失败")
+    except Exception as e:
+        logger.error(f"多组学数据整合失败：{str(e)}")
         raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
 
 @router.get("/status/{job_id}", response_model=DataProcessStatusResponse)
@@ -420,3 +557,39 @@ async def get_download_url(
     except Exception as e:
         logger.error(f"生成下载链接失败：{str(e)}")
         raise HTTPException(status_code=500, detail=f"生成下载链接失败：{str(e)}")
+
+
+# ---------------- 示例数据下载（多组学整合） ----------------
+
+# @router.get("/examples/integration/{file_type}")
+# async def download_integration_example(file_type: str):
+#     """
+#     下载多组学整合示例数据文件
+    
+#     file_type 取值：
+#     - pheno   -> jobID_pheno.txt
+#     - omics1  -> jobID_omics_1.txt
+#     - omics2  -> jobID_omics_2.txt
+#     - omics3  -> jobID_omics_3.txt
+#     """
+#     base_dir = FilePath("/xp/www/AutoMATA/example/train_example")
+#     mapping = {
+#         "pheno": "jobID_pheno.txt",
+#         "omics1": "jobID_omics_1.txt",
+#         "omics2": "jobID_omics_2.txt",
+#         "omics3": "jobID_omics_3.txt",
+#     }
+    
+#     if file_type not in mapping:
+#         raise HTTPException(status_code=400, detail="不支持的示例文件类型")
+    
+#     file_path = base_dir / mapping[file_type]
+#     if not file_path.exists():
+#         logger.error(f"示例文件不存在: {file_path}")
+#         raise HTTPException(status_code=404, detail="示例文件不存在")
+    
+#     return FileResponse(
+#         path=str(file_path),
+#         filename=mapping[file_type],
+#         media_type="text/plain"
+#     )

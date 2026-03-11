@@ -47,6 +47,39 @@ class TranscriptomeProcessResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class IntegrationProcessRequest(BaseModel):
+    """多组学数据整合请求模型"""
+    email: Optional[str] = None
+
+
+class IntegrationProcessResponse(BaseModel):
+    """多组学数据整合响应模型"""
+    job_id: str
+    status: str
+    message: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ProteinProcessRequest(BaseModel):
+    """蛋白质数据处理请求模型"""
+    protein_nomenclature: str  # Entry, RefSeq, AlphaFoldDB, Ensembl
+    organism: str  # homo_sapiens, bos_taurus, mus_musculus, drosophila_melanogaster
+    email: Optional[str] = None
+
+class ProteinProcessResponse(BaseModel):
+    """蛋白质数据处理响应模型"""
+    job_id: str
+    status: str
+    message: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
 class DataProcessStatusResponse(BaseModel):
     """数据处理状态查询响应模型"""
     job_id: str
