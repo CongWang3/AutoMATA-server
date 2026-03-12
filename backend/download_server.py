@@ -32,7 +32,13 @@ CORS_ORIGINS = ["http://localhost:5173", "http://localhost:5174", "http://localh
 MAX_SKEW = 60  # 允许的时间偏差，单位秒
 
 # 全局数据库引擎（复用连接池）
-engine: Engine = create_engine(settings.DATABASE_URL)
+# engine: Engine = create_engine(settings.DATABASE_URL)
+# 使用 pool_pre_ping 避免长时间空闲连接导致 "MySQL server has gone away"
+engine: Engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=7200,  # 定期回收连接，单位秒
+)
 
 
 def _parse_int_param(request: web.Request, name: str, default: Optional[int] = None) -> Optional[int]:

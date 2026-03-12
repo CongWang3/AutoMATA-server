@@ -22,10 +22,11 @@
         { label: 'Mus musculus', value: 'mus_musculus' },
         { label: 'Drosophila melanogaster', value: 'drosophila_melanogaster' }
       ]"
+      :show-data-type="false"
       :on-submit="handleSubmit"
       example-data-url="/example/test_protein_refseq.txt"
       example-file-name="protein_refseq_example.txt"
-      example-note="示例数据包含RefSeq蛋白质标识符，请选择对应物种查看结果"
+      example-note="示例数据包含人类物种的RefSeq蛋白质标识符"
       @submit-success="handleSuccess"
     />
     
@@ -40,6 +41,8 @@
         v-if="showResultDialog && currentJobId"
         :job-id="currentJobId"
         :params="jobParams"
+        :compact="false"
+        :hide-data-type="true"
         :initial-status="jobStatus"
         :initial-progress="jobProgress"
         @status-change="handleStatusChange"
@@ -76,9 +79,10 @@ const currentJobId = ref('')
 const jobStatus = ref('WAITING')
 const jobProgress = ref(0)
 
-// 任务参数
+// 任务参数（复用 TaskResultDisplay 通用结构，这里仅在等待页面展示）
 const jobParams = reactive({
-  protein_nomenclature: '',
+  gene_nomenclature: '',
+  data_type: '',
   organism: ''
 })
 
@@ -137,7 +141,8 @@ const handleSubmit = async (formData: FormData) => {
   }
   
   // 保存参数用于结果显示
-  jobParams.protein_nomenclature = formData.nomenclature
+  jobParams.gene_nomenclature = formData.nomenclature
+  jobParams.data_type = '' // 蛋白质处理无数据类型，这里留空即可
   jobParams.organism = formData.organism
   
   // 连接 WebSocket（如果还没有连接）

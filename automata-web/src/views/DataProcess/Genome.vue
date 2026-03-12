@@ -23,7 +23,7 @@
       :on-submit="handleSubmit"
       example-data-url="/example/test_geneid_multi_species.txt"
       example-file-name="geneid_multi_species_example.txt"
-      example-note="示例数据包含多个物种基因，请选择对应物种查看结果"
+      example-note="示例数据包含多个物种的GeneID和TPM值"
       @submit-success="handleSuccess"
     />
     

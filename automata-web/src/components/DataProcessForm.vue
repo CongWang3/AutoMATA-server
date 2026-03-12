@@ -75,8 +75,8 @@
           </el-select>
         </el-form-item>
         
-        <!-- 数据类型选择 -->
-        <el-form-item label="数据类型" prop="dataType">
+        <!-- 数据类型选择（部分功能如蛋白质处理无需此项，可通过 props 控制显示） -->
+        <el-form-item v-if="props.showDataType" label="数据类型" prop="dataType">
           <el-select 
             v-model="formData.dataType" 
             placeholder="请选择数据类型"
@@ -177,12 +177,15 @@ interface Props {
   exampleDataUrl?: string
   exampleFileName?: string
   exampleNote?: string  // 示例数据说明
+  /** 是否显示“数据类型”字段（蛋白质处理不需要），默认 true */
+  showDataType?: boolean
   onSubmit: (formData: FormData) => Promise<any>
 }
 
 const props = withDefaults(defineProps<Props>(), {
   tagType: 'success',
-  acceptTypes: '.txt,.csv,.tsv'
+  acceptTypes: '.txt,.csv,.tsv',
+  showDataType: true
 })
 
 const emit = defineEmits<{
@@ -204,23 +207,23 @@ const formData = reactive<FormData>({
   email: ''
 })
 
-const formRules: FormRules = {
-  file: [
-    { required: true, message: '请上传文件', trigger: 'change' }
-  ],
-  nomenclature: [
-    { required: true, message: props.nomenclaturePlaceholder, trigger: 'change' }
-  ],
-  dataType: [
-    { required: true, message: '请选择数据类型', trigger: 'change' }
-  ],
-  organism: [
-    { required: true, message: '请选择物种', trigger: 'change' }
-  ],
-  email: [
-    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
-  ]
-}
+const formRules = computed<FormRules>(() => {
+  const rules: FormRules = {
+    file: [{ required: true, message: '请上传文件', trigger: 'change' }],
+    nomenclature: [
+      { required: true, message: props.nomenclaturePlaceholder, trigger: 'change' }
+    ],
+    organism: [{ required: true, message: '请选择物种', trigger: 'change' }],
+    email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }]
+  }
+
+  // 仅在需要时添加“数据类型”校验规则（蛋白质处理不需要）
+  if (props.showDataType) {
+    rules.dataType = [{ required: true, message: '请选择数据类型', trigger: 'change' }]
+  }
+
+  return rules
+})
 
 const handleFileChange = (uploadFile: UploadFile) => {
   if (uploadFile.raw) {

@@ -22,12 +22,13 @@
         { label: 'Drosophila melanogaster', value: 'drosophila_melanogaster' }
       ]"
       :on-submit="handleSubmit"
-      example-data-url="/example/test_refseq_fpkm_mrna.txt"
+      example-data-url="/example/test_refseq_fpkm_mrna.txt" 
       example-file-name="refseq_accession_fpkm2TPM_mrna.txt"
-      example-note="示例数据包含Refseq mRNA标识符，请选择对应物种查看结果"
+      example-note="示例数据包含人类物种的Refseq mRNA标识符和FPKM值"
       @submit-success="handleSuccess"
     />
-    
+    <!-- 示例文件放在这里了 /xp/www/AutoMATA/automata-web/public/example -->
+
     <!-- 任务结果弹窗 -->
     <el-dialog
       v-model="showResultDialog"

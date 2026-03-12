@@ -26,6 +26,13 @@ interface TranscriptomeProcessResponse extends BaseApiResponse {
   created_at: string
 }
 
+interface ProteinProcessResponse extends BaseApiResponse {
+  job_id: string
+  status: string
+  message: string
+  created_at: string
+}
+
 interface IntegrationProcessResponse extends BaseApiResponse {
   job_id: string
   status: string
@@ -90,6 +97,26 @@ export class DataProcessAPI {
       )
     } catch (error) {
       console.error('多组学数据整合失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 蛋白质数据处理
+   */
+  static async processProtein(formData: FormData): Promise<ProteinProcessResponse> {
+    try {
+      return await apiClient.post<ProteinProcessResponse>(
+        '/v1/data-process/protein',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      )
+    } catch (error) {
+      console.error('蛋白质数据处理失败:', error)
       throw error
     }
   }

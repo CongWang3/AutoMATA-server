@@ -23,10 +23,14 @@
               <td>{{ jobId }}</td>
             </tr>
             <tr>
-              <td class="line" :style="lineStyle">Gene Nomenclature</td>
+              <td class="line" :style="lineStyle">Nomenclature</td>
               <td>{{ params.gene_nomenclature }}</td>
             </tr>
-            <tr class="odd" :style="oddRowStyle">
+            <tr
+              v-if="!props.hideDataType"
+              class="odd"
+              :style="oddRowStyle"
+            >
               <td class="line" :style="lineStyle">Input Data Type</td>
               <td>{{ params.data_type }}</td>
             </tr>
@@ -73,13 +77,17 @@
               <td class="line" :style="lineStyle">JobID</td>
               <td>{{ jobId }}</td>
             </tr>
-            <!-- 非精简模式下显示详细参数行（Genome / Transcriptome 保持不变） -->
+            <!-- 非精简模式下显示详细参数行 -->
             <template v-if="!props.compact">
               <tr>
-                <td class="line" :style="lineStyle">Gene Nomenclature</td>
+                <td class="line" :style="lineStyle">Nomenclature</td>
                 <td>{{ params.gene_nomenclature }}</td>
               </tr>
-              <tr class="odd" :style="oddRowStyle">
+              <tr
+                v-if="!props.hideDataType"
+                class="odd"
+                :style="oddRowStyle"
+              >
                 <td class="line" :style="lineStyle">Input Data Type</td>
                 <td>{{ params.data_type }}</td>
               </tr>
@@ -128,13 +136,17 @@
               <td class="line" :style="lineStyle">JobID</td>
               <td>{{ jobId }}</td>
             </tr>
-            <!-- 非精简模式下显示详细参数行（Genome / Transcriptome 保持不变） -->
+            <!-- 非精简模式下显示详细参数行 -->
             <template v-if="!props.compact">
               <tr>
-                <td class="line" :style="lineStyle">Gene Nomenclature</td>
+                <td class="line" :style="lineStyle">Nomenclature</td>
                 <td>{{ params.gene_nomenclature }}</td>
               </tr>
-              <tr class="odd" :style="oddRowStyle">
+              <tr
+                v-if="!props.hideDataType"
+                class="odd"
+                :style="oddRowStyle"
+              >
                 <td class="line" :style="lineStyle">Input Data Type</td>
                 <td>{{ params.data_type }}</td>
               </tr>
@@ -202,6 +214,11 @@ interface Props {
    * - 默认为 false，Genome / Transcriptome 继续显示完整信息
    */
   compact?: boolean
+  /**
+   * 是否隐藏“Input Data Type”行
+   * - 用于 Protein 等无数据类型参数的结果展示
+   */
+  hideDataType?: boolean
   initialStatus?: TaskStatus
   initialProgress?: number
 }
@@ -209,7 +226,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   initialStatus: 'WAITING' as TaskStatus,
   initialProgress: 0,
-  compact: false
+  compact: false,
+  hideDataType: false
 })
 
 const emit = defineEmits<{
@@ -457,7 +475,8 @@ table {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-tr.odd {
+/* 所有表格行使用与 JobID 行一致的浅灰色背景 */
+tr {
   background-color: #F7F7F7;
 }
 

@@ -9,15 +9,18 @@ from datetime import datetime
 from typing import Optional
 from pathlib import Path
 import asyncio
+import math
 from fastapi import UploadFile, HTTPException
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from api.models.user import User
 from api.models.job import Job, JobType, JobStatus
 from api.schemas.data_process import (
     GenomeProcessResponse,
     TranscriptomeProcessResponse,
-    IntegrationProcessResponse
+    ProteinProcessResponse,
+    IntegrationProcessResponse,
 )
 from api.utils.file_utils import save_uploaded_file
 from api.websocket.task_manager import task_status_manager
@@ -174,7 +177,70 @@ class DataProcessService:
             logger.error(f"转录组数据处理服务失败: {str(e)}")
             self.db.rollback()
             raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
-    
+
+    async def process_protein_data(
+        self,
+        file: UploadFile,
+        protein_nomenclature: str,
+        organism: str,
+        email: Optional[str] = None,
+    ) -> ProteinProcessResponse:
+        """
+        处理蛋白质数据
+
+        - 将 Entry / RefSeq / AlphaFoldDB / Ensembl ID 映射为蛋白质 Symbol
+        - 将表达值转换为 log2(value + 1) 格式，空或非法数据填充为 0
+        """
+        try:
+            # 生成任务ID
+            job_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+            # 保存上传文件
+            original_filename = file.filename or "unknown.txt"
+            saved_file_path = await save_uploaded_file(file, self.upload_dir, job_id)
+
+            # 创建任务记录
+            job = Job(
+                job_id=job_id,
+                user_id=self.user.id,
+                job_type=JobType.PROTEIN_PROCESS,
+                status=JobStatus.SUBMITTED,
+                input_params=json.dumps(
+                    {
+                        "protein_nomenclature": protein_nomenclature,
+                        "organism": organism,
+                        "email": email,
+                        "original_filename": original_filename,
+                    },
+                    ensure_ascii=False,
+                ),
+                created_at=datetime.now(),
+            )
+            self.db.add(job)
+            self.db.commit()
+
+            # 异步处理数据
+            asyncio.create_task(
+                self._execute_protein_processing(
+                    job_id=job_id,
+                    file_path=saved_file_path,
+                    protein_nomenclature=protein_nomenclature,
+                    organism=organism,
+                    email=email,
+                )
+            )
+
+            return ProteinProcessResponse(
+                job_id=job_id,
+                status="Submitted",
+                message="蛋白质数据处理任务已提交",
+                created_at=datetime.now(),
+            )
+        except Exception as e:
+            logger.error(f"蛋白质数据处理服务失败: {str(e)}")
+            self.db.rollback()
+            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+
     async def process_integration_data(
         self,
         pheno_file: UploadFile,
@@ -512,7 +578,221 @@ class DataProcessService:
                 job.error_message = str(e)
                 job.updated_at = datetime.now()
                 self.db.commit()
+    async def _execute_protein_processing(
+        self,
+        job_id: str,
+        file_path: Path,
+        protein_nomenclature: str,
+        organism: str,
+        email: Optional[str],
+    ):
+        """
+        执行蛋白质数据处理
 
+        逻辑参考原 protein2.php：
+        - 根据命名方式和物种，从 protein_* 表查询 Symbol
+        - 生成 [命名ID, Symbol, log2(value+1)...] 结果矩阵
+        """
+        try:
+            # 更新任务状态
+            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            if job:
+                job.status = JobStatus.PROCESSING
+                job.updated_at = datetime.now()
+                self.db.commit()
+
+                # 通过 WebSocket 推送状态更新
+                try:
+                    await task_status_manager.send_task_status(
+                        str(self.user.id),
+                        {
+                            "job_id": job_id,
+                            "status": JobStatus.PROCESSING.value,
+                            "progress": 0,
+                            "message": "开始处理蛋白质数据",
+                        },
+                    )
+                except Exception as e:
+                    logger.debug(f"WebSocket 状态推送失败: {e}")
+
+            # 读取上传文件
+            if not file_path.exists():
+                raise RuntimeError(f"输入文件不存在: {file_path}")
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                raw_lines = [line.rstrip("\n\r") for line in f if line.strip()]
+
+            if not raw_lines:
+                raise RuntimeError("输入文件为空")
+
+            header_cols = raw_lines[0].split("\t")
+            if len(header_cols) < 2:
+                raise RuntimeError("输入文件格式错误：至少需要一列ID和一列样本数据")
+
+            sample_names = header_cols[1:]
+            sample_count = len(sample_names)
+
+            ids = []
+            data_map = {}
+            for line in raw_lines[1:]:
+                cols = line.split("\t")
+                if not cols or not cols[0]:
+                    continue
+                pid = cols[0]
+                ids.append(pid)
+                # 后续会根据 sample_count 自动补齐/截断
+                data_map[pid] = cols[1:]
+
+            # 映射 organism -> protein 表名
+            table_map = {
+                "homo_sapiens": "protein_homo_sapiens",
+                "bos_taurus": "protein_bos_taurus",
+                "mus_musculus": "protein_mus",
+                "drosophila_melanogaster": "protein_dm",
+            }
+            table_name = table_map.get(organism)
+            if not table_name:
+                raise RuntimeError(f"不支持的物种: {organism}")
+
+            # 查询 Symbol（参考 protein2.php 逻辑）
+            engine = self.db.get_bind()
+            id_to_symbol = {}
+            processed_clean = {}
+
+            def _clean_id(value: str) -> str:
+                # 移除小数点及后面的所有内容（与 PHP cleanRefSeq 一致）
+                if not value:
+                    return ""
+                return value.split(".")[0]
+
+            with engine.connect() as conn:
+                for raw_id in ids:
+                    cleaned = _clean_id(raw_id)
+                    if not cleaned:
+                        continue
+
+                    # 复用已处理过的 ID，避免重复查询
+                    if cleaned in processed_clean:
+                        id_to_symbol[raw_id] = processed_clean[cleaned]
+                        continue
+
+                    symbol = ""
+
+                    if protein_nomenclature == "RefSeq":
+                        # RefSeq 处理：先模糊匹配，再在结果中精确比对 cleaned ID
+                        sql = text(
+                            f"SELECT RefSeq, Symbol FROM {table_name} WHERE RefSeq LIKE :pattern"
+                        )
+                        rows = conn.execute(
+                            sql, {"pattern": f"%{raw_id}%"}
+                        ).fetchall()
+                        for row in rows:
+                            refseq_field = row[0] or ""
+                            for db_ref in refseq_field.split(";"):
+                                cleaned_db = _clean_id(db_ref.strip())
+                                if cleaned_db == cleaned:
+                                    symbol = row[1]
+                                    break
+                            if symbol:
+                                break
+                    else:
+                        # 其它命名方式：Entry / AlphaFoldDB / Ensembl
+                        if protein_nomenclature == "Ensembl":
+                            col_name = "Protein_stable_ID"
+                        else:
+                            col_name = protein_nomenclature
+
+                        sql = text(
+                            f"SELECT Symbol FROM {table_name} WHERE {col_name} = :pid LIMIT 1"
+                        )
+                        row = conn.execute(sql, {"pid": raw_id}).fetchone()
+                        if row:
+                            symbol = row[0]
+
+                    if symbol:
+                        id_to_symbol[raw_id] = symbol
+                        processed_clean[cleaned] = symbol
+
+            # 生成输出内容：命名ID, Symbol, log2(value+1)
+            jobs_dir = Path("/xp/www/AutoMATA/download_data/Jobs") / job_id
+            jobs_dir.mkdir(parents=True, exist_ok=True)
+            output_file = jobs_dir / "processed.txt"
+
+            lines_out = []
+            header_out = (
+                f"{protein_nomenclature}\tSymbol\t" + "\t".join(sample_names)
+            )
+            lines_out.append(header_out)
+
+            for pid in ids:
+                symbol = id_to_symbol.get(pid, "")
+                sample_values = data_map.get(pid, [])
+
+                # 补齐或截断为固定样本数
+                if len(sample_values) < sample_count:
+                    sample_values = sample_values + ["0"] * (
+                        sample_count - len(sample_values)
+                    )
+                elif len(sample_values) > sample_count:
+                    sample_values = sample_values[:sample_count]
+
+                log_values = []
+                for v in sample_values:
+                    v_str = (v or "").strip()
+                    if not v_str:
+                        log_values.append("0")
+                        continue
+                    try:
+                        num = float(v_str)
+                    except ValueError:
+                        num = 0.0
+                    if num != 0:
+                        log_val = math.log2(num + 1.0)
+                        log_values.append(f"{log_val:.6f}")
+                    else:
+                        log_values.append("0")
+
+                lines_out.append(f"{pid}\t{symbol}\t" + "\t".join(log_values))
+
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines_out) + "\n")
+
+            # 更新任务结果
+            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            if job:
+                job.status = JobStatus.COMPLETED
+                job.result_file = str(output_file)
+                job.output_params = json.dumps(
+                    {"stdout": f"Protein process finished: {output_file}"},
+                    ensure_ascii=False,
+                )
+                job.updated_at = datetime.now()
+                self.db.commit()
+
+                # 推送完成状态
+                try:
+                    await task_status_manager.send_task_status(
+                        str(self.user.id),
+                        {
+                            "job_id": job_id,
+                            "status": JobStatus.COMPLETED.value,
+                            "progress": 100,
+                            "result_file": job.result_file,
+                            "message": "蛋白质数据处理完成",
+                        },
+                    )
+                except Exception as e:
+                    logger.debug(f"WebSocket 状态推送失败: {e}")
+
+            logger.info(f"蛋白质处理完成：job_id={job_id}, output={output_file}")
+        except Exception as e:
+            logger.error(f"蛋白质处理执行失败: job_id={job_id}, error={str(e)}")
+            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            if job:
+                job.status = JobStatus.FAILED
+                job.error_message = str(e)
+                job.updated_at = datetime.now()
+                self.db.commit()
     async def _execute_integration_processing(
         self,
         job_id: str,
