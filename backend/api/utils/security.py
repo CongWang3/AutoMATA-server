@@ -1,14 +1,132 @@
 """
 安全工具模块：提供统一的安全验证和防护功能
 
-包含路径验证、输入清理、安全检查等通用安全功能。
+包含路径验证、输入清理、密码加密、JWT操作等通用安全功能。
 """
 import logging
 import re
+import hashlib
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
+import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
+from passlib.context import CryptContext
+from config.settings import settings
+from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
+
+# 密码加密上下文
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    验证密码
+    
+    Args:
+        plain_password: 明文密码
+        hashed_password: 哈希后的密码
+        
+    Returns:
+        密码是否匹配
+    """
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    """
+    生成密码哈希
+    
+    Args:
+        password: 明文密码
+        
+    Returns:
+        哈希后的密码
+    """
+    return pwd_context.hash(password)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    创建访问令牌
+    
+    Args:
+        data: 要编码的数据
+        expires_delta: 过期时间增量
+        
+    Returns:
+        JWT 令牌字符串
+    """
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+
+def decode_access_token(token: str) -> dict:
+    """
+    解码访问令牌
+    
+    Args:
+        token: JWT 令牌字符串
+        
+    Returns:
+        解码后的数据字典
+        
+    Raises:
+        HTTPException: 当令牌无效或过期时
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return payload
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="令牌已过期",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except (InvalidTokenError, DecodeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="令牌无效",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def get_md5_hash(content: str) -> str:
+    """
+    计算字符串的 MD5 哈希值
+    
+    Args:
+        content: 要计算哈希的字符串
+        
+    Returns:
+        MD5 哈希值（十六进制字符串）
+    """
+    return hashlib.md5(content.encode()).hexdigest()
+
+
+def verify_token(token: str) -> Optional[dict]:
+    """
+    验证并解码访问令牌
+    
+    Args:
+        token: JWT 令牌字符串
+        
+    Returns:
+        解码后的载荷字典，如果验证失败返回None
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return payload
+    except (ExpiredSignatureError, InvalidTokenError, DecodeError):
+        return None
 
 
 class SecurityValidator:

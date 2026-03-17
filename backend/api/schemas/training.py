@@ -8,11 +8,14 @@ from typing import Any, Optional, Dict
 from datetime import datetime
 import re
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ConfigDict
 
 
 class TrainingTaskBase(BaseModel):
     """训练任务基础字段（Request 共用）"""
+    
+    # 解决Pydantic警告
+    model_config = ConfigDict(protected_namespaces=())
 
     task_name: str = Field(..., min_length=1, max_length=200, description="任务名称")
     model_type: str = Field(..., pattern=r"^(cnn|lstm|rnn|mlp|autoencoder|transformer|rbfn|all)$", 
@@ -48,6 +51,23 @@ class TrainingTaskBase(BaseModel):
         strategy = v.get('strategy')
         if strategy not in ['split', 'upload', 'kfold']:
             raise ValueError('strategy 必须是 split, upload 或 kfold')
+            
+        # 验证数值参数范围
+        numeric_params = {
+            'epochs': (1, 1000),
+            'batch_size': (1, 1024),
+            'learning_rate': (0.0001, 1.0),
+            'kfold': (2, 10)
+        }
+        
+        for param, (min_val, max_val) in numeric_params.items():
+            if param in v:
+                try:
+                    value = float(v[param])
+                    if not (min_val <= value <= max_val):
+                        raise ValueError(f'参数 {param} 超出有效范围 [{min_val}, {max_val}]')
+                except (ValueError, TypeError):
+                    raise ValueError(f'参数 {param} 必须是数值类型')
             
         return v
 
