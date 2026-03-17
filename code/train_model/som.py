@@ -225,13 +225,20 @@ if __name__ == '__main__':
     
     
     iterations = epochs
-    # 使用Stratifiedkfold几折交叉验证训练模型
+    # 使用 Stratifiedkfold 几折交叉验证训练模型
     if (kfold):
         kfscore = []
         # https://blog.csdn.net/u013685264/article/details/126488633
-        skf = StratifiedKFold(n_splits=kfold)  # 保证每次跑的时候分的数据都是一致的，注意shuffle=False（默认）
+        skf = StratifiedKFold(n_splits=kfold)  # 保证每次跑的时候分的数据都是一致的，注意 shuffle=False（默认）
         # 加载数据集
         X_train_total, Y_train_total = load_data("train", jobID=jobID)
+            
+        # 自动检测实际类别数量，覆盖命令行参数
+        actual_num_classes = len(torch.unique(torch.LongTensor(Y_train_total)))
+        if actual_num_classes != output_size:
+            print(f"警告：用户设置的类别数 ({output_size}) 与数据实际类别数 ({actual_num_classes}) 不一致")
+            print(f"自动使用实际类别数：{actual_num_classes}")
+            output_size = actual_num_classes
 
         for i, (train_idx, val_idx) in enumerate(skf.split(X_train_total, Y_train_total)):
             print("--------The {} fold is training---------".format(i+1))
@@ -273,9 +280,17 @@ if __name__ == '__main__':
         print("Stratified KFold mean validation acc = {}, precision = {}, recall = {}, f1 = {}".format(round(kfscore[0], 4), round(kfscore[1], 4), round(kfscore[2], 4), round(kfscore[3], 4)))
 
     else:
-        # 不用kfold
+        # 不用 kfold
         # 加载训练数据集
         X_train, Y_train = load_data("train", jobID=jobID)
+            
+        # 自动检测实际类别数量，覆盖命令行参数
+        actual_num_classes = len(torch.unique(torch.LongTensor(Y_train)))
+        if actual_num_classes != output_size:
+            print(f"警告：用户设置的类别数 ({output_size}) 与数据实际类别数 ({actual_num_classes}) 不一致")
+            print(f"自动使用实际类别数：{actual_num_classes}")
+            output_size = actual_num_classes
+            
         X_train, Y_train = np.array(X_train), np.array(Y_train)
         X_val, Y_val = load_data("validate", jobID=jobID)
         X_val, Y_val = np.array(X_val), np.array(Y_val)

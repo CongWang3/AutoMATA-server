@@ -1,732 +1,1457 @@
 <template>
-  <div class="model-train-supervised">
-    <div class="container-fluid py-4">
-      <!-- 训练表单卡片（风格对齐数据处理页面） -->
-      <div class="row justify-content-center">
-        <div class="col-12 col-lg-8">
-          <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-0 pt-3 pb-0 px-4 d-flex justify-content-between align-items-center">
-              <h4 class="mb-0 fw-semibold">监督模型训练</h4>
-              <span class="badge bg-success text-wrap">Train Your Supervised Model</span>
-            </div>
-
-            <div class="card-body p-4">
-              <form @submit.prevent="handleSubmit" class="train-form">
-                <!-- 第一步：选择策略并上传文件 -->
-                <div class="step-section mb-4">
-                  <h5 class="step-title">
-                    <span class="step-number">1</span>
-                    选择策略并上传文件
-                  </h5>
-
-                  <div class="strategy-options mb-4">
-                    <div class="form-check mb-3">
-                      <input 
-                        class="form-check-input" 
-                        type="radio" 
-                        id="splitStrategy" 
-                        value="split" 
-                        v-model="formData.strategy"
-                        @change="handleStrategyChange"
-                      >
-                      <label class="form-check-label" for="splitStrategy">
-                        上传数据集进行训练/验证/测试分割
-                      </label>
-                    </div>
-
-                    <div class="form-check mb-3">
-                      <input 
-                        class="form-check-input" 
-                        type="radio" 
-                        id="uploadStrategy" 
-                        value="upload" 
-                        v-model="formData.strategy"
-                        @change="handleStrategyChange"
-                      >
-                      <label class="form-check-label" for="uploadStrategy">
-                        分别上传训练/验证/测试数据集
-                      </label>
-                    </div>
-
-                    <div class="form-check">
-                      <input 
-                        class="form-check-input" 
-                        type="radio" 
-                        id="kfoldStrategy" 
-                        value="kfold" 
-                        v-model="formData.strategy"
-                        @change="handleStrategyChange"
-                      >
-                      <label class="form-check-label" for="kfoldStrategy">
-                        上传数据集进行K折交叉验证
-                      </label>
-                    </div>
-                  </div>
-
-                  <!-- 数据集上传区域 -->
-                  <div class="upload-section" v-show="formData.strategy === 'split'">
-                    <div class="mb-3">
-                      <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label mb-0">上传数据集</label>
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-primary"
-                          @click="downloadExample"
-                        >
-                          下载示例数据
-                        </button>
-                      </div>
-                      <FileUploader
-                        ref="datasetUploader"
-                        :allowed-types="['txt', 'csv', 'tsv']"
-                        :max-size="50 * 1024 * 1024"
-                        @file-selected="handleDatasetSelected"
-                      />
-                      <!-- <el-form-item :label="fileLabel" prop="file">
-                        <div class="file-upload-container">
-                          <el-upload
-                            ref="uploadRef"
-                            class="upload-demo"
-                            drag
-                            :auto-upload="false"
-                            :show-file-list="true"
-                            :limit="1"
-                            :on-change="handleFileChange"
-                            :on-exceed="handleExceed"
-                            :accept="acceptTypes"
-                            :before-upload="beforeUpload"
-                          >
-                            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-                            <div class="el-upload__text">
-                              将文件拖到此处，或<em>点击上传</em>
+    <div class="automata-training-supervised">
+        <!-- 监督学习训练表单 -->
+        <div class="container-fluid p-4">
+            <div class="row justify-content-center">
+                <div class="col-12 col-lg-10">
+                    <el-card class="form-card">
+                        <template #header>
+                            <div class="card-header">
+                                <span class="title">监督学习模型训练</span>
+                                <el-tag type="info">Supervised Learning</el-tag>
                             </div>
-                            <template #tip>
-                              <div class="upload-tip-container">
-                                <div class="tip-content">
-                                  <span class="file-types">{{ fileTip }}</span>
-                                  <el-button 
-                                    v-if="exampleDataUrl" 
-                                    type="primary" 
-                                    size="small" 
-                                    @click="downloadExampleData"
-                                    class="example-btn"
-                                  >
-                                    下载示例数据
-                                  </el-button>
+                        </template>
+                        <div class="card-body p-4">
+                            <form @submit.prevent="handleSubmit" class="train_form" enctype="multipart/form-data">
+
+                                <!-- 步骤 1：选择策略并上传文件 -->
+                                <div class="step-section mb-4">
+                                    <div class="step-header d-flex justify-content-between align-items-center">
+                                        <h5 class="step-title mb-0">
+                                            <span class="step-number">1</span>
+                                            选择策略并上传数据
+                                        </h5>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" @click="downloadStrategyExample">
+                                            <i class="fas fa-download me-1"></i>
+                                            下载示例数据
+                                        </button>
+                                    </div>
+                                    <div class="strategy-options mb-4 mt-3">
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="radio" name="strategy"
+                                                id="splitStrategy" value="split" v-model="strategy"
+                                                @change="handleStrategyChange" checked>
+                                            <label class="form-check-label" for="splitStrategy">
+                                                Upload a dataset to conduct train/validation/testing split
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="radio" name="strategy"
+                                                id="uploadStrategy" value="upload" v-model="strategy"
+                                                @change="handleStrategyChange">
+                                            <label class="form-check-label" for="uploadStrategy">
+                                                Upload train/validation/testing datasets respectively
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="strategy"
+                                                id="kfoldStrategy" value="kfold" v-model="strategy"
+                                                @change="handleStrategyChange">
+                                            <label class="form-check-label" for="kfoldStrategy">
+                                                Upload a dataset to conduct K-Fold cross-validation
+                                            </label>
+                                        </div>
+                                        
+                                        
+                                    </div>
+
+                                    <!-- 数据集上传区域 -->
+                                    <div class="upload-section" v-if="strategy === 'split'">
+                                        <div class="mb-3">
+                                            <label class="form-label">上传数据集</label>
+                                            <input type="file" class="form-control"
+                                                @change="handleFileUpload($event, 'dataset')"
+                                                accept=".txt,.csv,.xlsx,.xls" required>
+                                          
+                                            <!-- 上传进度条 -->
+                                            <div v-if="uploadProgress.dataset > 0 && uploadProgress.dataset < 100"
+                                                class="mt-2">
+                                                <div class="progress">
+                                                    <div class="progress-bar" role="progressbar"
+                                                        :style="{ width: uploadProgress.dataset + '%' }">
+                                                        {{ uploadProgress.dataset }}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div v-if="uploadedFiles.dataset" class="mt-2">
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check-circle me-1"></i>{{ uploadedFiles.dataset }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <label class="form-label">当前比例</label>
+                                        <div class="ratio-controls d-flex align-items-center">
+                                            <div class="ratio-item d-flex align-items-center me-4">
+                                                <label class="ratio-label me-2">训练集：</label>
+                                                <input type="number" class="form-control ratio-input text-center"
+                                                    v-model="splitRatio.train" min="1" max="10" step="1"
+                                                    @input="updateRatios" style="width: 180px;">
+                                            </div>
+                                            <span class="ratio-separator me-4">-</span>
+                                            <div class="ratio-item d-flex align-items-center me-4">
+                                                <label class="ratio-label me-2">验证集：</label>
+                                                <input type="number" class="form-control ratio-input text-center"
+                                                    v-model="splitRatio.validation" min="1" max="10" step="1"
+                                                    @input="updateRatios" style="width: 180px;">
+                                            </div>
+                                            <span class="ratio-separator me-4">-</span>
+                                            <div class="ratio-item d-flex align-items-center">
+                                                <label class="ratio-label me-2">测试集：</label>
+                                                <input type="number" class="form-control ratio-input text-center"
+                                                    v-model="splitRatio.test" min="1" max="10" step="1" readonly
+                                                    style="width: 180px; background-color: #e9ecef;">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 分别上传区域 -->
+                                    <div class="upload-section" v-if="strategy === 'upload'">
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <label class="form-label">训练集</label>
+                                                <input type="file" class="form-control"
+                                                    @change="handleFileUpload($event, 'train')"
+                                                    accept=".txt,.csv,.xlsx,.xls" required>
+                                              
+                                                <!-- 上传进度条 -->
+                                                <div v-if="uploadProgress.train > 0 && uploadProgress.train < 100"
+                                                    class="mt-2">
+                                                    <div class="progress">
+                                                        <div class="progress-bar" role="progressbar"
+                                                            :style="{ width: uploadProgress.train + '%' }">
+                                                            {{ uploadProgress.train }}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div v-if="uploadedFiles.train" class="mt-2">
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check-circle me-1"></i>{{ uploadedFiles.train
+                                                        }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">验证集</label>
+                                                <input type="file" class="form-control"
+                                                    @change="handleFileUpload($event, 'validation')"
+                                                    accept=".txt,.csv,.xlsx,.xls" required>
+                                               
+                                                <!-- 上传进度条 -->
+                                                <div v-if="uploadProgress.validation > 0 && uploadProgress.validation < 100"
+                                                    class="mt-2">
+                                                    <div class="progress">
+                                                        <div class="progress-bar" role="progressbar"
+                                                            :style="{ width: uploadProgress.validation + '%' }">
+                                                            {{ uploadProgress.validation }}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div v-if="uploadedFiles.validation" class="mt-2">
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check-circle me-1"></i>{{
+                                                            uploadedFiles.validation }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">测试集</label>
+                                                <input type="file" class="form-control"
+                                                    @change="handleFileUpload($event, 'test')"
+                                                    accept=".txt,.csv,.xlsx,.xls" required>
+                                                <!-- 上传进度条 -->
+                                                <div v-if="uploadProgress.test > 0 && uploadProgress.test < 100"
+                                                    class="mt-2">
+                                                    <div class="progress">
+                                                        <div class="progress-bar" role="progressbar"
+                                                            :style="{ width: uploadProgress.test + '%' }">
+                                                            {{ uploadProgress.test }}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div v-if="uploadedFiles.test" class="mt-2">
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check-circle me-1"></i>{{ uploadedFiles.test }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- K 折交叉验证区域 -->
+                                    <div class="upload-section" v-if="strategy === 'kfold'">
+                                        <div class="mb-3">
+                                            <label class="form-label">上传数据集</label>
+                                            <input type="file" class="form-control"
+                                                @change="handleFileUpload($event, 'kfoldDataset')"
+                                                accept=".txt,.csv,.xlsx,.xls" required>
+                                           
+                                            <!-- 上传进度条 -->
+                                            <div v-if="uploadProgress.kfoldDataset > 0 && uploadProgress.kfoldDataset < 100"
+                                                class="mt-2">
+                                                <div class="progress">
+                                                    <div class="progress-bar" role="progressbar"
+                                                        :style="{ width: uploadProgress.kfoldDataset + '%' }">
+                                                        {{ uploadProgress.kfoldDataset }}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div v-if="uploadedFiles.kfoldDataset" class="mt-2">
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check-circle me-1"></i>{{
+                                                        uploadedFiles.kfoldDataset }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">K 值</label>
+                                            <input type="number" class="form-control" v-model="kfoldValue" min="2"
+                                                max="10" placeholder="5">
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="tip-notes">
-                                  <el-text v-if="exampleNote" type="warning" size="small" class="example-note">
-                                    {{ exampleNote }}
-                                  </el-text>
+
+                                <!-- 步骤 2：选择模型 -->
+                                <div class="step-section mb-4">
+                                    <div class="step-header d-flex justify-content-between align-items-center">
+                                        <h5 class="step-title mb-0">
+                                            <span class="step-number">2</span>
+                                            选择模型
+                                            <span class="step-subtitle">Choose Model</span>
+                                        </h5>
+                                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                            :class="{ 'active': isAllSelected }" @click="selectAllModels">
+                                            <i class="fas fa-check-square me-1" v-if="isAllSelected"></i>
+                                            <i class="far fa-square me-1" v-else></i>
+                                            All
+                                        </button>
+                                    </div>
+
+                                    <div class="model-selection mt-3">
+                                        <div v-if="loadingModels" class="text-center py-4">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p class="mt-2 text-muted">正在加载可用模型列表...</p>
+                                        </div>
+
+                                        <div v-else class="row">
+                                            <div v-if="availableModels && availableModels.length > 0">
+                                                <p class="text-muted mb-3">共找到 {{ availableModels.length }} 个可用模型</p>
+                                            </div>
+                                            <div v-else>
+                                                <p class="text-warning">暂无可用模型，请检查后端服务</p>
+                                            </div>
+                                            <div class="col-md-6 mb-3" v-for="model in availableModels" :key="model.id">
+                                                <div class="model-card"
+                                                    :class="{ 'selected': selectedModels.includes(model.id) }"
+                                                    @click="toggleModelSelection(model.id)">
+                                                    <div class="model-header">
+                                                        <input class="form-check-input me-2" type="checkbox"
+                                                            :id="'model_' + model.id"
+                                                            :checked="selectedModels.includes(model.id)"
+                                                            @change="toggleModelSelection(model.id)">
+                                                        <label class="form-check-label fw-bold"
+                                                            :for="'model_' + model.id">
+                                                            {{ model.name }}
+                                                        </label>
+                                                    </div>
+                                                    <div class="model-description mt-2">
+                                                        <small class="text-muted">{{ model.description }}</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="all-models-info mt-3 p-3 bg-light rounded">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                以上所有模型将使用同一份数据并行训练
+                                            </small>
+                                        </div>
+                                    </div>
                                 </div>
-                              </div>
-                            </template>
-                          </el-upload>
+
+                                <!-- 步骤 3：设置训练超参数 -->
+                                <div class="step-section mb-4">
+                                    <h5 class="step-title">
+                                        <span class="step-number">3</span>
+                                        设置训练超参数
+                                        <span class="step-subtitle">Set Training Hyperparameters</span>
+                                    </h5>
+
+                                    <div class="hyperparameters-form">
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <label class="form-label">训练轮数 *</label>
+                                                <input type="number" class="form-control" id="epoch"
+                                                    v-model="hyperparameters.epoch" min="1" max="1000" required>
+                                            </div>
+
+                                            <div class="col-md-4">
+                                                <label class="form-label">学习率 *</label>
+                                                <input type="number" class="form-control" id="lr"
+                                                    v-model="hyperparameters.learningRate" step="0.001" min="0.001"
+                                                    max="1" required>
+                                            </div>
+
+                                            <div class="col-md-4">
+                                                <label class="form-label">早停耐心值 *</label>
+                                                <input type="number" class="form-control" id="es"
+                                                    v-model="hyperparameters.earlyStopping" min="1" max="100" required>
+                                            </div>
+
+                                            <div class="col-md-4">
+                                                <label class="form-label">批处理大小</label>
+                                                <input type="number" class="form-control"
+                                                    v-model="hyperparameters.batchSize" min="1" max="1024">
+                                            </div>
+
+                                            <div class="col-md-4">
+                                                <label class="form-label">随机种子</label>
+                                                <input type="number" class="form-control"
+                                                    v-model="hyperparameters.randomSeed" min="0" max="999999">
+                                            </div>
+
+                                            <div class="col-md-4">
+                                                <label class="form-label">标签数量</label>
+                                                <input type="number" class="form-control"
+                                                    v-model="hyperparameters.labelCount" min="2" max="1000">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 通知信息 -->
+                                <div class="notification-section mb-4">
+                                    <h5 class="section-title">
+                                        通知信息
+                                        <span class="section-subtitle">Notification</span>
+                                    </h5>
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label class="form-label">Email *</label>
+                                            <input type="email" class="form-control" id="email"
+                                                v-model="notification.email"
+                                                placeholder="Please input your email address" required>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 提交按钮 -->
+                                <div class="submission-section">
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" class="btn btn-primary btn-lg"
+                                            :disabled="isSubmitting || !isFormValid">
+                                            <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2"
+                                                role="status"></span>
+                                            {{ isSubmitting ? '提交中...' : '开始训练' }}
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" @click="resetForm">重置表单</button>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
-                      </el-form-item> -->
-                    </div>
-                    
-                    <div class="ratio-controls">
-                      <label class="form-label">分割比例</label>
-                      <div class="d-flex align-items-center">
-                        <div class="ratio-item me-4">
-                          <label class="ratio-label me-2">训练:</label>
-                          <input 
-                            type="number" 
-                            class="form-control ratio-input text-center"
-                            v-model="splitRatio.train" 
-                            min="1" 
-                            max="10" 
-                            step="1"
-                            @input="updateRatios"
-                            style="width: 80px;"
-                          >
-                        </div>
-                        <span class="ratio-separator me-4">-</span>
-                        <div class="ratio-item me-4">
-                          <label class="ratio-label me-2">验证:</label>
-                          <input 
-                            type="number" 
-                            class="form-control ratio-input text-center"
-                            v-model="splitRatio.validation" 
-                            min="1" 
-                            max="10" 
-                            step="1"
-                            @input="updateRatios"
-                            style="width: 80px;"
-                          >
-                        </div>
-                        <span class="ratio-separator me-4">-</span>
-                        <div class="ratio-item">
-                          <label class="ratio-label me-2">测试:</label>
-                          <input 
-                            type="number" 
-                            class="form-control ratio-input text-center"
-                            v-model="splitRatio.test" 
-                            min="1" 
-                            max="10" 
-                            step="1" 
-                            readonly
-                            style="width: 80px; background-color: #e9ecef;"
-                          >
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 分别上传区域 -->
-                  <div class="upload-section" v-show="formData.strategy === 'upload'">
-                    <div class="row">
-                      <div class="col-md-4 mb-3">
-                        <label class="form-label">训练集</label>
-                        <FileUploader
-                          ref="trainUploader"
-                          :allowed-types="['txt', 'csv', 'tsv']"
-                          :max-size="50 * 1024 * 1024"
-                          @file-selected="handleTrainSelected"
-                        />
-                      </div>
-                      <div class="col-md-4 mb-3">
-                        <label class="form-label">验证集</label>
-                        <FileUploader
-                          ref="validationUploader"
-                          :allowed-types="['txt', 'csv', 'tsv']"
-                          :max-size="50 * 1024 * 1024"
-                          @file-selected="handleValidationSelected"
-                        />
-                      </div>
-                      <div class="col-md-4 mb-3">
-                        <label class="form-label">测试集</label>
-                        <FileUploader
-                          ref="testUploader"
-                          :allowed-types="['txt', 'csv', 'tsv']"
-                          :max-size="50 * 1024 * 1024"
-                          @file-selected="handleTestSelected"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- K折交叉验证区域 -->
-                  <div class="upload-section" v-show="formData.strategy === 'kfold'">
-                    <div class="mb-3">
-                      <label class="form-label">上传数据集</label>
-                      <FileUploader
-                        ref="kfoldUploader"
-                        :allowed-types="['txt', 'csv', 'tsv']"
-                        :max-size="50 * 1024 * 1024"
-                        @file-selected="handleKfoldSelected"
-                      />
-                    </div>
-                    <div class="mb-3">
-                      <label class="form-label">K值</label>
-                      <input 
-                        type="number" 
-                        class="form-control" 
-                        v-model="formData.kfold" 
-                        min="2" 
-                        max="10"
-                        placeholder="请输入K折数 (2-10)"
-                      >
-                    </div>
-                  </div>
+                    </el-card>
                 </div>
-
-                <!-- 第二步：模型参数配置 -->
-                <div class="step-section mb-4">
-                  <h5 class="step-title">
-                    <span class="step-number">2</span>
-                    模型参数配置
-                  </h5>
-
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">Epochs *</label>
-                      <input 
-                        type="number" 
-                        class="form-control" 
-                        v-model="formData.epochs" 
-                        min="1" 
-                        required
-                        placeholder="训练轮数"
-                      >
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">Learning Rate *</label>
-                      <input 
-                        type="number" 
-                        class="form-control" 
-                        v-model="formData.learningRate" 
-                        min="0.0001" 
-                        max="1" 
-                        step="0.0001"
-                        required
-                        placeholder="学习率"
-                      >
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">Random Seed *</label>
-                      <input 
-                        type="number" 
-                        class="form-control" 
-                        v-model="formData.seed" 
-                        min="1"
-                        required
-                        placeholder="随机种子"
-                      >
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">Early Stopping Patience *</label>
-                      <input 
-                        type="number" 
-                        class="form-control" 
-                        v-model="formData.earlyStopping" 
-                        min="1"
-                        required
-                        placeholder="早停耐心值"
-                      >
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">标签数量 *</label>
-                      <input 
-                        type="number" 
-                        class="form-control" 
-                        v-model="formData.labels" 
-                        min="2"
-                        required
-                        placeholder="分类标签数"
-                      >
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">Batch Size</label>
-                      <select class="form-select" v-model="formData.batchSize">
-                        <option value="16">16</option>
-                        <option value="32">32</option>
-                        <option value="64">64</option>
-                        <option value="128">128</option>
-                      </select>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">Loss Function *</label>
-                      <select class="form-select" v-model="formData.lossFunction" required>
-                        <option value="crossentropy">CrossEntropyLoss</option>
-                        <option value="focalloss">FocalLoss</option>
-                        <option value="nllloss">NLLLoss</option>
-                      </select>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">Optimizer *</label>
-                      <select class="form-select" v-model="formData.optimizer" required>
-                        <option value="adam">Adam</option>
-                        <option value="sgd">SGD</option>
-                        <option value="rmsprop">RMSprop</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 第三步：模型选择 -->
-                <div class="step-section mb-4">
-                  <h5 class="step-title">
-                    <span class="step-number">3</span>
-                    选择模型
-                  </h5>
-
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">模型类型 *</label>
-                      <select 
-                        class="form-select" 
-                        v-model="formData.modelType" 
-                        required
-                      >
-                        <option value="cnn">
-                          CNN &gt; CNN Excels at extracting discriminative features from 1D signals with local patterns (e.g., mass spectrometry)
-                        </option>
-                        <option value="lstm">
-                          LSTM &gt; Designed for modeling data with long-term dependencies
-                        </option>
-                        <option value="rnn">
-                          RNN &gt; Used for processing simple sequences with short-term dependencies
-                        </option>
-                        <option value="mlp">
-                          MLP &gt; A general-purpose benchmark model for non-linear classification of feature vectors without explicit structure
-                        </option>
-                        <option value="autoencoder">
-                          AutoEncoder &gt; Generates better feature representations for classification tasks through dimensionality reduction and denoising
-                        </option>
-                        <option value="transformer">
-                          Transformer &gt; Models the global context via the self-attention mechanism
-                        </option>
-                        <option value="rbfn">
-                          RBFNN &gt; Suitable for fast learning and local approximation of small-scale tabular data
-                        </option>
-                        <option value="all">
-                          All &gt; All the above models are trained in parallel using the same set of data
-                        </option>
-                      </select>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label class="form-label">联系邮箱（可选）</label>
-                      <input
-                        type="email"
-                        class="form-control"
-                        v-model="formData.email"
-                        placeholder="请输入邮箱地址（选填，用于接收训练结果通知）"
-                      >
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 提交按钮 -->
-                <div class="d-flex justify-content-center gap-3 mt-4">
-                  <button 
-                    type="button" 
-                    class="btn btn-secondary px-4"
-                    @click="resetForm"
-                  >
-                    重置
-                  </button>
-                  <button 
-                    type="submit" 
-                    class="btn btn-primary px-5"
-                    :disabled="!isFormValid || isSubmitting"
-                  >
-                    <span 
-                      v-if="isSubmitting" 
-                      class="spinner-border spinner-border-sm me-2" 
-                      role="status"
-                    ></span>
-                    {{ isSubmitting ? '训练中...' : '开始训练' }}
-                  </button>
-                </div>
-              </form>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <!-- 任务状态面板 -->
-      <div v-if="currentJob" class="row justify-content-center mt-4">
-        <div class="col-12 col-lg-10">
-          <JobStatus 
-            :job="currentJob"
-            @cancel="cancelJob"
-            @retry="retryJob"
-            @view-result="viewResult"
-          />
+            <!-- 任务结果弹窗 -->
+            <el-dialog
+                v-model="showResultDialog"
+                width="80%"
+                :close-on-click-modal="false"
+                @close="handleClose"
+            >
+                <template #header>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">监督学习训练任务</h5>
+                        <div>
+                            <el-tag type="info" class="me-2">{{ currentJob?.status || '等待中' }}</el-tag>
+                            <el-button 
+                                v-if="currentJob?.resultFile" 
+                                type="success" 
+                                size="small"
+                                @click="downloadResult"
+                            >
+                                <i class="fas fa-download me-1"></i>
+                                下载结果
+                            </el-button>
+                        </div>
+                    </div>
+                </template>
+                
+                <JobStatus 
+                    v-if="currentJob"
+                    :job="currentJob"
+                    @cancel="handleCancel"
+                    @retry="handleRetry"
+                    @view-result="viewResult"
+                />
+                
+                <template #footer>
+                    <div class="dialog-footer">
+                        <el-button @click="handleClose">关闭并提交新任务</el-button>
+                    </div>
+                </template>
+            </el-dialog>
         </div>
-      </div>
     </div>
-  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import FileUploader from '@/components/FileUpload/FileUploader.vue'
+import { trainingApi, MODEL_PARAMETERS } from '@/api'
+import { WebSocketService } from '@/api/websocket'
 import JobStatus from '@/components/Job/JobStatus.vue'
-import { trainingApi } from '@/api/training'
+import { ElMessage } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 
-interface FormData {
-  strategy: 'split' | 'upload' | 'kfold'
-  epochs: number
-  learningRate: number
-  seed: number
-  earlyStopping: number
-  labels: number
-  batchSize: number
-  lossFunction: string
-  optimizer: string
-  modelType: string
-  kfold?: number
-  email?: string
-}
-
+// 类型定义
 interface Job {
-  id: number
-  name: string
-  status: string
-  progress: number
-  createdAt: string
-  updatedAt: string
-  duration: number
+    id: string
+    name: string
+    status: string
+    progress: number
+    currentStep?: string   // 当前执行步骤
+    createdAt: string
+    updatedAt: string
+    duration: number
+    resultFile?: string    // 结果文件路径
+    errorMessage?: string  // 错误信息
 }
 
-// 响应式数据
-const router = useRouter()
-const isSubmitting = ref(false)
-const currentJob = ref<Job | null>(null)
+interface UploadedFileInfo {
+    id: string
+    file_id: string
+    file_path: string
+}
 
-const formData = reactive<FormData>({
-  strategy: 'split',
-  epochs: 100,
-  learningRate: 0.001,
-  seed: 42,
-  earlyStopping: 10,
-  labels: 2,
-  batchSize: 32,
-  lossFunction: 'crossentropy',
-  optimizer: 'adam',
-  modelType: 'mlp',
-  kfold: 5,
-  email: ''
+// <!-- 
+// 审查上下文：
+// - 设计意图：监督学习训练页面，支持多种策略（split/upload/kfold）和多模型选择
+// - 已知局限：UI较为复杂，保留原有布局但接入了新的API调用模式
+// - 业务背景：与后端 /v1/training/supervised 端点集成
+// - 测试重点：确保文件上传、表单提交、WebSocket状态更新正常工作
+// -->
+
+// 路由
+const router = useRouter()
+// 响应式数据
+const strategy = ref('split')
+const selectedModels = ref<string[]>(['cnn']) // 默认选择CNN
+const kfoldValue = ref(5)
+
+const uploadedFiles = reactive<Record<string, string>>({
+    dataset: '',
+    train: '',
+    validation: '',
+    test: '',
+    kfoldDataset: ''
+})
+
+// 文件上传进度
+const uploadProgress = reactive<Record<string, number>>({
+    dataset: 0,
+    train: 0,
+    validation: 0,
+    test: 0,
+    kfoldDataset: 0
+})
+
+// 已上传文件信息
+const uploadedFileInfo = reactive<Record<string, UploadedFileInfo | null>>({
+    dataset: null,
+    train: null,
+    validation: null,
+    test: null,
+    kfoldDataset: null
 })
 
 const splitRatio = reactive({
-  train: 7,
-  validation: 2,
-  test: 1
+    train: 8,
+    validation: 1,
+    test: 1
 })
 
-// 文件上传引用
-const datasetUploader = ref<InstanceType<typeof FileUploader> | null>(null)
-const trainUploader = ref<InstanceType<typeof FileUploader> | null>(null)
-const validationUploader = ref<InstanceType<typeof FileUploader> | null>(null)
-const testUploader = ref<InstanceType<typeof FileUploader> | null>(null)
-const kfoldUploader = ref<InstanceType<typeof FileUploader> | null>(null)
+const hyperparameters = reactive({
+    epoch: 20,
+    learningRate: 0.001,
+    earlyStopping: 10,
+    batchSize: 32,
+    randomSeed: 42,
+    labelCount: 2
+})
+
+const notification = reactive({
+    email: ''
+})
+
+const isSubmitting = ref(false)
+const jobId = ref('')
+const currentStatus = ref('')
+const statusText = ref('Initializing...')
+const trainingResults = ref<Record<string, any>>({})
+
+// 可用模型 - 从API获取
+const availableModels = ref<Array<{ id: string; name: string; description: string }>>([])
+const loadingModels = ref(false)
+
+// 任务状态
+const showResultDialog = ref(false)
+const currentJob = ref<Job | null>(null)
+
+// WebSocket 服务
+let wsService: WebSocketService | null = null
+
+// 任务轮询控制
+let pollingInterval: ReturnType<typeof setTimeout> | null = null
 
 // 计算属性
+const ratioDisplay = computed(() => {
+    return `${splitRatio.train}:${splitRatio.validation}:${splitRatio.test}`
+})
+
+const simplifiedRatioDisplay = computed(() => {
+    // 计算最大公约数
+    const gcd = (a: number, b: number): number => {
+        return b === 0 ? a : gcd(b, a % b)
+    }
+
+    const total = splitRatio.train + splitRatio.validation + splitRatio.test
+    if (total === 0) return '0:0:0'
+
+    // 计算简化比例
+    const trainPart = Math.round((splitRatio.train / total) * 10)
+    const validationPart = Math.round((splitRatio.validation / total) * 10)
+    let testPart = 10 - trainPart - validationPart
+
+    // 确保总和为10
+    if (testPart < 0) testPart = 0
+
+    return `${trainPart}:${validationPart}:${testPart}`
+})
+
+const isAllSelected = computed(() => {
+    return selectedModels.value.length === availableModels.value.length
+})
+
 const isFormValid = computed(() => {
-  return formData.modelType && 
-         formData.epochs > 0 && 
-         formData.learningRate > 0 &&
-         formData.seed > 0 &&
-         formData.earlyStopping > 0 &&
-         formData.labels >= 2
+    // 检查基本必填项
+    const basicValid = selectedModels.value.length > 0 &&
+        hyperparameters.epoch &&
+        hyperparameters.learningRate &&
+        hyperparameters.earlyStopping &&
+        notification.email
+
+    // 根据策略检查文件上传
+    let filesValid = false
+    if (strategy.value === 'split') {
+        filesValid = !!uploadedFiles.dataset
+    } else if (strategy.value === 'upload') {
+        filesValid = !!(uploadedFiles.train && uploadedFiles.validation && uploadedFiles.test)
+    } else if (strategy.value === 'kfold') {
+        filesValid = !!(uploadedFiles.kfoldDataset && kfoldValue.value)
+    }
+
+    return basicValid && filesValid
 })
 
 // 方法
+const handleFileUpload = async (event: Event, fileType: string) => {
+    const input = event.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (file) {
+        // 检查文件格式
+        const allowedExtensions = ['txt', 'csv', 'xlsx', 'xls']
+        const fileExtension = file.name.split('.').pop()?.toLowerCase() || ''
+
+        if (!allowedExtensions.includes(fileExtension)) {
+            ElMessage.error('Please upload a txt, csv or excel file!')
+            input.value = ''
+            return
+        }
+
+        if (file.size > 100 * 1024 * 1024) {
+            ElMessage.error('File size cannot exceed 100MB')
+            input.value = ''
+            return
+        }
+
+        try {
+            // 重置进度
+            uploadProgress[fileType] = 0
+
+            // 上传文件到后端
+            const fileInfo = await trainingApi.uploadFile(file, fileType, (progressEvent) => {
+                if (progressEvent.total) {
+                    uploadProgress[fileType] = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+                }
+            })
+
+            // 保存文件信息
+            uploadedFileInfo[fileType] = {
+                ...fileInfo,
+                id: fileInfo.file_id  // 映射后端返回的 file_id 到 id
+            }
+            uploadedFiles[fileType] = file.name
+
+            console.log(`Uploaded ${fileType} file:`, file.name, 'File ID:', fileInfo.file_id)
+            ElMessage.success(`文件 ${file.name} 上传成功`)
+
+        } catch (error: any) {
+            console.error('文件上传失败:', error)
+            ElMessage.error('文件上传失败: ' + (error.response?.data?.detail || error.message || '未知错误'))
+            input.value = ''
+        }
+    }
+}
+
 const handleStrategyChange = () => {
-  // 清除之前的选择
-  if (datasetUploader.value) datasetUploader.value.clear()
-  if (trainUploader.value) trainUploader.value.clear()
-  if (validationUploader.value) validationUploader.value.clear()
-  if (testUploader.value) testUploader.value.clear()
-  if (kfoldUploader.value) kfoldUploader.value.clear()
+    // 清空之前上传的文件
+    Object.keys(uploadedFiles).forEach(key => {
+        uploadedFiles[key] = ''
+        uploadProgress[key] = 0
+        uploadedFileInfo[key] = null
+    })
 }
 
 const updateRatios = () => {
-  // 确保比例总和为10
-  const total = splitRatio.train + splitRatio.validation + splitRatio.test
-  if (total !== 10) {
-    splitRatio.test = 10 - splitRatio.train - splitRatio.validation
-  }
+    const total = splitRatio.train + splitRatio.validation
+    if (total <= 10) {
+        splitRatio.test = 10 - total
+    } else {
+        // 如果总和超过10，按比例调整
+        const ratioSum = splitRatio.train + splitRatio.validation
+        splitRatio.train = Math.round((splitRatio.train / ratioSum) * 10)
+        splitRatio.validation = 10 - splitRatio.train
+        splitRatio.test = 0
+    }
 }
 
-// 已上传的数据集主路径（简化版：当前版本以一个主数据集为入口）
-const datasetPath = ref<string | null>(null)
-
-const handleDatasetSelected = async (files: File[]) => {
-  if (!files.length) return
-  const file = files[0]
-  console.log('数据集文件已选择:', file.name)
-  const info = await trainingApi.uploadFile(file, 'dataset')
-  datasetPath.value = info.file_path
+const selectModel = (modelId: string) => {
+    const index = selectedModels.value.indexOf(modelId)
+    if (index > -1) {
+        selectedModels.value.splice(index, 1)
+    } else {
+        selectedModels.value.push(modelId)
+    }
 }
 
-const handleTrainSelected = async (files: File[]) => {
-  // TODO: 后续扩展为分别上传 train/val/test 三个数据集
-  if (!files.length) return
-  console.log('训练集文件已选择:', files[0].name)
+const toggleModelSelection = (modelId: string) => {
+    const index = selectedModels.value.indexOf(modelId)
+    if (index > -1) {
+        selectedModels.value.splice(index, 1)
+    } else {
+        selectedModels.value.push(modelId)
+    }
 }
 
-const handleValidationSelected = async (files: File[]) => {
-  if (!files.length) return
-  console.log('验证集文件已选择:', files[0].name)
+const selectAllModels = () => {
+    if (isAllSelected.value) {
+        selectedModels.value = []
+    } else {
+        selectedModels.value = availableModels.value.map(model => model.id)
+    }
 }
 
-const handleTestSelected = async (files: File[]) => {
-  if (!files.length) return
-  console.log('测试集文件已选择:', files[0].name)
+const isSelected = (modelId: string) => {
+    return selectedModels.value.includes(modelId)
 }
 
-const handleKfoldSelected = async (files: File[]) => {
-  if (!files.length) return
-  console.log('K折数据集文件已选择:', files[0].name)
+const getModelNames = () => {
+    return selectedModels.value.map(id => {
+        const model = availableModels.value.find(m => m.id === id)
+        return model ? model.name : ''
+    }).join(', ')
+}
+
+const getModelName = (modelId: string) => {
+    const model = availableModels.value.find(m => m.id === modelId)
+    return model ? model.name : ''
 }
 
 const handleSubmit = async () => {
-  if (!isFormValid.value) return
-
-  try {
     isSubmitting.value = true
-    
-    if (formData.strategy === 'split' && !datasetPath.value) {
-      alert('请先上传数据集文件')
-      return
+
+    try {
+        // 验证表单
+        if (!checkInput()) {
+            isSubmitting.value = false
+            return
+        }
+
+        // 构建训练参数
+        const parameters: Record<string, any> = {
+            strategy: strategy.value,
+            epochs: hyperparameters.epoch,
+            learning_rate: hyperparameters.learningRate,
+            batch_size: hyperparameters.batchSize,
+            seed: hyperparameters.randomSeed,
+            early_stopping: hyperparameters.earlyStopping,
+            label_count: hyperparameters.labelCount
+        }
+
+        // 根据策略添加特定参数
+        if (strategy.value === 'split') {
+            parameters.split_ratio = {
+                train: splitRatio.train,
+                validation: splitRatio.validation,
+                test: splitRatio.test
+            }
+        } else if (strategy.value === 'kfold') {
+            parameters.kfold = kfoldValue.value
+        }
+
+        // 准备训练任务数据
+        const modelType = selectedModels.value.length === 1 
+            ? selectedModels.value[0] 
+            : 'all'
+
+        const trainingParams = {
+            task_name: `Supervised_${getModelNames()}_${Date.now()}`,
+            model_type: modelType,
+            parameters: parameters,
+            dataset_path: getDatasetPathWithFileIds(),
+            email: notification.email
+        }
+
+        console.log('Submitting training task:', trainingParams)
+
+        // 调用API创建训练任务
+        const response = await trainingApi.trainSupervised(trainingParams)
+
+        jobId.value = response.job_id
+        currentStatus.value = response.status
+        statusText.value = '训练任务已提交'
+        
+        // 设置当前任务用于状态跟踪（使用后端返回的新字段）
+        currentJob.value = {
+            id: response.job_id,
+            name: response.task_name,
+            status: response.status,  // 直接使用后端返回的状态（如 Submitted）
+            progress: response.progress || 0,
+            currentStep: response.current_step || '已提交，等待执行',
+            createdAt: response.created_at,
+            updatedAt: response.created_at,
+            duration: 0,
+            resultFile: response.result_file || undefined,
+            errorMessage: response.error_message || undefined
+        }
+        
+        // 打开结果弹窗
+        showResultDialog.value = true
+        
+        ElMessage.success('训练任务已提交')
+
+        // 启动任务状态轮询作为后备
+        pollTaskStatus(response.job_id)
+
+    } catch (error: any) {
+        console.error('Submission error:', error)
+        const errorMessage = error.response?.data?.detail || error.message || '提交失败'
+        statusText.value = '提交失败: ' + errorMessage
+        ElMessage.error('提交失败: ' + errorMessage)
+    } finally {
+        isSubmitting.value = false
+    }
+}
+
+const checkInput = () => {
+    // 检查邮箱格式
+    const emailRegex = /^[\w\-\.]+@[a-z0-9]+(\-[a-z0-9]+)?(\.[a-z0-9]+(\-[a-z0-9]+)?)*\.[a-z]{2,4}$/i
+    if (!emailRegex.test(notification.email)) {
+        ElMessage.error('Please submit the correct email address')
+        return false
     }
 
-    // 构造训练参数（与后端 TrainingService 对应）
-    const params = {
-      strategy: formData.strategy,
-      epochs: formData.epochs,
-      learning_rate: formData.learningRate,
-      batch_size: formData.batchSize,
-      seed: formData.seed,
-      early_stopping: formData.earlyStopping,
-      labels: formData.labels,
-      loss_function: formData.lossFunction,
-      optimizer_function: formData.optimizer,
-      ...(formData.strategy === 'split' && {
-        ratio: `${splitRatio.train}:${splitRatio.validation}:${splitRatio.test}`
-      }),
-      ...(formData.strategy === 'kfold' && {
-        kfold: formData.kfold
-      })
-    }
-
-    const trainingParams = {
-      task_name: `supervised_${formData.modelType}_${Date.now()}`,
-      model_type: formData.modelType,
-      parameters: params,
-      dataset_path: datasetPath.value || undefined
-    }
-
-    // 调用API创建训练任务
-    const response = await trainingApi.trainSupervised(trainingParams)
-    
-    currentJob.value = {
-      id: response.job_id,
-      name: response.task_name,
-      status: response.status,
-      progress: 0,
-      createdAt: response.created_at,
-      updatedAt: response.created_at,
-      duration: 0
-    }
-
-    console.log('训练任务已创建:', response)
-
-  } catch (error) {
-    console.error('创建训练任务失败:', error)
-    alert('创建训练任务失败，请稍后重试')
-  } finally {
-    isSubmitting.value = false
-  }
+    return true
 }
 
 const resetForm = () => {
-  Object.assign(formData, {
-    strategy: 'split',
-    epochs: 100,
-    learningRate: 0.001,
-    seed: 42,
-    earlyStopping: 10,
-    labels: 2,
-    batchSize: 32,
-    modelType: 'mlp',
-    kfold: 5
-  })
-  
-  Object.assign(splitRatio, {
-    train: 7,
-    validation: 2,
-    test: 1
-  })
+    // 重置表单数据
+    strategy.value = 'split'
+    selectedModels.value = ['cnn']
+    kfoldValue.value = 5
 
-  datasetPath.value = null
-  // 清除文件上传
-  handleStrategyChange()
-  
-  currentJob.value = null
+    // 重置文件上传状态
+    Object.keys(uploadedFiles).forEach(key => {
+        uploadedFiles[key] = ''
+        uploadProgress[key] = 0
+        uploadedFileInfo[key] = null
+    })
+
+    // 重置文件输入元素
+    const fileInputs = document.querySelectorAll('input[type="file"]') as NodeListOf<HTMLInputElement>
+    fileInputs.forEach(input => {
+        input.value = ''
+    })
+
+    // 重置分割比例
+    splitRatio.train = 8
+    splitRatio.validation = 1
+    splitRatio.test = 1
+
+    // 重置超参数
+    hyperparameters.epoch = 20
+    hyperparameters.learningRate = 0.001
+    hyperparameters.earlyStopping = 10
+    hyperparameters.batchSize = 32
+    hyperparameters.randomSeed = 42
+    hyperparameters.labelCount = 2
+
+    // 重置通知设置
+    notification.email = ''
+
+    // 关闭弹窗并重置状态
+    showResultDialog.value = false
+    jobId.value = ''
+    currentStatus.value = ''
+    statusText.value = 'Initializing...'
+    trainingResults.value = {}
+    currentJob.value = null
+
+    // 停止任务轮询
+    stopPolling()
 }
 
-const cancelJob = (jobId: number) => {
-  console.log('取消任务:', jobId)
-  // 实现取消逻辑
+const startNewTraining = () => {
+    resetForm()
 }
 
-const retryJob = (jobId: number) => {
-  console.log('重试任务:', jobId)
-  // 实现重试逻辑
+// 关闭弹窗并重置表单（关闭按钮、右上角×、提交新任务都调用此方法）
+const handleClose = () => {
+    showResultDialog.value = false
+    currentJob.value = null
+    jobId.value = ''
+    currentStatus.value = ''
+    statusText.value = 'Initializing...'
+    trainingResults.value = {}
+    
+    // 重置表单
+    resetForm()
 }
 
-const viewResult = (jobId: number) => {
-  router.push(`/model/result/${jobId}`)
+// 加载可用模型
+const loadAvailableModels = async () => {
+    loadingModels.value = true
+    try {
+        const models = await trainingApi.getAvailableModels()
+        availableModels.value = models.map((model: any) => ({
+            id: model.model_type,
+            name: model.model_type.toUpperCase(),
+            description: model.description
+        }))
+    } catch (error) {
+        console.error('加载模型列表失败:', error)
+        // 使用默认模型列表作为后备
+        availableModels.value = [
+            { id: 'cnn', name: 'CNN', description: '卷积神经网络' },
+            { id: 'lstm', name: 'LSTM', description: '长短期记忆网络' },
+            { id: 'mlp', name: 'MLP', description: '多层感知机' }
+        ]
+    } finally {
+        loadingModels.value = false
+    }
 }
 
-// 生命周期
-onMounted(() => {
-  console.log('监督学习训练页面已加载')
+const getDatasetPath = () => {
+    if (strategy.value === 'split') {
+        return uploadedFiles.dataset
+    } else if (strategy.value === 'upload') {
+        return `${uploadedFiles.train},${uploadedFiles.validation},${uploadedFiles.test}`
+    } else if (strategy.value === 'kfold') {
+        return uploadedFiles.kfoldDataset
+    }
+    return ''
+}
+
+// 获取包含文件ID的数据集路径（用于后端自动关联）
+const getDatasetPathWithFileIds = () => {
+    if (strategy.value === 'split' && uploadedFileInfo.dataset) {
+        return `file://${uploadedFileInfo.dataset.id}`
+    } else if (strategy.value === 'upload') {
+        // 对于分别上传，返回主要训练文件ID
+        if (uploadedFileInfo.train) {
+            return `file://${uploadedFileInfo.train.id}`
+        }
+    } else if (strategy.value === 'kfold' && uploadedFileInfo.kfoldDataset) {
+        return `file://${uploadedFileInfo.kfoldDataset.id}`
+    }
+
+    return getDatasetPath()
+}
+
+// 任务状态轮询（作为 WebSocket 的后备）
+const pollTaskStatus = async (taskId: string) => {
+    // 停止之前的轮询
+    stopPolling()
+
+    const poll = async () => {
+        try {
+            const task = await trainingApi.getStatus(taskId)
+            currentStatus.value = task.status
+            statusText.value = task.current_step || `状态: ${task.status}`
+            
+            // 更新 currentJob
+            if (currentJob.value && currentJob.value.id === taskId) {
+                currentJob.value.status = task.status
+                currentJob.value.progress = task.progress || 0
+                if (task.current_step) {
+                    currentJob.value.currentStep = task.current_step
+                }
+                if (task.result_file) {
+                    currentJob.value.resultFile = task.result_file
+                }
+                if (task.error_message) {
+                    currentJob.value.errorMessage = task.error_message
+                }
+            }
+
+            // 使用后端新状态枚举值判断
+            if (task.status === 'Completed') {
+                // 任务完成，停止轮询
+                stopPolling()
+                ElMessage.success('训练完成！')
+            } else if (task.status === 'Submitted' || task.status === 'Processing') {
+                // 继续轮询，每5秒一次
+                pollingInterval = setTimeout(poll, 5000)
+            } else if (task.status === 'Failed') {
+                // 任务失败，停止轮询
+                stopPolling()
+                statusText.value = task.error_message || '训练失败'
+                ElMessage.error(task.error_message || '训练失败')
+            } else if (task.status === 'Cancelled') {
+                // 任务取消，停止轮询
+                stopPolling()
+                statusText.value = '任务已取消'
+            }
+        } catch (error) {
+            console.error('轮询任务状态失败:', error)
+            // 出错时也停止轮询
+            stopPolling()
+        }
+    }
+
+    // 立即执行一次
+    poll()
+}
+
+const stopPolling = () => {
+    if (pollingInterval) {
+        clearTimeout(pollingInterval)
+        pollingInterval = null
+    }
+}
+
+// <!-- 
+// 审查上下文：
+// - 设计意图：根据当前选择的训练策略下载相应的示例数据
+// - 已知局限：对于upload策略提供压缩包下载，其他策略提供单个文件
+// - 业务背景：让用户能够快速获取与所选策略匹配的示例数据
+// - 测试重点：请验证不同策略下的示例数据下载功能
+// -->
+const downloadStrategyExample = () => {
+    try {
+        let filePath = ''
+        let fileName = ''
+        
+        // 根据当前策略选择对应的示例文件
+        switch(strategy.value) {
+            case 'split':
+                // Split策略：下载训练数据示例
+                filePath = 'train_example/example_pseudo_data.txt'
+                fileName = 'example_pseudo_data.txt'
+                break
+            case 'upload':
+                // Upload策略：下载包含训练/验证/测试数据的压缩包
+                filePath = 'train_example.zip'
+                fileName = 'train_example.zip'
+                break
+            case 'kfold':
+                // K-Fold策略：下载训练数据示例
+                filePath = 'train_example/example_pseudo_data.txt'
+                fileName = 'example_pseudo_data.txt'
+                break
+            default:
+                throw new Error('未知的训练策略')
+        }
+        
+        // 构建下载链接
+        const downloadUrl = `http://localhost:8001/example/${filePath}`
+        
+        console.log(`📥 根据策略[${strategy.value}]下载示例文件: ${fileName}`)
+        
+        // 触发下载
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = fileName
+        link.target = '_blank'
+        link.style.display = 'none'
+        
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+    } catch (error: any) {
+        console.error('❓️ 策略示例文件下载失败:', error)
+        ElMessage.error(`下载失败: ${error.message || '未知错误'}`)
+    }
+}
+
+const downloadExample = (filePath: string) => {
+    try {
+        // 构建独立下载服务的示例文件下载链接
+        const downloadUrl = `http://localhost:8001/example/${filePath}`
+        
+        // 获取文件名（从路径中提取）
+        const fileName = filePath.split('/').pop() || filePath
+        
+        console.log(`📥 下载监督学习示例文件: ${fileName}`)
+        
+        // 使用 a 标签触发下载
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = fileName
+        link.target = '_blank'
+        link.style.display = 'none'
+        
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+    } catch (error: any) {
+        console.error('❓️ 监督学习示例文件下载失败:', error)
+        ElMessage.error(`下载失败: ${error.message || '未知错误'}`)
+    }
+}
+
+// 任务取消
+const handleCancel = (jobId: string) => {
+    console.log('取消任务:', jobId)
+    ElMessage.info('任务取消功能暂未实现')
+}
+
+// 任务重试
+const handleRetry = (jobId: string) => {
+    console.log('重试任务:', jobId)
+    // 重新提交表单
+    handleSubmit()
+}
+
+// 查看结果
+const viewResult = (jobId: string) => {
+    // 不再跳转到路由页面，因为结果已经在弹窗中显示
+    console.log('查看结果:', jobId)
+    ElMessage.info('请在弹窗中点击下载结果按钮')
+}
+
+// 下载训练结果
+const downloadResult = async () => {
+    if (!currentJob.value?.resultFile) {
+        ElMessage.warning('暂无结果文件')
+        return
+    }
+    
+    try {
+        // 使用带签名的下载链接（参考基因组和转录组的实现）
+        const jobId = currentJob.value.id
+        
+        // 调用后端 API 获取带签名的下载链接
+        const result = await trainingApi.getDownloadUrl(jobId)
+        const downloadUrl = result.download_url
+        
+        // 在新窗口打开下载链接
+        window.open(downloadUrl, '_blank')
+        
+        ElMessage.success('开始下载...')
+    } catch (error: any) {
+        console.error('下载失败:', error)
+        ElMessage.error('下载失败：' + (error.response?.data?.detail || error.message || '未知错误'))
+    }
+}
+
+// WebSocket 状态更新集成
+const setupWebSocket = async () => {
+    try {
+        wsService = WebSocketService.getInstance()
+        
+        // 设置任务状态回调
+        wsService.setOnTaskStatus((message: any) => {
+            if (message && currentJob.value && message.job_id === currentJob.value.id) {
+                // 更新当前任务状态（直接使用后端返回的状态值，不转换大小写）
+                if (message.status) {
+                    currentJob.value.status = message.status
+                }
+                if (message.progress !== undefined) {
+                    currentJob.value.progress = message.progress
+                }
+                if (message.current_step) {
+                    currentJob.value.currentStep = message.current_step
+                }
+                if (message.result_file) {
+                    currentJob.value.resultFile = message.result_file
+                }
+                if (message.error_message) {
+                    currentJob.value.errorMessage = message.error_message
+                }
+                
+                // 更新状态文本
+                currentStatus.value = message.status
+                statusText.value = message.current_step || `状态: ${message.status}`
+                
+                // 处理完成或失败状态（匹配后端新状态枚举值）
+                if (message.status === 'Completed') {
+                    ElMessage.success('训练完成！')
+                    stopPolling() // 停止轮询
+                } else if (message.status === 'Failed') {
+                    ElMessage.error(message.error_message || '训练失败')
+                    stopPolling() // 停止轮询
+                }
+            }
+        })
+        
+        // 连接任务状态 WebSocket
+        await wsService.connectTaskStatus()
+        console.log('🔌 WebSocket 已连接，用于任务状态更新')
+        
+    } catch (error) {
+        console.warn('❗ WebSocket 连接失败，将使用轮询方式:', error)
+        // WebSocket 连接失败不影响正常使用，会回退到轮询方式
+    }
+}
+
+// 组件挂载时加载数据
+onMounted(async () => {
+    loadAvailableModels()
+    await setupWebSocket()
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+    stopPolling()
+    if (wsService) {
+        wsService.disconnect()
+        wsService = null
+    }
 })
 </script>
 
 <style scoped>
-.model-train-supervised {
-  min-height: calc(100vh - 100px);
+/* 弹窗样式 */
+.dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
-.page-header h2 {
-  color: #2c3e50;
+.automata-training-supervised {
+    min-height: 100vh;
+    background-color: #f5f7fa;
+    /* 浅灰色背景 */
 }
 
-.breadcrumb {
-  background: none;
-  padding: 0;
-  margin-bottom: 0;
+.form-card {
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: white; /* 白色背景 */
+    border-bottom: 1px solid #e4e7ed; /* 添加底部边框以区分内容区域 */
+}
+
+.title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #303133;
+}
+
+.card {
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+}
+
+.step-section {
+    margin-bottom: 2rem;
 }
 
 .step-title {
-  position: relative;
-  padding-left: 40px;
-  margin-bottom: 1rem;
-  color: #2c3e50;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.step-subtitle {
+    font-size: 14px;
+    color: #6c757d;
+    margin-left: 12px;
+    font-weight: normal;
+}
+
+.section-subtitle {
+    font-size: 14px;
+    color: #6c757d;
+    margin-left: 12px;
+    font-weight: normal;
 }
 
 .step-number {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
-  background: #0d6efd;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.875rem;
-  font-weight: bold;
+    /* background-color: #0d6efd; */
+    /* Bootstrap 主蓝色数字背景 */
+    color: black;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    font-size: 1rem;
+    /* font-weight: bold; */
 }
 
-.strategy-options .form-check-input:checked {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333333;
+    /* 深灰色标题 */
+    margin-bottom: 1rem;
+}
+
+.model-card {
+    border: 2px solid #e0e0e0;
+    /* 浅灰色边框 */
+    border-radius: 8px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    height: 100%;
+    background-color: #fafafa;
+    /* 浅灰背景 */
+}
+
+.model-card:hover {
+    border-color: #0d6efd;
+    /* Bootstrap 主蓝色悬停边框 */
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.2);
+    /* Bootstrap 主蓝色阴影 */
+}
+
+.model-card.selected {
+    border-color: #0d6efd;
+    /* Bootstrap 主蓝色选中边框 */
+    background-color: rgba(13, 110, 253, 0.1);
+    /* Bootstrap 主蓝色背景 */
+}
+
+.model-header {
+    display: flex;
+    align-items: center;
+}
+
+.model-description {
+    min-height: 60px;
+    color: #666666;
+    /* 中灰色文字 */
+}
+
+.form-label {
+    font-weight: 500;
+    color: #444444;
+    /* 深灰色标签 */
+}
+
+/* Bootstrap 主蓝色主按钮 */
+.btn-primary {
+    /* background-color: #0d6efd; */
+    border-color: #0d6efd;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+    /* 稍深的 Bootstrap 主蓝色 */
+    border-color: #0b5ed7;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+/* 灰色次要按钮 */
+.btn-outline-secondary {
+    border-color: #cccccc;
+    color: #666666;
+}
+
+.btn-outline-secondary:hover {
+    background-color: #f0f0f0;
+    border-color: #999999;
+    color: #333333;
+}
+
+.badge.bg-success {
+    background-color: #0d6efd;
+    /* Bootstrap 主蓝色徽章 */
+    font-size: 0.875rem;
 }
 
 .ratio-controls {
-  background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-top: 1rem;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.ratio-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 150px;
+}
+
+.ratio-label {
+    font-weight: 500;
+    color: #495057;
+    white-space: nowrap;
+    margin-bottom: 0;
 }
 
 .ratio-input {
-  display: inline-block;
+    width: 80px;
+    padding: 6px 10px;
+    text-align: center;
+    border-radius: 4px;
 }
 
-.model-option {
-  transition: all 0.3s ease;
-  cursor: pointer;
+.ratio-input:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
-.model-option:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+.ratio-display {
+    background-color: #f0f0f0;
+    padding: 10px 15px;
+    border-radius: 6px;
+    border: 1px solid #dddddd;
+    color: #555555;
+    text-align: center;
 }
 
-.model-icon {
-  transition: color 0.3s ease;
+.upload-section {
+    background-color: #f8f8f8;
+    /* 浅灰色上传区域 */
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 15px;
+    border: 1px solid #eeeeee;
 }
 
-.model-option:hover .model-icon {
-  color: #0d6efd;
+/* All Models 卡片特殊样式 */
+.all-models-card {
+    background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+    border: 2px dashed #0d6efd;
+}
+
+.all-models-card.selected {
+    background: linear-gradient(135deg, rgba(13, 110, 253, 0.1) 0%, rgba(13, 110, 253, 0.2) 100%);
+    border-style: solid;
+}
+
+.form-control,
+.form-select {
+    border: 1px solid #cccccc;
+    background-color: white;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
 .form-check-input:checked {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* 卡片头部样式 */
+.card-header {
+    /* background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%); */
+    /* Bootstrap 主蓝色渐变 */
+    border-bottom: none;
+}
+
+/* 成功状态 Bootstrap 主蓝色 */
+.bg-success {
+    background-color: #0d6efd !important;
+}
+
+.text-success {
+    color: #0d6efd !important;
+}
+
+/* 输入框悬停效果 */
+.form-control:hover,
+.form-select:hover {
+    border-color: #aaaaaa;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .step-section {
+        padding-left: 15px;
+    }
+
+    .model-card {
+        margin-bottom: 15px;
+    }
+
+    .upload-section {
+        padding: 15px;
+    }
+}
+
+/* 新增样式 - All按钮和信息区域 */
+.step-header {
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.all-models-info {
+    border-left: 3px solid #0d6efd;
+}
+
+.btn-outline-primary.active {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+}
+
+.btn-outline-primary:not(.active):hover {
+    background-color: #f8f9fa;
+    border-color: #0d6efd;
+    color: #0d6efd;
+}
+
+/* 策略选项样式 */
+.strategy-options .form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* 步骤标题区域样式 */
+.step-header {
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
 }
 </style>

@@ -16,8 +16,7 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from api.dependencies.auth import get_current_active_user
 from api.models.user import User
-from api.models.training import TrainingTask
-from api.models.job import Job
+from api.models.job import Job, JobType, JobStatus
 from api.schemas.training import TrainingTaskCreate, TrainingTaskResponse
 from api.schemas.file import FileUploadRequest
 from api.services.file_service import FileUploadService
@@ -28,15 +27,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/training", tags=["模型训练"])
 
 
-def _create_response(task: TrainingTask, message: str = "训练任务已提交") -> TrainingTaskResponse:
-    """创建统一的响应对象"""
-    resp = TrainingTaskResponse.model_validate(task)
-    try:
-        resp.parameters = json.loads(task.parameters)
-    except Exception:
-        resp.parameters = task.parameters
-    resp.message = message
-    return resp
+def _create_response(job: Job, message: str = "训练任务已提交") -> TrainingTaskResponse:
+    """创建统一的响应对象（基于 Job 对象）"""
+    import json
+    
+    # 从 input_params 中提取训练参数
+    task_name = ""
+    model_type = ""
+    parameters = {}
+    
+    if job.input_params:
+        try:
+            params = json.loads(job.input_params)
+            task_name = params.get("task_name", "")
+            model_type = params.get("model_type", "")
+            parameters = params.get("parameters", {})
+        except (json.JSONDecodeError, TypeError):
+            pass
+    
+    return TrainingTaskResponse(
+        task_name=task_name,
+        model_type=model_type,
+        status=job.status.value if hasattr(job.status, "value") else str(job.status),
+        job_id=job.job_id,
+        created_at=job.created_at,
+        message=message,
+        parameters=parameters,
+        progress=job.progress or 0,
+        current_step=job.current_step,
+        result_file=job.result_file,
+        error_message=job.error_message
+    )
 
 
 @router.post("/tasks", response_model=TrainingTaskResponse)
@@ -75,16 +96,7 @@ async def train_supervised(
 ):
     """
     监督学习训练专用入口
-
-    与 /tasks 逻辑相同，仅路由更语义化，便于前端区分不同训练类型。
     """
-    # <!-- 
-    # 审查上下文：
-    # - 设计意图：复用相同的验证和处理逻辑，保持API一致性
-    # - 已知局限：与/tasks端点功能重复，可考虑合并或明确区分用途
-    # - 业务背景：为前端提供语义化的训练接口
-    # - 测试重点：验证专用路由的功能正确性
-    # -->
     service = TrainingService(db, current_user)
 
     task = await service.create_supervised_task(
@@ -97,6 +109,48 @@ async def train_supervised(
     return _create_response(task, "监督学习训练任务已提交")
 
 
+@router.post("/unsupervised", response_model=TrainingTaskResponse)
+async def train_unsupervised(
+    payload: TrainingTaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    无监督学习训练专用入口
+    """
+    service = TrainingService(db, current_user)
+
+    task = await service.create_unsupervised_task(
+        task_name=payload.task_name,
+        model_type=payload.model_type,
+        parameters=payload.parameters,
+        dataset_path=payload.dataset_path,
+    )
+
+    return _create_response(task, "无监督学习训练任务已提交")
+
+
+@router.post("/semi-supervised", response_model=TrainingTaskResponse)
+async def train_semi_supervised(
+    payload: TrainingTaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    半监督学习训练专用入口
+    """
+    service = TrainingService(db, current_user)
+
+    task = await service.create_semi_supervised_task(
+        task_name=payload.task_name,
+        model_type=payload.model_type,
+        parameters=payload.parameters,
+        dataset_path=payload.dataset_path,
+    )
+
+    return _create_response(task, "半监督学习训练任务已提交")
+
+
 @router.get("/tasks", response_model=List[TrainingTaskResponse])
 async def list_training_tasks(
     skip: int = Query(0, ge=0),
@@ -105,35 +159,38 @@ async def list_training_tasks(
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    获取当前用户的训练任务列表
+    获取当前用户的训练任务列表（从 jobs 表查询 MODEL_TRAIN 类型）
     """
     # <!-- 
     # 审查上下文：
-    # - 设计意图：使用统一的响应处理函数，减少代码重复
+    # - 设计意图：使用统一的 jobs 表查询，不再使用 training_tasks 表
     # - 已知局限：批量处理时可能会有性能考虑，但目前可接受
     # - 业务背景：为用户提供历史训练任务的查询功能
     # - 测试重点：验证分页功能和大量数据的处理能力
     # -->
-    tasks = (
-        db.query(TrainingTask)
-        .filter(TrainingTask.created_by == current_user.id)
-        .order_by(TrainingTask.created_at.desc())
+    jobs = (
+        db.query(Job)
+        .filter(
+            Job.user_id == current_user.id,
+            Job.job_type == JobType.MODEL_TRAIN
+        )
+        .order_by(Job.created_at.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
 
-    return [_create_response(task) for task in tasks]
+    return [_create_response(job) for job in jobs]
 
 
 @router.get("/tasks/{task_id}", response_model=TrainingTaskResponse)
 async def get_training_task(
-    task_id: int,
+    task_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    获取单个训练任务详情
+    获取单个训练任务详情（通过 job_id 查询）
     """
     # <!-- 
     # 审查上下文：
@@ -142,18 +199,19 @@ async def get_training_task(
     # - 业务背景：提供训练任务的详细信息查看
     # - 测试重点：验证权限控制和不存在任务的处理
     # -->
-    task = (
-        db.query(TrainingTask)
+    job = (
+        db.query(Job)
         .filter(
-            TrainingTask.id == task_id,
-            TrainingTask.created_by == current_user.id,
+            Job.job_id == task_id,
+            Job.user_id == current_user.id,
+            Job.job_type == JobType.MODEL_TRAIN
         )
         .first()
     )
-    if not task:
+    if not job:
         raise HTTPException(status_code=404, detail="训练任务不存在")
 
-    return _create_response(task)
+    return _create_response(job)
 
 
 @router.post("/files/upload")
@@ -222,7 +280,7 @@ async def get_training_status(
         .filter(
             Job.job_id == job_id,
             Job.user_id == current_user.id,
-            Job.job_type == "model_train",
+            Job.job_type == JobType.MODEL_TRAIN,
         )
         .first()
     )
@@ -233,7 +291,8 @@ async def get_training_status(
     return {
         "job_id": job.job_id,
         "status": job.status.value if hasattr(job.status, "value") else str(job.status),
-        "progress": getattr(job, "progress", None),
+        "progress": job.progress or 0,
+        "current_step": job.current_step,
         "result_file": job.result_file,
         "error_message": job.error_message,
         "created_at": job.created_at,
@@ -253,13 +312,13 @@ async def get_training_jobs(
     """
     total = (
         db.query(Job)
-        .filter(Job.user_id == current_user.id, Job.job_type == "model_train")
+        .filter(Job.user_id == current_user.id, Job.job_type == JobType.MODEL_TRAIN)
         .count()
     )
 
     jobs = (
         db.query(Job)
-        .filter(Job.user_id == current_user.id, Job.job_type == "model_train")
+        .filter(Job.user_id == current_user.id, Job.job_type == JobType.MODEL_TRAIN)
         .order_by(Job.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -275,6 +334,8 @@ async def get_training_jobs(
             "status": job.status.value
             if hasattr(job.status, "value")
             else str(job.status),
+            "progress": job.progress or 0,
+            "current_step": job.current_step,
             "input_params": job.input_params,
             "result_file": job.result_file,
             "error_message": job.error_message,
@@ -304,7 +365,7 @@ async def get_training_download_url(
         .filter(
             Job.job_id == job_id,
             Job.user_id == current_user.id,
-            Job.job_type == "model_train",
+            Job.job_type == JobType.MODEL_TRAIN,
         )
         .first()
     )
@@ -312,7 +373,7 @@ async def get_training_download_url(
     if not job:
         raise HTTPException(status_code=404, detail="训练任务不存在")
 
-    if (hasattr(job.status, "value") and job.status.value != "COMPLETED") or (
+    if (hasattr(job.status, "value") and job.status.value != JobStatus.COMPLETED.value) or (
         not hasattr(job.status, "value") and job.status != "Completed"
     ):
         raise HTTPException(status_code=400, detail="训练任务尚未完成")

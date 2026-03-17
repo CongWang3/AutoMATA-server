@@ -63,6 +63,8 @@ class Job(Base):
     output_params = Column(Text, comment="输出参数 (JSON 字符串)")
     result_file = Column(String(500), comment="结果文件路径")
     error_message = Column(Text, comment="错误信息")
+    progress = Column(Integer, default=0, comment="进度百分比 (0-100)")
+    current_step = Column(String(255), comment="当前执行步骤描述")
     created_at = Column(DateTime, default=datetime.utcnow, index=True, comment="创建时间")
     updated_at = Column(
         DateTime, 

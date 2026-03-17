@@ -530,11 +530,14 @@ export default defineComponent({
                         }
                     })
 
-                    // 保存文件信息
-                    uploadedFileInfo[fileType] = fileInfo
+                    // 保存文件信息（修复：后端返回的是 file_id 而不是 id）
+                    uploadedFileInfo[fileType] = {
+                        ...fileInfo,
+                        id: fileInfo.file_id  // 映射后端返回的 file_id 到 id
+                    }
                     uploadedFiles[fileType] = file.name
 
-                    console.log(`Uploaded ${fileType} file:`, file.name, 'File ID:', fileInfo.id)
+                    console.log(`Uploaded ${fileType} file:`, file.name, 'File ID:', fileInfo.file_id)
                     console.log('uploadedFileInfo:', uploadedFileInfo)
                     console.log('Current strategy:', strategy.value)
 

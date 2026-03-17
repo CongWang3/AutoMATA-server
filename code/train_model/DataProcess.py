@@ -33,6 +33,18 @@ def load_data(state="train", jobID="20240808232043_OtJF37SH"):  # train, val, te
     # 打乱数据
     # data = shuffle(data, random_state=2024)
     data = data.dropna()  # 一审
+    
+    # 过滤掉标签为非数字的行（如 "Unknown"）
+    # 监督学习需要有效的数字标签
+    label_col = data.iloc[:, -1]
+    # 尝试将标签转换为数字，无法转换的设为 NaN
+    numeric_labels = pd.to_numeric(label_col, errors='coerce')
+    valid_mask = numeric_labels.notna()
+    if not valid_mask.all():
+        invalid_count = (~valid_mask).sum()
+        print(f"警告: 过滤掉 {invalid_count} 行无效标签数据")
+        data = data[valid_mask]
+    
     # print(data.iloc[:,-1].head())
     # 获取数据和label
     feature = data.iloc[:,:-1].values.astype(float) 
@@ -56,9 +68,9 @@ def process(jobID="20240808232043_OtJF37SH", ratio="8:1:1"):
 
     # train_data, res_data = train_test_split(data, test_size=1-train_ratio, random_state=42, stratify=data[["Label"]])
     # val_data, test_data = train_test_split(res_data, test_size=test_ratio, random_state=42, stratify=res_data[["Label"]])
-    # 一审
-    train_data, res_data = train_test_split(data, test_size=1-train_ratio, stratify=data[["Label"]], shuffle=False)
-    val_data, test_data = train_test_split(res_data, test_size=test_ratio, stratify=res_data[["Label"]], shuffle=False)
+    # 分层抽样需要 shuffle=True，否则 sklearn 会报错
+    train_data, res_data = train_test_split(data, test_size=1-train_ratio, stratify=data[["Label"]], shuffle=True, random_state=42)
+    val_data, test_data = train_test_split(res_data, test_size=test_ratio, stratify=res_data[["Label"]], shuffle=True, random_state=42)
 
 
     # save

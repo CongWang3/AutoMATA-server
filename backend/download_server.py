@@ -28,17 +28,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 配置
-CORS_ORIGINS = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "http://10.131.77.125:5173", "http://1.95.52.33:5173"]
+CORS_ORIGINS = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
 MAX_SKEW = 60  # 允许的时间偏差，单位秒
 
 # 全局数据库引擎（复用连接池）
-# engine: Engine = create_engine(settings.DATABASE_URL)
-# 使用 pool_pre_ping 避免长时间空闲连接导致 "MySQL server has gone away"
-engine: Engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=7200,  # 定期回收连接，单位秒
-)
+engine: Engine = create_engine(settings.DATABASE_URL)
 
 
 def _parse_int_param(request: web.Request, name: str, default: Optional[int] = None) -> Optional[int]:
@@ -81,31 +75,6 @@ def get_file_path_from_db(file_id: str) -> Tuple[Optional[str], Optional[str]]:
             row = result.fetchone()
             if row:
                 return row[0], row[1]
-            return None, None
-    except Exception as e:
-        logger.exception(f"数据库查询错误: {e}")
-        return None, None
-
-
-def get_job_result_path(job_id: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    从数据库获取任务结果文件路径
-    
-    Args:
-        job_id: 任务ID
-        
-    Returns:
-        (文件路径, 原始文件名) 元组，如果未找到则返回 (None, None)
-    """
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT result_file, status FROM jobs WHERE job_id = :job_id"),
-                {"job_id": job_id}
-            )
-            row = result.fetchone()
-            if row and row[0]:
-                return row[0], f"{job_id}_processed.txt"
             return None, None
     except Exception as e:
         logger.exception(f"数据库查询错误: {e}")
@@ -230,170 +199,6 @@ async def handle_download(request: web.Request) -> web.StreamResponse:
         return web.Response(text="下载服务内部错误", status=500)
 
 
-async def handle_job_result_download(request: web.Request) -> web.StreamResponse:
-    """
-    处理任务结果文件下载
-    
-    Args:
-        request: HTTP请求对象
-        
-    Returns:
-        StreamResponse响应对象
-    """
-    try:
-        job_id = request.match_info.get('job_id')
-        token = request.query.get('token', '')
-        uid = _parse_int_param(request, 'uid')
-        timestamp = _parse_int_param(request, 't')
-        
-        # 参数验证
-        if uid is None or timestamp is None:
-            logger.warning(f"[JOB DOWNLOAD] 非法参数: uid={request.query.get('uid')}, t={request.query.get('t')}")
-            return web.Response(text="请求参数错误", status=400)
-        
-        logger.info(f"[JOB DOWNLOAD] 请求: job_id={job_id}, uid={uid}")
-        
-        # 验证时间戳（5分钟有效期）
-        current_time = int(time.time())
-        time_diff = current_time - timestamp
-        if abs(time_diff) > 300 + MAX_SKEW:
-            logger.warning(f"[JOB DOWNLOAD] 链接时间戳异常或已过期: diff={time_diff}秒")
-            return web.Response(text="下载链接已过期或无效", status=410)
-        
-        # 验证签名
-        if not verify_signature(job_id, uid, timestamp, token):
-            logger.warning(f"[JOB DOWNLOAD] 签名验证失败")
-            return web.Response(text="无效的下载链接", status=403)
-        
-        # 从数据库获取任务结果文件路径
-        file_path_str, original_name = get_job_result_path(job_id)
-        
-        if not file_path_str:
-            logger.info(f"[JOB DOWNLOAD] 任务结果不存在: {job_id}")
-            return web.Response(text="任务结果不存在", status=404)
-        
-        file_path = Path(file_path_str)
-        if not file_path.exists():
-            logger.error(f"[JOB DOWNLOAD] 文件路径不存在: {file_path}")
-            return web.Response(text="文件不存在", status=404)
-        
-        file_size = file_path.stat().st_size
-        encoded_filename = urllib.parse.quote(original_name, safe='')
-        
-        logger.info(f"[JOB DOWNLOAD] 开始传输: {file_path.name}, 大小: {file_size}")
-        
-        # 设置响应头
-        origin = request.headers.get('Origin', '')
-        allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
-        
-        response = web.StreamResponse(
-            status=200,
-            headers={
-                'Content-Type': 'text/plain',
-                'Content-Length': str(file_size),
-                'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}",
-                'Cache-Control': 'no-cache',
-                'Access-Control-Allow-Origin': allow_origin,
-            }
-        )
-        
-        await response.prepare(request)
-        
-        # 流式传输
-        chunk_size = 64 * 1024
-        rate_limit = 5 * 1024 * 1024
-        chunks_per_second = rate_limit // chunk_size
-        delay_per_chunk = 1.0 / chunks_per_second if chunks_per_second > 0 else 0.01
-        
-        try:
-            with open(file_path, 'rb') as f:
-                while True:
-                    chunk = f.read(chunk_size)
-                    if not chunk:
-                        break
-                    await response.write(chunk)
-                    await asyncio.sleep(delay_per_chunk)
-            
-            logger.info(f"[JOB DOWNLOAD] 传输完成: {file_path.name}")
-        except Exception as e:
-            logger.exception(f"[JOB DOWNLOAD] 传输错误: {e}")
-            return web.Response(text="文件传输失败", status=500)
-            
-        return response
-        
-    except Exception as e:
-        logger.exception(f"[JOB DOWNLOAD] 未处理异常: {e}")
-        return web.Response(text="下载服务内部错误", status=500)
-
-
-async def handle_example_download(request: web.Request) -> web.StreamResponse:
-    """
-    下载示例文件（不需要鉴权），用于前端示例数据下载
-    
-    访问路径示例：
-    - /example/train_example/jobID_pheno.txt
-    - /example/train_example/jobID_omics_1.txt
-    
-    映射到文件系统路径：
-    - /xp/www/AutoMATA/example/train_example/jobID_pheno.txt
-    """
-    try:
-        # {filepath:.*} 会把 "train_example/jobID_pheno.txt" 这样的相对路径整体匹配进来
-        rel_path = request.match_info.get('filepath', '')
-        if not rel_path:
-            return web.Response(text="示例文件路径为空", status=400)
-        
-        base_dir = Path("/xp/www/AutoMATA/example").resolve()
-        target_path = (base_dir / rel_path).resolve()
-        
-        # 防止路径穿越攻击：必须保证目标路径仍在 base_dir 下
-        if not str(target_path).startswith(str(base_dir)):
-            logger.warning(f"[EXAMPLE] 非法示例路径: {target_path}")
-            return web.Response(text="非法示例路径", status=400)
-        
-        if not target_path.exists():
-            logger.warning(f"[EXAMPLE] 示例文件不存在: {target_path}")
-            return web.Response(text="示例文件不存在", status=404)
-        
-        file_size = target_path.stat().st_size
-        filename = target_path.name
-        encoded_filename = urllib.parse.quote(filename, safe='')
-        
-        origin = request.headers.get('Origin', '')
-        allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
-        
-        response = web.StreamResponse(
-            status=200,
-            headers={
-                'Content-Type': 'text/plain',
-                'Content-Length': str(file_size),
-                'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}",
-                'Cache-Control': 'no-cache',
-                'Access-Control-Allow-Origin': allow_origin,
-            }
-        )
-        
-        await response.prepare(request)
-        
-        chunk_size = 64 * 1024
-        try:
-            with open(target_path, 'rb') as f:
-                while True:
-                    chunk = f.read(chunk_size)
-                    if not chunk:
-                        break
-                    await response.write(chunk)
-            logger.info(f"[EXAMPLE] 示例文件传输完成: {target_path}")
-        except Exception as e:
-            logger.exception(f"[EXAMPLE] 示例文件传输错误: {e}")
-            return web.Response(text="示例文件传输失败", status=500)
-        
-        return response
-    except Exception as e:
-        logger.exception(f"[EXAMPLE] 未处理异常: {e}")
-        return web.Response(text="示例下载服务内部错误", status=500)
-
-
 async def handle_cors_preflight(request: web.Request) -> web.Response:
     """
     处理 CORS 预检请求
@@ -430,11 +235,6 @@ def create_app() -> web.Application:
     app.router.add_get('/health', health_check)
     app.router.add_get('/download/{file_id}', handle_download)
     app.router.add_options('/download/{file_id}', handle_cors_preflight)
-    app.router.add_get('/job-result/{job_id}', handle_job_result_download)
-    app.router.add_options('/job-result/{job_id}', handle_cors_preflight)
-    # 示例文件下载，支持子目录路径（如 /example/train_example/jobID_pheno.txt）
-    app.router.add_get('/example/{filepath:.*}', handle_example_download)
-    app.router.add_options('/example/{filepath:.*}', handle_cors_preflight)
     
     return app
 

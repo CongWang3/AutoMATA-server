@@ -76,12 +76,12 @@ const router = createRouter({
     {
       path: '/model/train/unsupervised',
       name: 'train-unsupervised',
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/ModelTrain/Unsupervised.vue')
     },
     {
       path: '/model/train/semi-supervised',
       name: 'train-semi-supervised',
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/ModelTrain/SemiSupervised.vue')
     },
     {
       path: '/model/train/dashboard',
@@ -91,7 +91,7 @@ const router = createRouter({
     {
       path: '/model/use',
       name: 'model-use',
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/ModelUse/ModelUse.vue')
     },
     {
       path: '/data-analysis',

@@ -335,6 +335,13 @@ if __name__ == '__main__':
 
     # 加载训练数据集
     X_train, Y_train = load_data("train", jobID=jobID)
+    
+    # 自动检测实际类别数量，覆盖命令行参数
+    actual_num_classes = len(torch.unique(Y_train))
+    if actual_num_classes != output_size:
+        print(f"警告：用户设置的类别数 ({output_size}) 与数据实际类别数 ({actual_num_classes}) 不一致")
+        print(f"自动使用实际类别数：{actual_num_classes}")
+        output_size = actual_num_classes
     '''训练模型参数'''
     input_dim = X_train.shape[1]
 

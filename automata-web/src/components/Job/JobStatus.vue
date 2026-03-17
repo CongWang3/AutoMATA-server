@@ -11,6 +11,14 @@
     </div>
 
     <div class="status-details">
+      <!-- 当前步骤显示 -->
+      <div class="current-step-section mb-3" v-if="job.currentStep">
+        <div class="d-flex align-items-center">
+          <span class="small text-muted me-2">当前步骤：</span>
+          <span class="current-step-text">{{ job.currentStep }}</span>
+        </div>
+      </div>
+
       <!-- 进度条 -->
       <div class="progress-section mb-3" v-if="showProgress">
         <div class="d-flex justify-content-between mb-1">
@@ -110,13 +118,16 @@ interface JobLog {
 }
 
 interface Job {
-  id: number
+  id: number | string
   name: string
-  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+  status: 'Submitted' | 'Processing' | 'Completed' | 'Failed' | 'Cancelled' | 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
   progress: number
+  currentStep?: string   // 当前执行步骤描述
   createdAt: string
   updatedAt: string
   duration: number // seconds
+  resultFile?: string    // 结果文件路径
+  errorMessage?: string  // 错误信息
   logs?: JobLog[]
 }
 
@@ -137,51 +148,49 @@ const emit = defineEmits<{
   (e: 'view-result', jobId: number): void
 }>()
 
+// 状态映射（支持后端新格式和旧版本大写格式）
+const STATUS_MAP: Record<string, { class: string; text: string; progressClass: string }> = {
+  // 后端新状态枚举值（首字母大写）
+  Submitted: { class: 'bg-secondary', text: '已提交', progressClass: 'bg-secondary' },
+  Processing: { class: 'bg-primary', text: '处理中', progressClass: 'bg-primary progress-bar-animated progress-bar-striped' },
+  Completed: { class: 'bg-success', text: '已完成', progressClass: 'bg-success' },
+  Failed: { class: 'bg-danger', text: '失败', progressClass: 'bg-danger' },
+  Cancelled: { class: 'bg-warning', text: '已取消', progressClass: 'bg-warning' },
+  // 兼容旧版本大写状态
+  PENDING: { class: 'bg-secondary', text: '等待中', progressClass: 'bg-secondary' },
+  RUNNING: { class: 'bg-primary', text: '运行中', progressClass: 'bg-primary progress-bar-animated progress-bar-striped' },
+  COMPLETED: { class: 'bg-success', text: '已完成', progressClass: 'bg-success' },
+  FAILED: { class: 'bg-danger', text: '失败', progressClass: 'bg-danger' },
+  CANCELLED: { class: 'bg-warning', text: '已取消', progressClass: 'bg-warning' }
+}
+
 // 计算属性
 const canCancel = computed(() => {
-  return ['PENDING', 'RUNNING'].includes(props.job.status)
+  const status = props.job.status
+  return ['Submitted', 'Processing', 'PENDING', 'RUNNING'].includes(status)
 })
 
 const canRetry = computed(() => {
-  return ['FAILED', 'CANCELLED'].includes(props.job.status)
+  const status = props.job.status
+  return ['Failed', 'Cancelled', 'FAILED', 'CANCELLED'].includes(status)
 })
 
 const canViewResult = computed(() => {
-  return props.job.status === 'COMPLETED'
+  const status = props.job.status
+  return ['Completed', 'COMPLETED'].includes(status)
 })
 
 // 方法
 const getStatusClass = (status: string): string => {
-  const classes: Record<string, string> = {
-    PENDING: 'bg-secondary',
-    RUNNING: 'bg-primary',
-    COMPLETED: 'bg-success',
-    FAILED: 'bg-danger',
-    CANCELLED: 'bg-warning'
-  }
-  return classes[status] || 'bg-secondary'
+  return STATUS_MAP[status]?.class || 'bg-secondary'
 }
 
 const getStatusText = (status: string): string => {
-  const texts: Record<string, string> = {
-    PENDING: '等待中',
-    RUNNING: '运行中',
-    COMPLETED: '已完成',
-    FAILED: '失败',
-    CANCELLED: '已取消'
-  }
-  return texts[status] || status
+  return STATUS_MAP[status]?.text || status
 }
 
 const getProgressClass = (status: string): string => {
-  const classes: Record<string, string> = {
-    PENDING: 'bg-secondary',
-    RUNNING: 'bg-primary progress-bar-animated progress-bar-striped',
-    COMPLETED: 'bg-success',
-    FAILED: 'bg-danger',
-    CANCELLED: 'bg-warning'
-  }
-  return classes[status] || 'bg-secondary'
+  return STATUS_MAP[status]?.progressClass || 'bg-secondary'
 }
 
 const getLogClass = (level: string): string => {
@@ -236,6 +245,19 @@ const formatDuration = (seconds: number): string => {
 .log-entry {
   font-family: monospace;
   font-size: 0.875rem;
+}
+
+.current-step-section {
+  padding: 0.5rem 0;
+}
+
+.current-step-text {
+  font-weight: 500;
+  color: #495057;
+  background-color: #f8f9fa;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
 }
 
 .progress-bar-animated {
