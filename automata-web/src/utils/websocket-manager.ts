@@ -17,7 +17,7 @@ export class WebSocketManager {
   private isActive = false
   private checkDebounceTimer: number | null = null
   private lastCheckTime = 0
-  private readonly CHECK_DEBOUNCE_DELAY = 1000 // 1秒防抖延迟
+  private readonly CHECK_DEBOUNCE_DELAY = 2000 // 2秒防抖延迟，减少频繁检查
   private statusChangeListeners: Set<() => void> = new Set()
   
   // 需要实时功能的路由

@@ -13,8 +13,8 @@ export class WebSocketService {
   private static instance: WebSocketService | null = null
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 2  // 进一步减少最大重连次数
-  private reconnectDelay = 8000    // 增加重连延迟到8秒
+  private maxReconnectAttempts = 3  // 合理的最大重连次数
+  private reconnectDelay = 5000    // 重连延迟5秒
   private isIntentionallyClosing = false  // 标记是否为主动关闭
   private heartbeatInterval: number | null = null
   private heartbeatTimeout: number | null = null
@@ -194,7 +194,8 @@ export class WebSocketService {
         this.ws.onerror = (error) => {
           console.error('❌ WebSocket错误:', error)
           this.onErrorCallback?.(error)
-          reject(error)
+          // 不立即reject，等待onclose事件处理
+          // reject(error)
         }
 
       } catch (error) {
