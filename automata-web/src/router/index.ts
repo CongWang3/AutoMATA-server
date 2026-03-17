@@ -61,6 +61,12 @@ const router = createRouter({
       component: () => import('../views/DataProcess/Integration.vue'),
       meta: { requiresAuth: true }
     },
+    {
+      path: '/data-process/pvalue-integration',
+      name: 'pvalue-integration',
+      component: () => import('../views/DataProcess/PvalueIntegration.vue'),
+      meta: { requiresAuth: true }
+    },
     // 模型相关路由
     {
       path: '/model/train/supervised',

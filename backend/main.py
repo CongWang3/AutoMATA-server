@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import settings
 
 # 导入路由
-from api.routers import auth, files, chunked_download, data_process, task_websocket
+from api.routers import auth, files, chunked_download, data_process, task_websocket, training
 
 # 导入定时任务
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -67,6 +67,8 @@ app.include_router(files.router)
 app.include_router(chunked_download.router, prefix="/api/v1/files", tags=["分片下载"])
 app.include_router(data_process.router)
 app.include_router(task_websocket.router)
+# 训练相关路由（/training/...）
+app.include_router(training.router)
 
 
 # 创建全局调度器

@@ -64,6 +64,23 @@ class IntegrationProcessResponse(BaseModel):
         from_attributes = True
 
 
+class PvalueIntegrationProcessRequest(BaseModel):
+    """pvalue 多组学整合请求模型"""
+    method: str
+    email: Optional[str] = None
+
+
+class PvalueIntegrationProcessResponse(BaseModel):
+    """pvalue 多组学整合响应模型"""
+    job_id: str
+    status: str
+    message: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ProteinProcessRequest(BaseModel):
     """蛋白质数据处理请求模型"""
     protein_nomenclature: str  # Entry, RefSeq, AlphaFoldDB, Ensembl

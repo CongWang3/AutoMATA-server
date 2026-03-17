@@ -29,10 +29,11 @@
                             Data Process
                         </a>
                         <ul class="dropdown-menu" :class="{ show: activeDropdown === 'data' }">
-                            <li><a href="/genome" class="dropdown-item">Genome</a></li>
-                            <li><a href="/transcriptome" class="dropdown-item">Transcriptome</a></li>
-                            <li><a href="/protein" class="dropdown-item">Protein</a></li>
-                            <li><a href="/integration" class="dropdown-item">Integration</a></li>
+                            <li><a href="/data-process/genome" class="dropdown-item">Genome</a></li>
+                            <li><a href="/data-process/transcriptome" class="dropdown-item">Transcriptome</a></li>
+                            <li><a href="/data-process/protein" class="dropdown-item">Protein</a></li>
+                            <li><a href="/data-process/integration" class="dropdown-item">Integration</a></li>
+                            <li><a href="/data-process/pvalue-integration" class="dropdown-item">pvalue Integration</a></li>
                         </ul>
                     </li>
 

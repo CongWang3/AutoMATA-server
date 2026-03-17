@@ -6,6 +6,7 @@ from api.models.job import Job, JobType, JobStatus
 from api.models.file import File
 from api.models.job_file import JobFile, FileRole
 from api.models.job_log import JobLog, LogLevel
+from api.models.training import TrainingTask
 
 __all__ = [
     "User",
@@ -17,4 +18,5 @@ __all__ = [
     "FileRole",
     "JobLog",
     "LogLevel",
+    "TrainingTask",
 ]

@@ -71,6 +71,14 @@
                   数据整合
                 </router-link>
               </li>
+              <li>
+                <router-link 
+                  to="/data-process/pvalue-integration" 
+                  class="dropdown-item"
+                >
+                  pvalue整合
+                </router-link>
+              </li>
             </ul>
           </li>
           

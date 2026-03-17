@@ -21,6 +21,8 @@ from api.schemas.data_process import (
     GenomeProcessResponse,
     TranscriptomeProcessRequest,
     TranscriptomeProcessResponse,
+    PvalueIntegrationProcessRequest,
+    PvalueIntegrationProcessResponse,
     ProteinProcessRequest,
     ProteinProcessResponse,
     IntegrationProcessRequest,
@@ -344,6 +346,72 @@ async def process_integration_data(
         raise HTTPException(status_code=500, detail="数据库操作失败")
     except Exception as e:
         logger.error(f"多组学数据整合失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+
+
+@router.post("/pvalue-integration", response_model=PvalueIntegrationProcessResponse)
+async def process_pvalue_integration_data(
+    file_1: UploadFile = File(...),
+    file_2: UploadFile = File(...),
+    file_3: UploadFile = File(...),
+    method: str = Form(...),
+    email: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    pvalue 多组学整合接口
+
+    调用 R 脚本 integration_pvalue.R，对三个组学的 pvalue 进行整合
+    """
+    try:
+        # 基本文件类型校验
+        files = [file_1, file_2, file_3]
+        for f in files:
+            if not f.filename or not f.filename.endswith(('.txt', '.csv', '.tsv')):
+                raise HTTPException(
+                    status_code=400,
+                    detail="所有文件仅支持 txt、csv、tsv 格式",
+                )
+
+        # 方法校验（与 R 脚本中说明保持一致）
+        valid_methods = [
+            "Fisher",
+            "Fisher_directional",
+            "Brown",
+            "DPM",
+            "Stouffer",
+            "Stouffer_directional",
+            "Strube",
+            "Strube_directional",
+            "None"
+        ]
+        if method not in valid_methods:
+            raise HTTPException(
+                status_code=400,
+                detail=f"method 必须为: {', '.join(valid_methods)}",
+            )
+
+        service = DataProcessService(db, current_user)
+        result = await service.process_pvalue_integration(
+            file_1=file_1,
+            file_2=file_2,
+            file_3=file_3,
+            method=method,
+            email=email,
+        )
+
+        logger.info(
+            f"pvalue 多组学整合任务已提交: job_id={result.job_id}, user={current_user.username}"
+        )
+        return result
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        logger.error(f"数据库错误：{str(e)}")
+        raise HTTPException(status_code=500, detail="数据库操作失败")
+    except Exception as e:
+        logger.error(f"pvalue 多组学整合失败：{str(e)}")
         raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
 
 @router.get("/status/{job_id}", response_model=DataProcessStatusResponse)

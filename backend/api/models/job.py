@@ -16,6 +16,7 @@ class JobType(str, enum.Enum):
     TRANSCRIPTOME_PROCESS = "transcriptome_process"
     PROTEIN_PROCESS = "protein_process"
     INTEGRATION_PROCESS = "integration_process"
+    PVALUE_INTEGRATION = "pvalue_integration"
     MODEL_TRAIN = "model_train"
     DATA_ANALYSIS = "data_analysis"
     

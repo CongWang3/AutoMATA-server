@@ -40,6 +40,13 @@ interface IntegrationProcessResponse extends BaseApiResponse {
   created_at: string
 }
 
+interface PvalueIntegrationProcessResponse extends BaseApiResponse {
+  job_id: string
+  status: string
+  message: string
+  created_at: string
+}
+
 export class DataProcessAPI {
   /**
    * 基因组数据处理
@@ -97,6 +104,28 @@ export class DataProcessAPI {
       )
     } catch (error) {
       console.error('多组学数据整合失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * pvalue 多组学整合
+   */
+  static async processPvalueIntegration(
+    formData: FormData
+  ): Promise<PvalueIntegrationProcessResponse> {
+    try {
+      return await apiClient.post<PvalueIntegrationProcessResponse>(
+        '/v1/data-process/pvalue-integration',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      )
+    } catch (error) {
+      console.error('pvalue 多组学整合失败:', error)
       throw error
     }
   }

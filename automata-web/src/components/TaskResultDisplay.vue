@@ -23,7 +23,7 @@
               <td>{{ jobId }}</td>
             </tr>
             <tr>
-              <td class="line" :style="lineStyle">Nomenclature</td>
+              <td class="line" :style="lineStyle">{{ props.nomenclatureLabel }}</td>
               <td>{{ params.gene_nomenclature }}</td>
             </tr>
             <tr
@@ -34,7 +34,7 @@
               <td class="line" :style="lineStyle">Input Data Type</td>
               <td>{{ params.data_type }}</td>
             </tr>
-            <tr>
+            <tr v-if="!props.hideOrganism">
               <td class="line" :style="lineStyle">Organism</td>
               <td>{{ params.organism }}</td>
             </tr>
@@ -80,7 +80,7 @@
             <!-- 非精简模式下显示详细参数行 -->
             <template v-if="!props.compact">
               <tr>
-                <td class="line" :style="lineStyle">Nomenclature</td>
+                <td class="line" :style="lineStyle">{{ props.nomenclatureLabel }}</td>
                 <td>{{ params.gene_nomenclature }}</td>
               </tr>
               <tr
@@ -91,7 +91,7 @@
                 <td class="line" :style="lineStyle">Input Data Type</td>
                 <td>{{ params.data_type }}</td>
               </tr>
-              <tr>
+              <tr v-if="!props.hideOrganism">
                 <td class="line" :style="lineStyle">Organism</td>
                 <td>{{ params.organism }}</td>
               </tr>
@@ -139,7 +139,7 @@
             <!-- 非精简模式下显示详细参数行 -->
             <template v-if="!props.compact">
               <tr>
-                <td class="line" :style="lineStyle">Nomenclature</td>
+                <td class="line" :style="lineStyle">{{ props.nomenclatureLabel }}</td>
                 <td>{{ params.gene_nomenclature }}</td>
               </tr>
               <tr
@@ -150,7 +150,7 @@
                 <td class="line" :style="lineStyle">Input Data Type</td>
                 <td>{{ params.data_type }}</td>
               </tr>
-              <tr>
+              <tr v-if="!props.hideOrganism">
                 <td class="line" :style="lineStyle">Organism</td>
                 <td>{{ params.organism }}</td>
               </tr>
@@ -219,6 +219,17 @@ interface Props {
    * - 用于 Protein 等无数据类型参数的结果展示
    */
   hideDataType?: boolean
+  /**
+   * 是否隐藏“Organism”行
+   * - 用于仅需展示 JobID + 方法等少量信息的场景（如 pvalue 整合）
+   */
+  hideOrganism?: boolean
+  /**
+   * Nomenclature 行的显示名称
+   * - 默认为 "Nomenclature"
+   * - 在 pvalue 整合等场景下可设置为 "Method"
+   */
+  nomenclatureLabel?: string
   initialStatus?: TaskStatus
   initialProgress?: number
 }
@@ -227,7 +238,9 @@ const props = withDefaults(defineProps<Props>(), {
   initialStatus: 'WAITING' as TaskStatus,
   initialProgress: 0,
   compact: false,
-  hideDataType: false
+  hideDataType: false,
+  hideOrganism: false,
+  nomenclatureLabel: 'Nomenclature'
 })
 
 const emit = defineEmits<{
