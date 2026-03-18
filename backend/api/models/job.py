@@ -22,6 +22,20 @@ class JobType(str, enum.Enum):
     
     def __str__(self):
         return self.value
+    
+    @property
+    def display_name(self) -> str:
+        """获取任务类型的中文显示名称"""
+        names = {
+            'genome_process': '基因组处理',
+            'transcriptome_process': '转录组处理',
+            'protein_process': '蛋白质处理',
+            'integration_process': '多组学整合',
+            'pvalue_integration': 'P值整合分析',
+            'model_train': '模型训练',
+            'data_analysis': '数据分析',
+        }
+        return names.get(self.value, self.value)
 
 
 class JobStatus(str, enum.Enum):
@@ -31,6 +45,18 @@ class JobStatus(str, enum.Enum):
     COMPLETED = "Completed"
     FAILED = "Failed"
     CANCELLED = "Cancelled"
+    
+    @property
+    def display_name(self) -> str:
+        """获取任务状态的中文显示名称"""
+        names = {
+            'Submitted': '已提交',
+            'Processing': '处理中',
+            'Completed': '已完成',
+            'Failed': '失败',
+            'Cancelled': '已取消',
+        }
+        return names.get(self.value, self.value)
 
 
 class Job(Base):

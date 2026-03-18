@@ -23,10 +23,14 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
-      path: '/files',
-      name: 'files',
+      path: '/tasks',
+      name: 'tasks',
       component: () => import('../views/Files.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: '任务管理' }
+    },
+    {
+      path: '/files',
+      redirect: '/tasks?tab=files'
     },
     {
       path: '/about',
