@@ -6,6 +6,7 @@ import AppHeader from './components/common/AppHeader.vue'
 import AppFooter from './components/common/AppFooter.vue'
 import LoadingSpinner from './components/common/LoadingSpinner.vue'
 import ErrorBoundary from './components/common/ErrorBoundary.vue'
+import ChatPanel from './components/Agent/ChatPanel.vue'
 import { RouterView } from 'vue-router'
 
 const userStore = useUserStore()
@@ -63,6 +64,9 @@ onMounted(() => {
     <div class="notifications-container">
       <!-- 通知将通过 Element Plus Notification API 显示 -->
     </div>
+    
+    <!-- AI 聊天面板（全局可见） -->
+    <ChatPanel />
   </div>
 </template>
 

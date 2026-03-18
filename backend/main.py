@@ -9,6 +9,7 @@ from config.settings import settings
 
 # 导入路由
 from api.routers import auth, files, chunked_download, data_process, task_websocket, training, jobs, analysis
+from api.agent import router as agent_router
 
 # 导入定时任务
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -73,6 +74,8 @@ app.include_router(training.router)
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["Jobs"])
 # 数据分析路由（/api/v1/analysis/...）
 app.include_router(analysis.router)
+# AI Agent 路由（/api/v1/agent/...）
+app.include_router(agent_router.router)
 
 
 # 创建全局调度器

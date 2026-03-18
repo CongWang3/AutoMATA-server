@@ -92,6 +92,19 @@ class Settings(BaseSettings):
     SMTP_SSL: bool = False
     SMTP_FROM_NAME: str = "AutoMATA"
     
+    # AI Agent 配置
+    AGENT_ENABLED: bool = False
+    AGENT_DEFAULT_PROVIDER: str = "openai"  # openai / qwen / deepseek
+    AGENT_OPENAI_API_KEY: str = ""
+    AGENT_OPENAI_BASE_URL: str = ""  # 可选代理地址
+    AGENT_OPENAI_MODEL: str = "gpt-4o"
+    AGENT_QWEN_API_KEY: str = ""
+    AGENT_QWEN_MODEL: str = "qwen-plus"
+    AGENT_DEEPSEEK_API_KEY: str = ""
+    AGENT_DEEPSEEK_MODEL: str = "deepseek-chat"
+    AGENT_DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
+    AGENT_MAX_TURNS: int = 10
+    
     class Config:
         env_file = ".env"
         
