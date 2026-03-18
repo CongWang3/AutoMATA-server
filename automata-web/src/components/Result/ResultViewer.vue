@@ -28,15 +28,15 @@
           </el-button>
         </el-button-group>
         
-        <el-dropdown @command="handleExport">
-          <el-button>
-            导出 <el-icon class="el-icon--right"><arrow-down /></el-icon>
+        <el-dropdown @command="handleExport" trigger="click">
+          <el-button type="primary">
+            导出数据 <el-icon class="el-icon--right"><arrow-down /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="csv">CSV格式</el-dropdown-item>
-              <el-dropdown-item command="json">JSON格式</el-dropdown-item>
-              <el-dropdown-item command="excel">Excel格式</el-dropdown-item>
+              <el-dropdown-item command="csv">CSV 格式</el-dropdown-item>
+              <el-dropdown-item command="txt">TXT 格式 (Tab分隔)</el-dropdown-item>
+              <el-dropdown-item command="excel">Excel 格式</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -128,6 +128,7 @@ interface Props {
   rawData?: string
   summary?: SummaryData
   loading?: boolean
+  exportFilename?: string  // 导出文件名，默认使用 'result'
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -137,7 +138,8 @@ const props = withDefaults(defineProps<Props>(), {
   chartData: undefined,
   rawData: '',
   summary: undefined,
-  loading: false
+  loading: false,
+  exportFilename: 'result'
 })
 
 const emit = defineEmits<{
@@ -161,7 +163,157 @@ function setViewMode(mode: 'table' | 'chart' | 'raw') {
   viewMode.value = mode
 }
 
+/**
+ * 通用下载方法 - 使用 Blob 和 URL.createObjectURL
+ * 添加 BOM 头确保中文 Excel 正确显示
+ */
+function downloadBlob(content: string, filename: string, mimeType: string) {
+  const blob = new Blob(['\ufeff' + content], { type: `${mimeType};charset=utf-8` })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * 获取导出数据的表头
+ * 优先使用 columns 配置，否则从数据中自动推断
+ */
+function getExportHeaders(): string[] {
+  if (props.columns && props.columns.length > 0) {
+    return props.columns.map(col => col.prop)
+  }
+  if (props.data.length > 0) {
+    return Object.keys(props.data[0])
+  }
+  return []
+}
+
+/**
+ * 获取表头显示名称
+ */
+function getHeaderLabels(): string[] {
+  if (props.columns && props.columns.length > 0) {
+    return props.columns.map(col => col.label || col.prop)
+  }
+  return getExportHeaders()
+}
+
+/**
+ * 导出为 CSV 格式（逗号分隔）
+ */
+function exportCSV() {
+  if (props.data.length === 0) {
+    console.warn('没有可导出的数据')
+    return
+  }
+  
+  const headers = getExportHeaders()
+  const headerLabels = getHeaderLabels()
+  
+  const csv = [
+    headerLabels.join(','),
+    ...props.data.map(row => 
+      headers.map(h => {
+        const value = row[h] ?? ''
+        // 处理包含逗号、引号或换行的值
+        const strValue = String(value)
+        if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
+          return `"${strValue.replace(/"/g, '""')}"`
+        }
+        return `"${strValue}"`
+      }).join(',')
+    )
+  ].join('\n')
+  
+  downloadBlob(csv, `${props.exportFilename}.csv`, 'text/csv')
+}
+
+/**
+ * 导出为 TXT 格式（Tab分隔）
+ */
+function exportTXT() {
+  if (props.data.length === 0) {
+    console.warn('没有可导出的数据')
+    return
+  }
+  
+  const headers = getExportHeaders()
+  const headerLabels = getHeaderLabels()
+  
+  const txt = [
+    headerLabels.join('\t'),
+    ...props.data.map(row => 
+      headers.map(h => row[h] ?? '').join('\t')
+    )
+  ].join('\n')
+  
+  downloadBlob(txt, `${props.exportFilename}.txt`, 'text/plain')
+}
+
+/**
+ * 导出为 Excel 格式（使用 HTML table 转 xls 方式）
+ */
+function exportExcel() {
+  if (props.data.length === 0) {
+    console.warn('没有可导出的数据')
+    return
+  }
+  
+  const headers = getExportHeaders()
+  const headerLabels = getHeaderLabels()
+  
+  let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'
+  html += '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Sheet1</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>'
+  html += '<body><table border="1"><tr>'
+  
+  // 表头
+  html += headerLabels.map(h => `<th style="background-color:#f5f5f5;font-weight:bold;">${escapeHtml(String(h))}</th>`).join('')
+  html += '</tr>'
+  
+  // 数据行
+  props.data.forEach(row => {
+    html += '<tr>'
+    html += headers.map(h => `<td>${escapeHtml(String(row[h] ?? ''))}</td>`).join('')
+    html += '</tr>'
+  })
+  
+  html += '</table></body></html>'
+  
+  downloadBlob(html, `${props.exportFilename}.xls`, 'application/vnd.ms-excel')
+}
+
+/**
+ * HTML 转义，防止 XSS
+ */
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+/**
+ * 处理导出命令
+ */
 function handleExport(format: string) {
+  switch (format) {
+    case 'csv':
+      exportCSV()
+      break
+    case 'txt':
+      exportTXT()
+      break
+    case 'excel':
+      exportExcel()
+      break
+    default:
+      console.warn('未知的导出格式:', format)
+  }
+  // 同时发出事件，以便父组件可以监听
   emit('export', format)
 }
 

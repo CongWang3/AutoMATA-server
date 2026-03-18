@@ -48,9 +48,9 @@
             <el-icon><PieChart /></el-icon>
             <span>数据分析</span>
           </template>
-          <el-menu-item index="/analysis/differential">差异表达</el-menu-item>
-          <el-menu-item index="/analysis/enrichment">富集分析</el-menu-item>
-          <el-menu-item index="/analysis/visualization">可视化</el-menu-item>
+          <el-menu-item index="/data-analysis">差异表达</el-menu-item>
+          <el-menu-item index="/data-analysis/go">富集分析</el-menu-item>
+          <el-menu-item index="/data-analysis/pca">可视化</el-menu-item>
         </el-sub-menu>
         
         <el-menu-item index="/help">

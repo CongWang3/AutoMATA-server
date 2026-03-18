@@ -143,7 +143,7 @@
             <ul class="dropdown-menu" aria-labelledby="analysisDropdown">
               <li>
                 <router-link 
-                  to="/analysis/differential" 
+                  to="/data-analysis" 
                   class="dropdown-item"
                 >
                   差异表达
@@ -151,7 +151,7 @@
               </li>
               <li>
                 <router-link 
-                  to="/analysis/enrichment" 
+                  to="/data-analysis/go" 
                   class="dropdown-item"
                 >
                   富集分析
@@ -159,7 +159,7 @@
               </li>
               <li>
                 <router-link 
-                  to="/analysis/visualization" 
+                  to="/data-analysis/pca" 
                   class="dropdown-item"
                 >
                   可视化
@@ -404,7 +404,7 @@
             <ul class="menu-list">
               <li>
                 <router-link 
-                  to="/analysis/differential" 
+                  to="/data-analysis" 
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
@@ -413,7 +413,7 @@
               </li>
               <li>
                 <router-link 
-                  to="/analysis/enrichment" 
+                  to="/data-analysis/go" 
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
@@ -422,7 +422,7 @@
               </li>
               <li>
                 <router-link 
-                  to="/analysis/visualization" 
+                  to="/data-analysis/pca" 
                   class="menu-item"
                   @click="closeMobileMenu"
                 >

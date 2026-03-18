@@ -28,13 +28,13 @@
                                 <a href="/" class="footer-link">Home</a>
                             </li>
                             <li class="menu-item mb-2">
-                                <a href="/genome" class="footer-link">Data Process</a>
+                                <a href="/data-process/genome" class="footer-link">Data Process</a>
                             </li>
                             <li class="menu-item mb-2">
                                 <a href="/model/train/supervised" class="footer-link">Model</a>
                             </li>
                             <li class="menu-item mb-2">
-                                <a href="/analysis" class="footer-link">Data Analyse</a>
+                                <a href="/data-analysis" class="footer-link">Data Analyse</a>
                             </li>
                             <li class="menu-item mb-2">
                                 <a href="/help" class="footer-link">Help</a>

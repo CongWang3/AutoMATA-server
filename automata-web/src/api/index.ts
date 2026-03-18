@@ -10,6 +10,7 @@ export { AuthService } from './auth'
 export { FileService } from './files'
 export { webSocketService, WebSocketService } from './websocket'
 export { DataProcessAPI } from './data-process'
+export { AnalysisAPI } from './analysis'
 
 // 业务API
 export { trainingApi, TASK_STATUS, MODEL_PARAMETERS } from './training'
@@ -48,3 +49,12 @@ export type {
   WebSocketProgressMessage,
   BaseApiResponse
 } from './types'
+
+// 分析API类型导出
+export type {
+  AnalysisResponse,
+  AnalysisResultFile,
+  AnalysisResultResponse,
+  AnalysisFieldOption,
+  AnalysisField
+} from './analysis'

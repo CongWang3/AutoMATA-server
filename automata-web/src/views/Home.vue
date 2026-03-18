@@ -159,7 +159,7 @@ function goToModelTraining() {
 }
 
 function goToDataAnalysis() {
-  router.push('/analysis/differential')
+  router.push('/data-analysis')
 }
 
 function viewAllTasks() {

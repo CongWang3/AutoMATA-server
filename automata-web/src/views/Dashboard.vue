@@ -5,6 +5,38 @@
       <p class="dashboard-subtitle">您的生物信息学分析平台</p>
     </div>
 
+    <!-- 平台简介 -->
+    <div class="platform-intro">
+      <el-card class="intro-card" shadow="hover">
+        <div class="intro-content">
+          <div class="intro-text">
+            <h2 class="intro-title">AutoMATA</h2>
+            <p class="intro-desc">
+              A deep learning-enhanced bioinformatics platform for <strong>multi-omics data processing</strong>, 
+              <strong>exploration</strong> and <strong>modelling</strong>.
+            </p>
+            <p class="intro-desc-cn">
+              基于深度学习的生物信息学平台，支持多组学数据处理、探索与建模。
+            </p>
+          </div>
+          <div class="intro-features">
+            <div class="feature-item">
+              <el-icon class="feature-icon" color="#409eff"><DataAnalysis /></el-icon>
+              <span>多组学分析</span>
+            </div>
+            <div class="feature-item">
+              <el-icon class="feature-icon" color="#67c23a"><Cpu /></el-icon>
+              <span>深度学习</span>
+            </div>
+            <div class="feature-item">
+              <el-icon class="feature-icon" color="#e6a23c"><TrendCharts /></el-icon>
+              <span>数据可视化</span>
+            </div>
+          </div>
+        </div>
+      </el-card>
+    </div>
+
     <div class="dashboard-content">
       <!-- 统计卡片 -->
       <div class="stats-grid">
@@ -232,7 +264,9 @@ import {
   Finished, 
   Setting, 
   QuestionFilled, 
-  Download 
+  Download,
+  Cpu,
+  TrendCharts
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useFilesStore } from '@/stores/files'
@@ -300,7 +334,7 @@ function goToTraining() {
 }
 
 function goToAnalysis() {
-  router.push('/analysis')
+  router.push('/data-analysis')
 }
 
 function goToHelp() {
@@ -387,7 +421,78 @@ onUnmounted(() => {
 }
 
 .dashboard-header {
+  margin-bottom: 16px;
+}
+
+/* 平台简介 */
+.platform-intro {
   margin-bottom: 24px;
+}
+
+.intro-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+}
+
+.intro-card :deep(.el-card__body) {
+  padding: 24px;
+}
+
+.intro-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+.intro-text {
+  flex: 1;
+}
+
+.intro-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 12px 0;
+}
+
+.intro-desc {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 8px 0;
+  line-height: 1.6;
+}
+
+.intro-desc strong {
+  color: #ffffff;
+}
+
+.intro-desc-cn {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+}
+
+.intro-features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.feature-icon {
+  font-size: 20px;
 }
 
 .dashboard-title {
@@ -590,6 +695,27 @@ onUnmounted(() => {
   
   .dashboard-title {
     font-size: 24px;
+  }
+
+  /* 平台简介响应式 */
+  .intro-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .intro-title {
+    font-size: 24px;
+  }
+
+  .intro-features {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .feature-item {
+    padding: 8px 12px;
+    font-size: 13px;
   }
   
   .stats-grid {

@@ -83,6 +83,15 @@ class Settings(BaseSettings):
     # CORS 配置 - 开发环境允许所有来源（支持本地前端直连）
     CORS_ORIGINS: List[str] = ["*"]
     
+    # Email 配置
+    EMAIL_ENABLED: bool = False
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_SSL: bool = False
+    SMTP_FROM_NAME: str = "AutoMATA"
+    
     class Config:
         env_file = ".env"
         

@@ -25,6 +25,7 @@ from api.schemas.data_process import (
 )
 from api.utils.file_utils import save_uploaded_file
 from api.websocket.task_manager import task_status_manager
+from api.services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -505,6 +506,18 @@ class DataProcessService:
                 self.db.commit()
                             
                 logger.info(f"基因组处理完成：job_id={job_id}, status={job.status}")
+                
+                # 如果任务成功且提供了邮箱，发送结果邮件
+                if job.status == "Completed" and email:
+                    try:
+                        await email_service.send_result_email(
+                            to_email=email,
+                            job_id=job_id,
+                            analysis_type="基因组数据处理",
+                            result_dir=job.result_file
+                        )
+                    except Exception as e:
+                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
             
         except Exception as e:
             logger.error(f"基因组处理执行失败: job_id={job_id}, error={str(e)}")
@@ -636,6 +649,18 @@ class DataProcessService:
                 self.db.commit()
                             
                 logger.info(f"转录组处理完成：job_id={job_id}, status={job.status}")
+                
+                # 如果任务成功且提供了邮箱，发送结果邮件
+                if job.status == "Completed" and email:
+                    try:
+                        await email_service.send_result_email(
+                            to_email=email,
+                            job_id=job_id,
+                            analysis_type="转录组数据处理",
+                            result_dir=job.result_file
+                        )
+                    except Exception as e:
+                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
             
         except Exception as e:
             logger.error(f"转录组处理执行失败: job_id={job_id}, error={str(e)}")
@@ -853,6 +878,18 @@ class DataProcessService:
                     logger.debug(f"WebSocket 状态推送失败: {e}")
 
             logger.info(f"蛋白质处理完成：job_id={job_id}, output={output_file}")
+            
+            # 如果任务成功且提供了邮箱，发送结果邮件
+            if email:
+                try:
+                    await email_service.send_result_email(
+                        to_email=email,
+                        job_id=job_id,
+                        analysis_type="蛋白质数据处理",
+                        result_dir=str(output_file)
+                    )
+                except Exception as e:
+                    logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
         except Exception as e:
             logger.error(f"蛋白质处理执行失败: job_id={job_id}, error={str(e)}")
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
@@ -990,6 +1027,18 @@ class DataProcessService:
                 job.updated_at = datetime.now()
                 self.db.commit()
                 logger.info(f"多组学数据整合完成：job_id={job_id}, status={job.status}")
+                
+                # 如果任务成功且提供了邮箱，发送结果邮件
+                if job.status == JobStatus.COMPLETED and email:
+                    try:
+                        await email_service.send_result_email(
+                            to_email=email,
+                            job_id=job_id,
+                            analysis_type="多组学数据整合",
+                            result_dir=str(result_dir)
+                        )
+                    except Exception as e:
+                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
         
         except Exception as e:
             logger.error(f"多组学数据整合执行失败: job_id={job_id}, error={str(e)}")
@@ -1117,6 +1166,18 @@ class DataProcessService:
                 job.updated_at = datetime.now()
                 self.db.commit()
                 logger.info(f"pvalue 多组学整合完成：job_id={job_id}, status={job.status}")
+                
+                # 如果任务成功且提供了邮箱，发送结果邮件
+                if job.status == JobStatus.COMPLETED and email:
+                    try:
+                        await email_service.send_result_email(
+                            to_email=email,
+                            job_id=job_id,
+                            analysis_type="pvalue多组学整合",
+                            result_dir=str(result_dir)
+                        )
+                    except Exception as e:
+                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
 
         except Exception as e:
             logger.error(f"pvalue 多组学整合执行失败: job_id={job_id}, error={str(e)}")

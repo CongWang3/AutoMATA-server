@@ -23,6 +23,7 @@ from api.models.user import User
 from api.models.job import Job, JobType, JobStatus
 from api.websocket.task_manager import task_status_manager
 from api.utils.security import security_validator
+from api.services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +359,7 @@ class TrainingService:
                     training_type=training_type,
                     parameters=parameters,
                     dataset_path=dataset_path,
+                    email=parameters.get("email"),
                 )
             )
 
@@ -375,6 +377,7 @@ class TrainingService:
         training_type: str,
         parameters: Dict[str, Any],
         dataset_path: Optional[str],
+        email: Optional[str] = None,
     ):
         """
         执行模型训练（支持监督、无监督、半监督学习）
@@ -554,6 +557,18 @@ class TrainingService:
                 )
             except Exception as e:
                 logger.debug(f"WebSocket 状态推送失败: {e}")
+            
+            # 如果任务成功且提供了邮箱，发送结果邮件
+            if email:
+                try:
+                    await email_service.send_result_email(
+                        to_email=email,
+                        job_id=job_id,
+                        analysis_type=f"{training_type}模型训练",
+                        result_dir=zip_file
+                    )
+                except Exception as e:
+                    logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
 
         except Exception as e:
             logger.exception(f"[TRAIN] 训练执行失败: job_id={job_id}, error={e}")

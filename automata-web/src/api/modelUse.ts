@@ -3,7 +3,7 @@
  * 
  * 用于模型预测和推理功能
  */
-import { apiClient } from '../client'
+import { apiClient } from './client'
 import type { BaseApiResponse } from '../types'
 import { JobApiBase } from './jobApiBase'
 

@@ -51,10 +51,26 @@
                         </ul>
                     </li>
 
-                    <li class="nav-item">
-                        <a href="/analysis" class="nav-link mx-2">
-                            Data Analyse
+                    <li class="nav-item dropdown">
+                        <a class="nav-link mx-2 dropdown-toggle" role="button" @click="toggleDropdown('analysis')"
+                            @blur="hideDropdown('analysis')">
+                            Data Analysis
                         </a>
+                        <ul class="dropdown-menu" :class="{ show: activeDropdown === 'analysis' }">
+                            <li><a href="/data-analysis" class="dropdown-item">All Analysis Tools</a></li>
+                            <li class="dropdown-divider"></li>
+                            <li><a href="/data-analysis/pca" class="dropdown-item">PCA</a></li>
+                            <li><a href="/data-analysis/heatmap" class="dropdown-item">Correlation Heatmap</a></li>
+                            <li><a href="/data-analysis/volcano" class="dropdown-item">Volcano Plot</a></li>
+                            <li><a href="/data-analysis/venn" class="dropdown-item">Venn Diagram</a></li>
+                            <li><a href="/data-analysis/cluster" class="dropdown-item">Gene Cluster Heatmap</a></li>
+                            <li class="dropdown-divider"></li>
+                            <li><a href="/data-analysis/go" class="dropdown-item">GO Enrichment</a></li>
+                            <li><a href="/data-analysis/kegg" class="dropdown-item">KEGG Enrichment</a></li>
+                            <li><a href="/data-analysis/ppi" class="dropdown-item">PPI Network</a></li>
+                            <li class="dropdown-divider"></li>
+                            <li><a href="/data-analysis/comprehensive" class="dropdown-item">Comprehensive Analysis</a></li>
+                        </ul>
                     </li>
 
                     <li class="nav-item">
@@ -152,6 +168,13 @@ const hideDropdown = (dropdownName: string) => {
 .dropdown-item:hover {
     background-color: #f8f9fa;
     color: #0d6efd;
+}
+
+.dropdown-divider {
+    height: 0;
+    margin: 0.5rem 0;
+    overflow: hidden;
+    border-top: 1px solid #e9ecef;
 }
 
 /* 移动端适配 */
