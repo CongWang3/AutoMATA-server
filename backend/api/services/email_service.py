@@ -5,6 +5,7 @@ import os
 import logging
 import smtplib
 import zipfile
+import html as html_module
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -63,6 +64,112 @@ class EmailService:
             )
         except Exception as e:
             logger.error(f"发送邮件失败: {e}")
+            return False
+
+    @staticmethod
+    def _format_failure_error_html(error_message: str, max_chars: int = 2000) -> str:
+        """将失败的错误信息安全地格式化为 HTML（截断 + 转义 + 换行换成 <br/>）。"""
+        if error_message is None:
+            error_message = ""
+
+        # 按 Unicode 字符截断，而非按字节
+        truncated = error_message[:max_chars]
+        escaped = html_module.escape(truncated)
+        return escaped.replace("\n", "<br/>")
+
+    def _send_failure_email_sync(
+        self,
+        to_email: str,
+        job_id: str,
+        analysis_type: str,
+        error_message: str,
+    ) -> bool:
+        """同步发送失败邮件（用于线程池执行）。"""
+        try:
+            msg = MIMEMultipart()
+            msg["From"] = f"{self.from_name} <{self.smtp_user}>"
+            msg["To"] = to_email
+            msg["Subject"] = f"AutoMATA Failure - {analysis_type}"
+
+            formatted_error = self._format_failure_error_html(error_message, max_chars=2000)
+
+            # 仅发送失败摘要 HTML；不附带任何 zip/result 附件
+            body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <p>Dear user,</p>
+                <p>Your <b>{analysis_type}</b> task has <b>failed</b>.</p>
+                <p><b>Job ID:</b> {job_id}</p>
+                <hr style="border: none; border-top: 1px solid #ccc;"/>
+                <p><b>Error message:</b></p>
+                <div style="white-space: normal; word-break: break-word; font-family: monospace;">
+                    {formatted_error}
+                </div>
+                <br/>
+                <p>Best regards,<br/><b>AutoMATA Platform</b></p>
+                <p style="font-size: 12px; color: #888;">
+                    This is an automated email. Please do not reply directly.
+                </p>
+            </body>
+            </html>
+            """
+            msg.attach(MIMEText(body, "html", "utf-8"))
+
+            if self.smtp_ssl:
+                with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=30) as server:
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as server:
+                    server.starttls()
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.send_message(msg)
+
+            logger.info(f"失败邮件已发送至 {to_email}, JobID: {job_id}, Type: {analysis_type}")
+            return True
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"SMTP认证失败: {e}")
+            return False
+        except smtplib.SMTPException as e:
+            logger.error(f"SMTP发送失败: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"失败邮件发送异常: {e}")
+            return False
+
+    async def send_failure_email(
+        self,
+        to_email: str,
+        job_id: str,
+        analysis_type: str,
+        error_message: str,
+    ) -> bool:
+        """
+        发送失败邮件给用户（用于任务失败后的错误通知）。
+
+        强约束：任何 SMTP/mail 异常都只在内部捕获（仅记录日志并返回 False），不向调用方抛出异常。
+        """
+        if not self.enabled or not to_email:
+            logger.debug(f"邮件服务未启用或收件人为空: enabled={self.enabled}, to_email={to_email}")
+            return False
+
+        if not self.smtp_password:
+            logger.warning("SMTP密码未配置，无法发送邮件")
+            return False
+
+        try:
+            # 在线程池中执行同步 SMTP 操作避免阻塞
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
+                None,
+                self._send_failure_email_sync,
+                to_email,
+                job_id,
+                analysis_type,
+                error_message,
+            )
+        except Exception as e:
+            logger.error(f"发送失败邮件失败: {e}")
             return False
     
     def _send_email_sync(
