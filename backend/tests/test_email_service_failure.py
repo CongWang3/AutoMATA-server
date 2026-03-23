@@ -35,6 +35,17 @@ def test_format_failure_error_html_escape_newline_and_truncate():
     assert len(formatted) <= len(expected)
 
 
+def test_format_failure_error_html_normalizes_crlf_to_br():
+    assert hasattr(EmailService, "_format_failure_error_html")
+
+    raw = "<x>\r\n" + ("A" * 50) + "\r" + ("B" * 50)
+    formatted = EmailService._format_failure_error_html(raw, max_chars=2000)
+
+    normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
+    expected = html.escape(normalized).replace("\n", "<br/>")
+    assert formatted == expected
+
+
 def test_send_failure_email_formats_safe_html_and_sends_once() -> None:
     assert hasattr(EmailService, "send_failure_email")
 
@@ -47,10 +58,15 @@ def test_send_failure_email_formats_safe_html_and_sends_once() -> None:
     job_id = "job-123"
     analysis_type = "Auto<Encoder>"
 
-    # 构造超长错误信息：包含 < 号用于 html 转义、包含换行用于 <br/>
-    error_message = "<bad>\n" + ("A" * 1990) + "\n" + ("B" * 1000)
+    # 构造超长错误信息：确保前 2000 字符可验证，2000 字符后的哨兵不会出现在正文中
+    sentinel = "<SENTINEL_AFTER_2000>&"
+    prefix_len = 2000 - len("<bad>\n")
+    prefix = "<bad>\n" + ("A" * prefix_len)  # prefix 的长度严格为 2000
+    error_message = prefix + sentinel + ("B" * 1000)
+
     truncated = error_message[:2000]
     expected_escaped = html.escape(truncated).replace("\n", "<br/>")
+    sentinel_escaped = html.escape(sentinel)
 
     with patch("api.services.email_service.smtplib.SMTP_SSL") as mock_smtp_ssl:
         mock_server = MagicMock()
@@ -89,6 +105,8 @@ def test_send_failure_email_formats_safe_html_and_sends_once() -> None:
         assert html.escape(analysis_type) in html_body
         assert expected_escaped in html_body
         assert "<br/>" in html_body
+        assert sentinel not in html_body
+        assert sentinel_escaped not in html_body
 
 
 def test_send_failure_email_catches_smtp_exception_and_returns_false() -> None:

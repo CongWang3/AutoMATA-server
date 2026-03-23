@@ -77,8 +77,20 @@ class EmailService:
 
         # 按 Unicode 字符截断，而非按字节
         truncated = error_message[:max_chars]
-        escaped = html_module.escape(truncated)
+        # 统一行结束符，避免 \r\n 或 \r 不能被正确转成 <br/>
+        normalized = truncated.replace("\r\n", "\n").replace("\r", "\n")
+        escaped = html_module.escape(normalized)
         return escaped.replace("\n", "<br/>")
+
+    @staticmethod
+    def _sanitize_header_value(value: str) -> str:
+        """
+        清洗邮件头字段，防止 CR/LF 注入导致的 header splitting。
+        仅移除头敏感字符（\\r / \\n），不改变调用方错误捕获语义。
+        """
+        if value is None:
+            return ""
+        return str(value).replace("\r", "").replace("\n", "")
 
     def _send_failure_email_sync(
         self,
@@ -92,7 +104,8 @@ class EmailService:
             msg = MIMEMultipart()
             msg["From"] = f"{self.from_name} <{self.smtp_user}>"
             msg["To"] = to_email
-            msg["Subject"] = f"AutoMATA Failure - {analysis_type}"
+            safe_analysis_type_header = self._sanitize_header_value(analysis_type)
+            msg["Subject"] = f"AutoMATA Failure - {safe_analysis_type_header}"
 
             safe_job_id = html_module.escape(str(job_id))
             safe_analysis_type = html_module.escape(str(analysis_type))
@@ -189,7 +202,8 @@ class EmailService:
             msg = MIMEMultipart()
             msg['From'] = f"{self.from_name} <{self.smtp_user}>"
             msg['To'] = to_email
-            msg['Subject'] = f'AutoMATA Result - {analysis_type}'
+            safe_analysis_type_header = self._sanitize_header_value(analysis_type)
+            msg['Subject'] = f'AutoMATA Result - {safe_analysis_type_header}'
             
             # HTML 邮件正文
             body = f"""
