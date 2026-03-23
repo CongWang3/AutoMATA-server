@@ -348,9 +348,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import FileUploader from '@/components/FileUpload/FileUploader.vue'
 import { trainingApi } from '@/api/training'
+import { useUserStore } from '@/stores/user'
 
 // 定义Props
 interface FormConfig {
@@ -424,6 +425,54 @@ const localFormData = reactive<FormData>({
   email: '',
   ...props.initialData
 })
+
+// 邮箱输入的自动回填/保持空规则
+const userStore = useUserStore()
+const emailTouched = ref(false) // 用户是否动过邮箱（包含清空）
+const isAutoFilling = ref(false) // 程序性赋值阶段：避免触发 emailTouched=true
+const userEmailCache = ref<string>('') // 缓存登录邮箱
+
+const programmaticSetEmail = async (nextEmail: string) => {
+  isAutoFilling.value = true
+  localFormData.email = nextEmail
+  await nextTick()
+  isAutoFilling.value = false
+}
+
+const tryAutoFillEmail = async () => {
+  const nextEmail = userStore.userInfo?.email || ''
+  userEmailCache.value = nextEmail
+  if (emailTouched.value) return
+  if (nextEmail && localFormData.email) return
+  await programmaticSetEmail(nextEmail)
+}
+
+// 当登录用户信息变更时（例如路由守卫异步拉取），再进行一次自动回填
+onMounted(() => {
+  if (userStore.userInfo?.email) {
+    tryAutoFillEmail()
+  }
+})
+
+watch(
+  () => userStore.userInfo?.email,
+  async (newEmail) => {
+    userEmailCache.value = newEmail || ''
+    if (emailTouched.value) return
+    if (!newEmail) return
+    if (localFormData.email) return
+    await programmaticSetEmail(newEmail)
+  }
+)
+
+// 用户对邮箱的任何手动改动都将置 touched=true
+watch(
+  () => localFormData.email,
+  () => {
+    if (isAutoFilling.value) return
+    emailTouched.value = true
+  }
+)
 
 const localSplitRatio = reactive({
   train: 7,
@@ -524,6 +573,8 @@ const onSubmit = () => {
 }
 
 const resetForm = () => {
+  const nextEmail = emailTouched.value ? localFormData.email : (userEmailCache.value || '')
+  isAutoFilling.value = true
   Object.assign(localFormData, {
     strategy: 'split',
     epochs: 50,
@@ -535,8 +586,9 @@ const resetForm = () => {
     optimizer: 'adam',
     modelType: props.initialData?.modelType || '',
     kfold: 5,
-    email: '',
-    ...props.initialData
+    ...props.initialData,
+    // 保证 reset 逻辑的 email 行为优先级最高
+    email: nextEmail,
   })
   
   Object.assign(localSplitRatio, {
@@ -548,6 +600,11 @@ const resetForm = () => {
   datasetPath.value = null
   testPath.value = null
   handleStrategyChange()
+
+  // 确保 resetForm 设置的 email 不会触发 touched=true
+  nextTick(() => {
+    isAutoFilling.value = false
+  })
 }
 
 // 监听外部isSubmitting变化
