@@ -93,6 +93,60 @@ def test_send_result_email_sanitizes_subject_and_from_headers() -> None:
         assert expected_from_name in from_header
 
 
+def test_send_result_email_sanitizes_attachment_filename_header_value(tmp_path) -> None:
+    service = EmailService()
+    service.enabled = True
+    service.smtp_ssl = True
+    service.smtp_password = "test-password"
+
+    # 构造恶意 job_id：试图破坏 Content-Disposition 的 quoted-string，并注入新头字段
+    # - 需要清洗：CRLF、双引号等风险字符
+    malicious_job_id = 'job-123"\r\nBcc:evil@example.com\r\n"'
+    safe_job_id = EmailService._sanitize_attachment_job_id(malicious_job_id)
+
+    # 构造一个结果目录，使 _send_email_sync 会创建 zip 并生成 application/zip 附件
+    result_dir = tmp_path / "results"
+    result_dir.mkdir(parents=True, exist_ok=True)
+    (result_dir / "out.txt").write_text("ok", encoding="utf-8")
+
+    with patch("api.services.email_service.smtplib.SMTP_SSL") as mock_smtp_ssl:
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        ok = service._send_email_sync(
+            to_email="user@example.com",
+            job_id=malicious_job_id,
+            analysis_type="Gene",
+            result_dir=str(result_dir),
+        )
+
+        assert ok is True
+        mock_server.send_message.assert_called_once()
+
+        msg = mock_server.send_message.call_args[0][0]
+
+        # 找到附件部分并校验 Content-Disposition
+        attachment_parts = []
+        for part in msg.walk():
+            if part.is_multipart():
+                continue
+            if part.get_content_type() == "application/zip":
+                attachment_parts.append(part)
+
+        assert attachment_parts, "expected at least one application/zip attachment part"
+        # 当前实现每次发送只会附带 1 个 zip
+        part = attachment_parts[0]
+
+        content_disp = str(part.get("Content-Disposition") or "")
+        assert content_disp, "attachment must contain Content-Disposition header"
+
+        # 清洗后，Content-Disposition 头值不应再包含 CR/LF，避免 header splitting
+        assert "\r" not in content_disp and "\n" not in content_disp
+
+        # filename 必须是清洗后的安全值
+        assert f'filename="result_{safe_job_id}.zip"' in content_disp
+
+
 def test_send_failure_email_formats_safe_html_and_sends_once() -> None:
     assert hasattr(EmailService, "send_failure_email")
 

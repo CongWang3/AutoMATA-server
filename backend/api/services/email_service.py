@@ -6,6 +6,7 @@ import logging
 import smtplib
 import zipfile
 import html as html_module
+import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -59,7 +60,8 @@ class EmailService:
             
         try:
             # 在线程池中执行同步SMTP操作避免阻塞
-            return await asyncio.get_event_loop().run_in_executor(
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
                 None, self._send_email_sync, to_email, job_id, analysis_type, result_dir
             )
         except Exception as e:
@@ -91,6 +93,35 @@ class EmailService:
         if value is None:
             return ""
         return str(value).replace("\r", "").replace("\n", "")
+
+    @staticmethod
+    def _sanitize_attachment_job_id(job_id: str, max_len: int = 80) -> str:
+        """
+        清洗用于附件 filename 参数拼接的 job_id，防止：
+        - CR/LF 导致 header splitting
+        - 引号破坏 Content-Disposition 的 quoted-string
+        - 路径/控制字符破坏或越界
+        """
+        s = "" if job_id is None else str(job_id)
+
+        # Header splitting 防护
+        s = s.replace("\r", "").replace("\n", "")
+        # quoted-string 防护：Content-Disposition 使用 filename="..."; 需要移除引号
+        s = s.replace('"', '').replace("'", "")
+        # 路径/转义字符防护
+        s = s.replace("\\", "")
+        s = s.replace("/", "_")
+        # 移除不可见控制字符
+        s = re.sub(r"[\x00-\x1f\x7f]", "", s)
+        # 限定为较安全的文件名字符；其余字符用 '_' 替换
+        s = re.sub(r"[^A-Za-z0-9._-]+", "_", s)
+        s = s.strip("_")
+
+        if not s:
+            s = "unknown"
+        if max_len and max_len > 0:
+            s = s[:max_len]
+        return s
 
     def _send_failure_email_sync(
         self,
@@ -255,9 +286,10 @@ class EmailService:
                     part = MIMEBase('application', 'zip')
                     part.set_payload(f.read())
                     encoders.encode_base64(part)
+                    safe_job_id = self._sanitize_attachment_job_id(job_id)
                     part.add_header(
                         'Content-Disposition',
-                        f'attachment; filename="result_{job_id}.zip"'
+                        f'attachment; filename="result_{safe_job_id}.zip"'
                     )
                     msg.attach(part)
             
