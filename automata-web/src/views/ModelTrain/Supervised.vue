@@ -405,7 +405,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { trainingApi, MODEL_PARAMETERS } from '@/api'
 import { WebSocketService } from '@/api/websocket'
@@ -492,6 +492,51 @@ const hyperparameters = reactive({
 const notification = reactive({
     email: ''
 })
+
+const userStore = useUserStore()
+const emailTouched = ref(false) // 用户是否动过邮箱（包含清空）
+const isAutoFilling = ref(false) // 程序性赋值：避免触发 emailTouched=true
+const userEmailCache = ref<string>('') // 缓存登录邮箱
+
+const programmaticSetEmail = async (nextEmail: string) => {
+    isAutoFilling.value = true
+    notification.email = nextEmail
+    await nextTick()
+    isAutoFilling.value = false
+}
+
+const tryAutoFillEmail = async () => {
+    const nextEmail = userStore.userInfo?.email || ''
+    userEmailCache.value = nextEmail
+
+    if (emailTouched.value) return
+    if (notification.email) return // 已有值则不再自动回填
+    if (!nextEmail) return
+
+    await programmaticSetEmail(nextEmail)
+}
+
+watch(
+    () => userStore.userInfo?.email,
+    async (newEmail) => {
+        const nextEmail = newEmail || ''
+        userEmailCache.value = nextEmail
+
+        if (emailTouched.value) return
+        if (!nextEmail) return
+        if (notification.email) return
+
+        await programmaticSetEmail(nextEmail)
+    }
+)
+
+watch(
+    () => notification.email,
+    () => {
+        if (isAutoFilling.value) return
+        emailTouched.value = true
+    }
+)
 
 const isSubmitting = ref(false)
 const jobId = ref('')
@@ -805,8 +850,13 @@ const resetForm = () => {
     hyperparameters.randomSeed = 42
     hyperparameters.labelCount = 2
 
-    // 重置通知设置
-    notification.email = ''
+    // 重置通知设置：如果用户已清空（emailTouched=true），则保持为空
+    const nextEmail = emailTouched.value ? notification.email : (userEmailCache.value || '')
+    isAutoFilling.value = true
+    notification.email = nextEmail
+    nextTick(() => {
+        isAutoFilling.value = false
+    })
 
     // 关闭弹窗并重置状态
     showResultDialog.value = false
@@ -1101,8 +1151,10 @@ const setupWebSocket = async () => {
 
 // 组件挂载时加载数据
 onMounted(async () => {
+    userStore.initializeFromStorage()
     loadAvailableModels()
     await setupWebSocket()
+    await tryAutoFillEmail()
 })
 
 // 组件卸载时清理
