@@ -83,6 +83,7 @@ async def create_training_task(
         model_type=payload.model_type,
         parameters=payload.parameters,
         dataset_path=payload.dataset_path,
+        email=payload.email,
     )
 
     return _create_response(task)
@@ -104,6 +105,7 @@ async def train_supervised(
         model_type=payload.model_type,
         parameters=payload.parameters,
         dataset_path=payload.dataset_path,
+        email=payload.email,
     )
 
     return _create_response(task, "监督学习训练任务已提交")
@@ -125,6 +127,7 @@ async def train_unsupervised(
         model_type=payload.model_type,
         parameters=payload.parameters,
         dataset_path=payload.dataset_path,
+        email=payload.email,
     )
 
     return _create_response(task, "无监督学习训练任务已提交")
@@ -146,6 +149,7 @@ async def train_semi_supervised(
         model_type=payload.model_type,
         parameters=payload.parameters,
         dataset_path=payload.dataset_path,
+        email=payload.email,
     )
 
     return _create_response(task, "半监督学习训练任务已提交")
