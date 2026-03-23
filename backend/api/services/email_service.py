@@ -72,6 +72,9 @@ class EmailService:
         if error_message is None:
             error_message = ""
 
+        if max_chars < 0:
+            max_chars = 0
+
         # 按 Unicode 字符截断，而非按字节
         truncated = error_message[:max_chars]
         escaped = html_module.escape(truncated)
@@ -91,6 +94,8 @@ class EmailService:
             msg["To"] = to_email
             msg["Subject"] = f"AutoMATA Failure - {analysis_type}"
 
+            safe_job_id = html_module.escape(str(job_id))
+            safe_analysis_type = html_module.escape(str(analysis_type))
             formatted_error = self._format_failure_error_html(error_message, max_chars=2000)
 
             # 仅发送失败摘要 HTML；不附带任何 zip/result 附件
@@ -98,8 +103,8 @@ class EmailService:
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6;">
                 <p>Dear user,</p>
-                <p>Your <b>{analysis_type}</b> task has <b>failed</b>.</p>
-                <p><b>Job ID:</b> {job_id}</p>
+                <p>Your <b>{safe_analysis_type}</b> task has <b>failed</b>.</p>
+                <p><b>Job ID:</b> {safe_job_id}</p>
                 <hr style="border: none; border-top: 1px solid #ccc;"/>
                 <p><b>Error message:</b></p>
                 <div style="white-space: normal; word-break: break-word; font-family: monospace;">
