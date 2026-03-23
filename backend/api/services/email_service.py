@@ -22,14 +22,30 @@ class EmailService:
     """邮件通知服务"""
     
     def __init__(self):
-        # 从环境变量读取 SMTP 配置
-        self.smtp_host = os.getenv('SMTP_HOST', 'smtp.163.com')
-        self.smtp_port = int(os.getenv('SMTP_PORT', '465'))
-        self.smtp_user = os.getenv('SMTP_USER', 'wanger0808@163.com')
-        self.smtp_password = os.getenv('SMTP_PASSWORD', '')
-        self.smtp_ssl = os.getenv('SMTP_SSL', 'true').lower() == 'true'
-        self.from_name = os.getenv('SMTP_FROM_NAME', 'AutoMATA')
-        self.enabled = os.getenv('EMAIL_ENABLED', 'true').lower() == 'true'
+        try:
+            from config.settings import settings as app_settings  # local project config
+        except Exception:
+            app_settings = None
+
+        # 优先使用 config.settings（pydantic 已从 backend/.env 读取），
+        # 避免 os.getenv 在当前进程中拿不到 .env 注入值导致 smtp_password_configured=false。
+        if app_settings is not None:
+            self.smtp_host = getattr(app_settings, "SMTP_HOST", "smtp.163.com")
+            self.smtp_port = int(getattr(app_settings, "SMTP_PORT", 465))
+            self.smtp_user = getattr(app_settings, "SMTP_USER", "wanger0808@163.com")
+            self.smtp_password = getattr(app_settings, "SMTP_PASSWORD", "")
+            self.smtp_ssl = bool(getattr(app_settings, "SMTP_SSL", False))
+            self.from_name = getattr(app_settings, "SMTP_FROM_NAME", "AutoMATA")
+            self.enabled = bool(getattr(app_settings, "EMAIL_ENABLED", True))
+        else:
+            # 回退：从环境变量读取 SMTP 配置
+            self.smtp_host = os.getenv('SMTP_HOST', 'smtp.163.com')
+            self.smtp_port = int(os.getenv('SMTP_PORT', '465'))
+            self.smtp_user = os.getenv('SMTP_USER', 'wanger0808@163.com')
+            self.smtp_password = os.getenv('SMTP_PASSWORD', '')
+            self.smtp_ssl = os.getenv('SMTP_SSL', 'true').lower() == 'true'
+            self.from_name = os.getenv('SMTP_FROM_NAME', 'AutoMATA')
+            self.enabled = os.getenv('EMAIL_ENABLED', 'true').lower() == 'true'
     
     async def send_result_email(
         self,
@@ -303,7 +319,7 @@ class EmailService:
                     server.starttls()
                     server.login(self.smtp_user, self.smtp_password)
                     server.send_message(msg)
-            
+
             logger.info(f"邮件已发送至 {to_email}, JobID: {job_id}, Type: {analysis_type}")
             return True
             
