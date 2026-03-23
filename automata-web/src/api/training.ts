@@ -70,6 +70,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
     task_name: string
     model_type: string
     parameters: any
+    email?: string
     dataset_path?: string
   }): Promise<SupervisedTrainResponse> {
     return TrainingAPI.trainSupervised(payload)
@@ -82,6 +83,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
     task_name: string
     model_type: string
     parameters: any
+    email?: string
     dataset_path?: string
   }): Promise<SupervisedTrainResponse> {
     return TrainingAPI.trainUnsupervised(payload)
@@ -94,6 +96,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
     task_name: string
     model_type: string
     parameters: any
+    email?: string
     dataset_path?: string
   }): Promise<SupervisedTrainResponse> {
     return TrainingAPI.trainSemiSupervised(payload)
@@ -106,6 +109,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
     task_name: string
     model_type: string
     parameters: any
+    email?: string
     dataset_path?: string
   }): Promise<SupervisedTrainResponse> {
     // 默认使用监督学习训练
@@ -121,6 +125,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
       task_name: string
       model_type: string
       parameters: any
+      email?: string
       dataset_path?: string
     }
   ): Promise<SupervisedTrainResponse> {
@@ -140,6 +145,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
     task_name: string
     model_type: string
     parameters: any
+    email?: string
     dataset_path?: string
   }): Promise<SupervisedTrainResponse> {
     return this.createTrainingTask('supervised', payload)
@@ -152,6 +158,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
     task_name: string
     model_type: string
     parameters: any
+    email?: string
     dataset_path?: string
   }): Promise<SupervisedTrainResponse> {
     return this.createTrainingTask('unsupervised', payload)
@@ -164,6 +171,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
     task_name: string
     model_type: string
     parameters: any
+    email?: string
     dataset_path?: string
   }): Promise<SupervisedTrainResponse> {
     return this.createTrainingTask('semi-supervised', payload)
