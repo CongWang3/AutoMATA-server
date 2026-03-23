@@ -102,7 +102,9 @@ class EmailService:
         """同步发送失败邮件（用于线程池执行）。"""
         try:
             msg = MIMEMultipart()
-            msg["From"] = f"{self.from_name} <{self.smtp_user}>"
+            safe_from_name = self._sanitize_header_value(self.from_name)
+            safe_smtp_user = self._sanitize_header_value(self.smtp_user)
+            msg["From"] = f"{safe_from_name} <{safe_smtp_user}>"
             msg["To"] = to_email
             safe_analysis_type_header = self._sanitize_header_value(analysis_type)
             msg["Subject"] = f"AutoMATA Failure - {safe_analysis_type_header}"
@@ -200,18 +202,22 @@ class EmailService:
         """同步发送邮件"""
         try:
             msg = MIMEMultipart()
-            msg['From'] = f"{self.from_name} <{self.smtp_user}>"
+            safe_from_name = self._sanitize_header_value(self.from_name)
+            safe_smtp_user = self._sanitize_header_value(self.smtp_user)
+            msg['From'] = f"{safe_from_name} <{safe_smtp_user}>"
             msg['To'] = to_email
             safe_analysis_type_header = self._sanitize_header_value(analysis_type)
             msg['Subject'] = f'AutoMATA Result - {safe_analysis_type_header}'
+            safe_analysis_type_html = html_module.escape(str(analysis_type))
+            safe_job_id_html = html_module.escape(str(job_id))
             
             # HTML 邮件正文
             body = f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6;">
                 <p>Dear user,</p>
-                <p>Your <b>{analysis_type}</b> task has been completed.</p>
-                <p><b>Job ID:</b> {job_id}</p>
+                <p>Your <b>{safe_analysis_type_html}</b> task has been completed.</p>
+                <p><b>Job ID:</b> {safe_job_id_html}</p>
                 <p>The results are attached to this email.</p>
                 <br/>
                 <p>Best regards,<br/><b>AutoMATA Platform</b></p>

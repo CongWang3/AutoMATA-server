@@ -46,6 +46,53 @@ def test_format_failure_error_html_normalizes_crlf_to_br():
     assert formatted == expected
 
 
+def test_format_failure_error_html_handles_none_and_negative_max_chars():
+    assert hasattr(EmailService, "_format_failure_error_html")
+
+    # None 应被当作空字符串处理
+    assert EmailService._format_failure_error_html(None, max_chars=10) == ""
+    # max_chars < 0 按当前实现应归一为 0，结果为空
+    assert EmailService._format_failure_error_html("abc\n<d>", max_chars=-1) == ""
+
+
+def test_send_result_email_sanitizes_subject_and_from_headers() -> None:
+    service = EmailService()
+    service.enabled = True
+    service.smtp_ssl = True
+    service.smtp_password = "test-password"
+    service.from_name = "AutoMATA\r\nBcc:evil@example.com"
+
+    raw_from_name = service.from_name
+    analysis_type = "Gene\r\nX-Injected: yes"
+
+    with patch("api.services.email_service.smtplib.SMTP_SSL") as mock_smtp_ssl:
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        ok = service._send_email_sync(
+            to_email="user@example.com",
+            job_id="job-1",
+            analysis_type=analysis_type,
+            result_dir=None,
+        )
+
+        assert ok is True
+        mock_server.send_message.assert_called_once()
+        msg = mock_server.send_message.call_args[0][0]
+
+        subject = str(msg["Subject"])
+        from_header = str(msg["From"])
+
+        # Subject 中不应保留 CR/LF 或注入片段
+        assert "\r" not in subject and "\n" not in subject
+        assert "GeneX-Injected: yes" in subject
+
+        # From 中同样应做 header-safe 清洗，避免额外头字段注入
+        assert "\r" not in from_header and "\n" not in from_header
+        expected_from_name = EmailService._sanitize_header_value(raw_from_name)
+        assert expected_from_name in from_header
+
+
 def test_send_failure_email_formats_safe_html_and_sends_once() -> None:
     assert hasattr(EmailService, "send_failure_email")
 
