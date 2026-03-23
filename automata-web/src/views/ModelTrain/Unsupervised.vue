@@ -208,6 +208,7 @@ const handleSubmit = async (data: TrainingFormData) => {
       task_name: `unsupervised_${data.modelType}_${Date.now()}`,
       model_type: data.modelType,
       parameters: params,
+      email: data.email,
       dataset_path: data.datasetPath || undefined
     }
 

@@ -308,6 +308,7 @@ const handleSubmit = async (data: TrainingFormData) => {
       task_name: `semi_supervised_${data.modelType}_${Date.now()}`,
       model_type: data.modelType,
       parameters: params,
+      email: data.email,
       dataset_path: data.datasetPath || undefined
     }
 
