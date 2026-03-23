@@ -323,9 +323,11 @@ async def run_agent(
                 if isinstance(last_msg, AIMessage) and last_msg.content:
                     # 检查这个消息是否已经作为 thinking 发送过
                     if not (hasattr(last_msg, "tool_calls") and last_msg.tool_calls):
+                        # 移除 Markdown 标题标记
+                        cleaned_content = strip_markdown_headers(last_msg.content)
                         yield {
                             "event": "agent_response",
-                            "content": last_msg.content,
+                            "content": cleaned_content,
                             "done": True
                         }
                         return
@@ -343,6 +345,31 @@ async def run_agent(
             "event": "error",
             "message": f"处理请求时发生错误: {str(e)}"
         }
+
+
+def strip_markdown_headers(text: str) -> str:
+    """
+    将 Markdown 格式的标题转换为纯文本格式
+    
+    Args:
+        text: 包含 Markdown 的文本
+        
+    Returns:
+        转换后的文本（## 标题 → 标题）
+    """
+    if not text:
+        return text
+    
+    # 移除行首的 # 符号及其后的空格
+    import re
+    lines = text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        # 移除开头的 # 和紧随的空格，保留标题文字
+        cleaned_line = re.sub(r'^#+\s*', '', line)
+        cleaned_lines.append(cleaned_line)
+    
+    return '\n'.join(cleaned_lines)
 
 
 def get_conversation_messages(state_messages: List[BaseMessage]) -> List[dict]:

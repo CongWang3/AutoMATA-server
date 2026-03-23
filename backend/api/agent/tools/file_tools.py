@@ -4,8 +4,8 @@
 """
 import logging
 import json
-from typing import Optional
-from langchain_core.tools import tool
+from typing import Optional, Annotated
+from langchain_core.tools import tool, InjectedToolArg
 from langchain_core.runnables import RunnableConfig
 from pathlib import Path
 
@@ -20,7 +20,7 @@ def list_user_files(
     page: int = 1,
     size: int = 20,
     file_type: Optional[str] = None,
-    config: RunnableConfig = None
+    config: Annotated[RunnableConfig, InjectedToolArg] = {}
 ) -> str:
     """
     列出用户上传的文件。
@@ -53,14 +53,19 @@ def list_user_files(
         tool_context = configurable.get("tool_context", {})
         
         if not user_id:
+            logger.warning("[File Tools] user_id 为空，config 内容: %s", configurable)
+            return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
+        
+        # 确保 user_id 为整数（数据库字段为 Integer）
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"[File Tools] user_id 类型转换失败: {user_id}")
             return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
         
         # 获取或创建数据库会话
-        db = tool_context.get("db")
-        should_close_db = False
-        if db is None:
-            db = SessionLocal()
-            should_close_db = True
+        db = SessionLocal()
+        should_close_db = True
         
         # 计算偏移量
         offset = (page - 1) * size
@@ -118,7 +123,7 @@ def list_user_files(
 @tool
 def get_file_info(
     file_id: str,
-    config: RunnableConfig = None
+    config: Annotated[RunnableConfig, InjectedToolArg] = {}
 ) -> str:
     """
     获取指定文件的详细信息。
@@ -143,14 +148,19 @@ def get_file_info(
         tool_context = configurable.get("tool_context", {})
         
         if not user_id:
+            logger.warning("[File Tools] user_id 为空，config 内容: %s", configurable)
             return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
         
-        # 获取或创建数据库会话
-        db = tool_context.get("db")
-        should_close_db = False
-        if db is None:
-            db = SessionLocal()
-            should_close_db = True
+        # 确保 user_id 为整数（数据库字段为 Integer）
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"[File Tools] user_id 类型转换失败: {user_id}")
+            return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
+        
+        # 创建数据库会话
+        db = SessionLocal()
+        should_close_db = True
         
         # 查询文件
         file = db.query(File).filter(

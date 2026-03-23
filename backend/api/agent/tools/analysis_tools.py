@@ -6,10 +6,10 @@ import logging
 import json
 import uuid
 import asyncio
-from typing import Optional
+from typing import Optional, Annotated
 from datetime import datetime
 from pathlib import Path
-from langchain_core.tools import tool
+from langchain_core.tools import tool, InjectedToolArg
 from langchain_core.runnables import RunnableConfig
 
 from config.database import SessionLocal
@@ -55,7 +55,7 @@ def run_pca_analysis(
     boundary: bool = False,
     permanova: bool = False,
     method: Optional[str] = None,
-    config: RunnableConfig = None
+    config: Annotated[RunnableConfig, InjectedToolArg] = {}
 ) -> str:
     """
     执行 PCA 主成分分析。
@@ -92,14 +92,19 @@ def run_pca_analysis(
         tool_context = configurable.get("tool_context", {})
         
         if not user_id:
+            logger.warning("[Analysis Tools] user_id 为空，config 内容: %s", configurable)
             return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
         
-        # 获取或创建数据库会话
-        db = tool_context.get("db")
-        should_close_db = False
-        if db is None:
-            db = SessionLocal()
-            should_close_db = True
+        # 确保 user_id 为整数（数据库字段为 Integer）
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"[Analysis Tools] user_id 类型转换失败: {user_id}")
+            return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
+        
+        # 创建数据库会话
+        db = SessionLocal()
+        should_close_db = True
         
         # 获取用户文件
         file_record = _get_user_file(db, file_id, user_id)
@@ -201,7 +206,7 @@ def run_volcano_plot(
     fc_threshold: float = 1.0,
     padj_threshold: float = 0.05,
     top: int = 10,
-    config: RunnableConfig = None
+    config: Annotated[RunnableConfig, InjectedToolArg] = {}
 ) -> str:
     """
     生成火山图（Volcano Plot）。
@@ -236,14 +241,19 @@ def run_volcano_plot(
         tool_context = configurable.get("tool_context", {})
         
         if not user_id:
+            logger.warning("[Analysis Tools] user_id 为空，config 内容: %s", configurable)
             return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
         
-        # 获取或创建数据库会话
-        db = tool_context.get("db")
-        should_close_db = False
-        if db is None:
-            db = SessionLocal()
-            should_close_db = True
+        # 确保 user_id 为整数（数据库字段为 Integer）
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"[Analysis Tools] user_id 类型转换失败: {user_id}")
+            return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
+        
+        # 创建数据库会话
+        db = SessionLocal()
+        should_close_db = True
         
         # 获取用户文件
         file_record = _get_user_file(db, file_id, user_id)
@@ -344,7 +354,7 @@ def run_diff_expression(
     padj_threshold: float = 0.05,
     data_type: str = "read_counts",
     correction: str = "BH",
-    config: RunnableConfig = None
+    config: Annotated[RunnableConfig, InjectedToolArg] = {}
 ) -> str:
     """
     执行差异表达分析。
@@ -385,14 +395,19 @@ def run_diff_expression(
         tool_context = configurable.get("tool_context", {})
         
         if not user_id:
+            logger.warning("[Analysis Tools] user_id 为空，config 内容: %s", configurable)
             return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
         
-        # 获取或创建数据库会话
-        db = tool_context.get("db")
-        should_close_db = False
-        if db is None:
-            db = SessionLocal()
-            should_close_db = True
+        # 确保 user_id 为整数（数据库字段为 Integer）
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"[Analysis Tools] user_id 类型转换失败: {user_id}")
+            return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
+        
+        # 创建数据库会话
+        db = SessionLocal()
+        should_close_db = True
         
         # 获取表达矩阵文件
         expr_file_record = _get_user_file(db, expression_file_id, user_id)

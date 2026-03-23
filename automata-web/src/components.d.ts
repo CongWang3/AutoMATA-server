@@ -46,7 +46,6 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     ErrorBoundary: typeof import('./components/common/ErrorBoundary.vue')['default']
-    FileChunkedDownloader: typeof import('./components/FileChunkedDownloader.vue')['default']
     FileUploader: typeof import('./components/FileUpload/FileUploader.vue')['default']
     Footer: typeof import('./components/Footer.vue')['default']
     Header: typeof import('./components/Header.vue')['default']

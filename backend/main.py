@@ -3,13 +3,75 @@ AutoMATA 后端应用入口
 """
 import logging
 import asyncio
-from fastapi import FastAPI
+import json
+import time
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from config.settings import settings
+from starlette.requests import Request
+from fastapi.responses import FileResponse
+from typing import Optional, Dict
 
 # 导入路由
-from api.routers import auth, files, chunked_download, data_process, task_websocket, training, jobs, analysis
-from api.agent import router as agent_router
+from api.routers import auth, files, data_process, task_websocket, training, jobs, analysis
+
+# --- debug: systematic-debugging instrumentation ---
+DEBUG_LOG_PATH = "/xp/www/AutoMATA/.cursor/debug-d45b01.log"
+DEBUG_SESSION_ID = "d45b01"
+
+def _debug_append_ndjson(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: Optional[Dict] = None,
+    run_id: str = "pre-fix"
+) -> None:
+    """
+    Append one NDJSON line for debug mode; must never break request flow.
+    """
+    payload = {
+        "sessionId": DEBUG_SESSION_ID,
+        "runId": run_id,
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data or {},
+        "timestamp": int(time.time() * 1000),
+        "id": f"log_{int(time.time() * 1000)}_{hypothesis_id}",
+    }
+    try:
+        # Ensure debug directory exists (in some deployments the directory might not be pre-created).
+        try:
+            from pathlib import Path as _Path
+            _Path(DEBUG_LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            # If mkdir fails, the subsequent file open will fail too; we'll report below.
+            pass
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        # IMPORTANT: Never break the request flow, but record the failure for investigation.
+        try:
+            logging.getLogger(__name__).warning(
+                "[debug_ndjson] write failed",
+                extra={
+                    "debug_log_path": DEBUG_LOG_PATH,
+                    "hypothesisId": hypothesis_id,
+                    "location": location,
+                },
+            )
+        except Exception:
+            pass
+        return
+
+# AI Agent 路由（依赖可选）
+try:
+    from api.agent.router import router as agent_router
+    AGENT_AVAILABLE = True
+except ImportError as e:
+    AGENT_AVAILABLE = False
+    import logging as _logging
+    _logging.getLogger(__name__).warning(f"AI Agent 模块不可用（缺少依赖）: {e}")
 
 # 导入定时任务
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -65,7 +127,6 @@ app.add_middleware(
 # 注册路由
 app.include_router(auth.router)
 app.include_router(files.router)
-app.include_router(chunked_download.router, prefix="/api/v1/files", tags=["分片下载"])
 app.include_router(data_process.router)
 app.include_router(task_websocket.router)
 # 训练相关路由（/training/...）
@@ -74,8 +135,9 @@ app.include_router(training.router)
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["Jobs"])
 # 数据分析路由（/api/v1/analysis/...）
 app.include_router(analysis.router)
-# AI Agent 路由（/api/v1/agent/...）
-app.include_router(agent_router.router)
+# AI Agent 路由（可选）
+if AGENT_AVAILABLE:
+    app.include_router(agent_router)
 
 
 # 创建全局调度器
@@ -182,6 +244,71 @@ async def health_check():
         "status": "healthy",
         "version": settings.APP_VERSION
     }
+
+# ------------------ example 目录直下下载 ------------------
+# 前端需要把 /xp/www/AutoMATA/example 里的 zip/txt 等文件直接下载给用户，
+# 因此在后端提供一个受控的文件下载接口。
+EXAMPLE_DIR = (Path(__file__).resolve().parent.parent / "example").resolve()
+
+@app.get("/example/{file_path:path}")
+def download_example_file(file_path: str):
+    # 防止路径遍历：只允许落在 EXAMPLE_DIR 内的文件
+    target_path = (EXAMPLE_DIR / file_path).resolve()
+    if not (target_path == EXAMPLE_DIR or EXAMPLE_DIR in target_path.parents):
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    if not target_path.exists() or not target_path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    return FileResponse(
+        path=str(target_path),
+        filename=target_path.name,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{target_path.name}"',
+        },
+    )
+
+# 404 logging for systematic-debugging requests
+@app.middleware("http")
+async def debug_systematic_debugging_404_middleware(request: Request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception:
+        # Never change error semantics; just don't log in exceptional paths.
+        raise
+
+    try:
+        path = request.url.path or ""
+        if path.startswith("/systematic-debugging") and response.status_code == 404:
+            logging.getLogger(__name__).warning(
+                "[debug_systematic_debugging] matched 404",
+                extra={
+                    "path": path,
+                    "uid": request.query_params.get("uid"),
+                    "t": request.query_params.get("t"),
+                    "hasToken": "token" in request.query_params,
+                },
+            )
+            # Avoid logging token values (may be sensitive). Record only key existence.
+            q = dict(request.query_params)
+            _debug_append_ndjson(
+                hypothesis_id="H2_fastapi_returns_404_for_systematic_debugging",
+                location="backend/main.py:middleware/systematic-debugging:404",
+                message="FastAPI returned 404 for systematic-debugging path",
+                data={
+                    "path": path,
+                    "uid": q.get("uid"),
+                    "t": q.get("t"),
+                    "hasToken": "token" in q,
+                },
+                run_id="pre-fix",
+            )
+    except Exception:
+        # Debug logging must not break the API.
+        pass
+
+    return response
 
 
 # 审查上下文：

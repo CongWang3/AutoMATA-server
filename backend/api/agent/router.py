@@ -285,11 +285,12 @@ async def agent_chat_websocket(
                     # 获取对话历史
                     history = _get_conversation_history(user_id, ws_id)
                     
-                    # 构建工具上下文
+                    # 构建工具上下文（只存储可序列化的数据）
+                    # 注意：不要存储 db session 对象，因为它无法被 msgpack 序列化
                     tool_context = {
-                        "db": db,
-                        "user": user,
-                        "user_id": user.id
+                        "user_id": user.id,
+                        "username": user.username,
+                        "email": user.email
                     }
                     
                     # 运行 Agent

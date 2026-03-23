@@ -22,6 +22,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.preprocessing import LabelEncoder
 from utils.earlystopping import EarlyStopping
 from utils.FocalLoss import FocalLoss
+from utils.regularization import apply_regularization_loss, apply_max_norm_constraint, create_optimizer_with_reg
 import argparse
 import warnings
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
@@ -30,18 +31,7 @@ torch.manual_seed(2022)
 
 from DataProcess import load_data,process  # 新加
 
-# 一审
-def set_random_seed(seed):
-    """设置随机种子确保可重现性"""
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    torch.Generator().manual_seed(seed)  # dataloader的随机种子
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-class Autoencoder(nn.Module):  # feature_dim, 64, 32 ,16
+class Autoencoder(nn.Module):  # 64, 32 ,16
     def __init__(self, input_dim, hidden_size_1=64, hidden_size_2=32, hidden_size_3=16, lr=0.001, dropout_rate=0.5):
         super(Autoencoder, self).__init__()
 
@@ -62,7 +52,7 @@ class Autoencoder(nn.Module):  # feature_dim, 64, 32 ,16
             nn.Linear(hidden_size_1, input_dim),
         )
 
-        self.criterion = nn.MSELoss()  # Autoencoder 通常使用 MSELoss 来优化重建误差
+        self.criterion = nn.MSELoss()  # Autoencoder usually uses MSELoss to optimise the reconstruction error.
         self.learning_rate = lr
         self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
 
@@ -73,16 +63,16 @@ class Autoencoder(nn.Module):  # feature_dim, 64, 32 ,16
 
 
 class Classifier(nn.Module):  # 16, 8, 2
-    def __init__(self, hidden_size_3=16, cls_hidden_size=8, output_size=2, lr=0.001, loss_function="crossentropy", optimizer_function="adam"):
-        self.output_size = output_size  # 记录flatten层的输出维度
+    def __init__(self, hidden_size_3=16, cls_hidden_size=8, output_size=2, lr=0.001, loss_function="crossentropy", optimizer_function="adam", r_method=None, r_weight=0.0):
+        self.output_size = output_size  # Record the output dimension of the flatten layer
         super(Classifier, self).__init__()
+        self.r_method = r_method
+        self.r_weight = r_weight
 
         self.fc = nn.Sequential(
             nn.Linear(hidden_size_3, cls_hidden_size),
             nn.ReLU(),
             nn.Linear(cls_hidden_size, output_size),
-            # nn.Sigmoid()  # 二分类时用 Sigmoid 激活函数
-            # nn.Softmax(dim=1)
         )
 
         self.learning_rate = lr
@@ -97,12 +87,8 @@ class Classifier(nn.Module):  # 16, 8, 2
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
-        if optimizer_function == "adam":
-            self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimizer = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)  # 应改为0.5 SGD对这些敏感
-        elif optimizer_function == "rmsprop":
-            self.optimizer = optim.RMSprop(self.parameters(), lr=self.learning_rate)
+        # Create optimizer with regularization support
+        self.optimizer = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
 
     def forward(self, x):
         # 一审
@@ -110,17 +96,11 @@ class Classifier(nn.Module):  # 16, 8, 2
         if self.loss_function == "nllloss":
             return nn.functional.log_softmax(logits, dim=1)
         return logits
-        # if (self.output_size == 2):
-        #     act = nn.Softmax(dim=1).to(device)
-        #     x = act(x)
-        # return self.fc(x)
 
 
 
-# 训练 Autoencoder
+# train Autoencoder
 def train_autoencoder(model, dataloader):
-    
-    # 训练模型
     train_loss = 0
     for data in dataloader:
         inputs, _ = data[0].to(device), data[1].to(device)
@@ -131,26 +111,22 @@ def train_autoencoder(model, dataloader):
         model.optimizer.step()
         train_loss += loss.item()
 
-    train_loss /= len(dataloader)  # 一次迭代的损失
-    # print("train loss = {}".format(train_loss))
-    return train_loss  # 返回每个 epoch 的损失值
+    train_loss /= len(dataloader)  # Loss of one epoch
+    return train_loss
 
-
+# validate Autoencoder
 def val_autoencoder(model, val_dataloader):
-    val_loss = 0 # 积累测试损失
-    with torch.no_grad(): # 上下文管理器，将其包裹的代码块中的梯度计算禁用，以减少内存使用和加速计算。
+    val_loss = 0
+    with torch.no_grad(): # Context manager that disables gradient computation in the code blocks it wraps to reduce memory usage and speed up computation.
         for data in val_dataloader:
             inputs, _ = data[0].to(device), data[1].to(device)
             decoded, _  = model(inputs)
-            val_loss += model.criterion(decoded, inputs).item() #计算并累积测试损失
-    val_loss /= len(val_dataloader)  # 一次迭代的损失
-    # print("val loss = {}".format(val_loss))
-    return val_loss  # 返回测试损失
+            val_loss += model.criterion(decoded, inputs).item() # Calculate and accumulate losses
+    val_loss /= len(val_dataloader)  # Loss of one epoch
+    return val_loss
 
-# 训练分类模型
+# train classifier
 def train_classifier(classifier, dataloader):
-    # criterion = nn.BCELoss()  # 二分类问题，使用二进制交叉熵损失
-    # optimizer = optim.Adam(classifier.parameters(), lr=learning_rate)
     true_label_list, pred_label_list= [], []
     train_loss = 0
     classifier.train()
@@ -158,16 +134,24 @@ def train_classifier(classifier, dataloader):
         features, labels = data[0].to(device), data[1].to(device)
         classifier.optimizer.zero_grad()
         outputs = classifier(features)
-        # loss = classifier.criterion(outputs.view(-1), labels.float())  # BCELoss 需要 0-1 之间的标签
         loss = classifier.criterion(outputs, labels)
+        
+        # Apply regularization penalties (except max-norm which is applied after optimizer step)
+        loss = apply_regularization_loss(loss, classifier, classifier.r_method, classifier.r_weight)
+        
         loss.backward()
         classifier.optimizer.step()
+        
+        # Apply max-norm constraint if specified
+        if classifier.r_method == "maxnorm":
+            apply_max_norm_constraint(classifier, classifier.r_weight)
+        
         train_loss += loss.item()
         true_label_list.append(labels.cpu().detach().numpy())
-        pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())  # softmax
+        pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())
 
 
-    train_loss /= len(dataloader)  # 一次迭代的损失
+    train_loss /= len(dataloader)
     y_true = np.concatenate(true_label_list)
     y_pred = np.concatenate(pred_label_list)
     train_acc = accuracy_score(y_true,y_pred)
@@ -175,31 +159,30 @@ def train_classifier(classifier, dataloader):
 
     return train_loss, train_acc, train_precision, train_recall, train_f1
 
-
+# validate classifier
 def val_classifier(classifier, dataloader):
     true_label_list, pred_label_list= [], []
-    # 验证模型
     classifier.eval()
-    val_loss = 0 # 积累测试损失
-    with torch.no_grad(): # 上下文管理器，将其包裹的代码块中的梯度计算禁用，以减少内存使用和加速计算。
+    val_loss = 0 
+    with torch.no_grad():
         for data in dataloader:
             features, labels = data[0].to(device), data[1].to(device)
             outputs = classifier(features)
-            # loss = classifier.criterion(outputs.view(-1), labels.float())  # BCELoss 需要 0-1 之间的标签
             loss = classifier.criterion(outputs, labels)
             val_loss += loss.item()
             true_label_list.append(labels.cpu().detach().numpy())
-            pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())  # softmax
+            pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy()) 
 
     y_true = np.concatenate(true_label_list)
     y_pred = np.concatenate(pred_label_list)
-    val_loss /= len(dataloader)  # 一次迭代的损失
+    val_loss /= len(dataloader)
     val_acc = accuracy_score(y_true,y_pred)
     val_precision, val_recall, val_f1 = precision_recall_fscore_support(y_true, y_pred, average='macro')[:-1]
     
     return val_loss, val_acc, val_precision, val_recall, val_f1
 
-def extract_features(autoencoder, dataloader):
+
+def extract_features(autoencoder, dataloader, device):
     encoder = autoencoder.encoder
     features = []
     labels = []
@@ -210,46 +193,57 @@ def extract_features(autoencoder, dataloader):
             encoded_features = encoder(inputs)
         features.append(encoded_features)
         labels.append(label)
-    # 连接features和labels
-    features = torch.cat(features, dim=0)  # torch.Size([34, 16])
-    labels = torch.cat(labels, dim=0)  # torch.Size([34])
-    # 构造dataloader
+    # concatenate features and labels
+    features = torch.cat(features, dim=0)
+    labels = torch.cat(labels, dim=0)
+    # construct dataloader
     dataset =  torch.utils.data.TensorDataset(features, labels)
     loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
     return loader
 
 
-# 保存模型
+# save models
 def save_model(autoencoder, classifier, autoencoder_path, classifier_path):
     torch.save(autoencoder.state_dict(), autoencoder_path)
     torch.save(classifier.state_dict(), classifier_path)
-    print("模型保存成功！")
+    print("model save successfully!")
 
-# 加载模型
+# load models
 def load_model(autoencoder, classifier, autoencoder_path, classifier_path):
     autoencoder.load_state_dict(torch.load(autoencoder_path))
     classifier.load_state_dict(torch.load(classifier_path))
-    print("模型加载成功！")
+    print("model load successfully!")
 
+# 一审
+def set_random_seed(seed):
+    """设置随机种子确保可重现性"""
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    torch.Generator().manual_seed(seed)  # dataloader的随机种子
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
-def test(dataloader, autoencoder, classifier):
-    loader = extract_features(autoencoder, dataloader)  # 数据集loader
+# test model
+def test(dataloader, autoencoder, classifier, device):
+    loader = extract_features(autoencoder, dataloader, device) 
     true_label_list, pred_label_list= [], []
 
     classifier.eval()
-    with torch.no_grad(): # 上下文管理器，将其包裹的代码块中的梯度计算禁用，以减少内存使用和加速计算。
+    with torch.no_grad():
         for data in loader:
             features, labels = data[0].to(device), data[1].to(device)
             outputs = classifier(features)
             true_label_list.append(labels.cpu().detach().numpy())
-            pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())  # softmax
+            pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())
 
     y_true = np.concatenate(true_label_list)
     y_pred = np.concatenate(pred_label_list)
     acc = accuracy_score(y_true,y_pred)
     precision, recall, f1 = precision_recall_fscore_support(y_true, y_pred, average='macro')[:-1]
-    # 还可以增加其他计算指标 mcc，auc等等
     return acc, precision, recall, f1
+
 
 
 if __name__ == '__main__':
@@ -267,6 +261,11 @@ if __name__ == '__main__':
     parser.add_argument("--output_size", default=4, type=int)  # 分类数 2
     parser.add_argument("--type", default="single", type=str)  # all表示运行所有模型，修改result路径；single表示只运行当前模型-默认single
     parser.add_argument('--random_seed', type=int, default=42, help='随机种子')  # 一审新增
+
+    parser.add_argument('--r_method', type=str, default=None, help='Regularization method: l1, l2, maxnorm, sparsity, or none')
+    parser.add_argument('--r_weight', type=float, default=0.0, help='Regularization weight/strength')
+    parser.add_argument('--dropout_rate', type=float, default=0.0, help='Dropout rate')
+    parser.add_argument('--feature_method', type=str, default=None, help='Feature selection method: PCC, SPEARMAN, CHI2, RF.')
 
 
     args = parser.parse_args()
@@ -297,6 +296,16 @@ if __name__ == '__main__':
     print('random seed =', random_seed)  # 一审新增
     set_random_seed(random_seed)  # 一审新增
 
+    random_seed = args.random_seed  # 一审新增
+    r_method = args.r_method if args.r_method and args.r_method != "none" else None
+    r_weight = args.r_weight
+    dropout_rate = args.dropout_rate
+    feature_method = args.feature_method if args.feature_method and args.feature_method.strip() else None
+    print('regularization method =', r_method if r_method else 'none')
+    print('regularization weight =', r_weight)
+    print('dropout rate =', dropout_rate)
+    print('feature selection method =', feature_method if feature_method else 'none')
+
 
     # jobID = "20240808232043_OtJF37SH"  # 参数待改
     # kfold = 0 # 默认不使用kfold 参数待改
@@ -311,7 +320,7 @@ if __name__ == '__main__':
     hidden_size_2=32
     hidden_size_3=16
     cls_hidden_size=8
-    dropout_rate = 0.0  # dropout层的比例
+    # dropout_rate = 0.0  # dropout层的比例
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if (type == "all"):

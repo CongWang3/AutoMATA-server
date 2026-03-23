@@ -53,6 +53,8 @@ def load_data(state="train", jobID="20240808232043_OtJF37SH"):  # train, val, te
     encoder = LabelEncoder()
     label = encoder.fit_transform(label.ravel())
 
+    
+
     feature, label = torch.FloatTensor(feature), torch.LongTensor(label)
     return feature, label
 

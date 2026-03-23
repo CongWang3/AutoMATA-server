@@ -653,7 +653,7 @@ async def get_download_url(
     
 #     file_path = base_dir / mapping[file_type]
 #     if not file_path.exists():
-#         logger.error(f"示例文件不存在: {file_path}")
+#         logger.error(f"示例文件不存在：{file_path}")
 #         raise HTTPException(status_code=404, detail="示例文件不存在")
     
 #     return FileResponse(
@@ -661,3 +661,58 @@ async def get_download_url(
 #         filename=mapping[file_type],
 #         media_type="text/plain"
 #     )
+
+
+# ---------------- 示例数据下载（数据分析模块） ----------------
+
+@router.get("/examples/draw/{analysis_type}")
+async def download_draw_example(analysis_type: str):
+    """
+    下载数据分析模块示例数据文件
+    
+    analysis_type 取值：
+    - pca               -> pca_example.txt
+    - cor_heatmap       -> cor_heatmap_example.txt
+    - volcano           -> volcano_example.txt
+    - venn              -> venn_example.txt
+    - df_cluster        -> df_cluster_example.txt
+    - go_enrichment     -> go_enrichment_example.txt
+    - kegg_enrichment   -> kegg_enrichment_example.txt
+    - dumbbell          -> dumbbell_example.txt
+    - dumbbell_bar      -> dumbbell_bar_example.txt
+    - ppi               -> ppi_example.txt
+    """
+    base_dir = FilePath("/xp/www/AutoMATA/example/draw_example")
+    
+    # 示例文件映射
+    example_files = {
+        "pca": "pca_example.txt",
+        "cor_heatmap": "cor_heatmap_example.txt",
+        "volcano": "volcano_example.txt",
+        "venn": "venn_example.txt",
+        "df_cluster": "df_cluster_example.txt",
+        "go_enrichment": "go_enrichment_example.txt",
+        "kegg_enrichment": "kegg_enrichment_example.txt",
+        "dumbbell": "dumbbell_example.txt",
+        "dumbbell_bar": "dumbbell_bar_example.txt",
+        "ppi": "ppi_example.txt",
+    }
+    
+    if analysis_type not in example_files:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"不支持的示例类型：{analysis_type}。支持的类型：{', '.join(example_files.keys())}"
+        )
+    
+    file_name = example_files[analysis_type]
+    file_path = base_dir / file_name
+    
+    if not file_path.exists():
+        logger.error(f"示例文件不存在：{file_path}")
+        raise HTTPException(status_code=404, detail=f"示例文件不存在：{file_name}")
+    
+    return FileResponse(
+        path=str(file_path),
+        filename=file_name,
+        media_type="text/plain"
+    )

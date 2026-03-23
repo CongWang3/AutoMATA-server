@@ -331,10 +331,14 @@
                                     </h5>
                                     <div class="row g-3">
                                         <div class="col-12">
-                                            <label class="form-label">Email *</label>
-                                            <input type="email" class="form-control" id="email"
+                                            <label class="form-label">Email（可选）</label>
+                                            <input
+                                                type="email"
+                                                class="form-control"
+                                                id="email"
                                                 v-model="notification.email"
-                                                placeholder="Please input your email address" required>
+                                                placeholder="Please input your email address（可选，用于接收训练结果通知）"
+                                            >
                                         </div>
                                     </div>
                                 </div>
@@ -543,8 +547,7 @@ const isFormValid = computed(() => {
     const basicValid = selectedModels.value.length > 0 &&
         hyperparameters.epoch &&
         hyperparameters.learningRate &&
-        hyperparameters.earlyStopping &&
-        notification.email
+        hyperparameters.earlyStopping
 
     // 根据策略检查文件上传
     let filesValid = false
@@ -762,8 +765,8 @@ const handleSubmit = async () => {
 const checkInput = () => {
     // 检查邮箱格式
     const emailRegex = /^[\w\-\.]+@[a-z0-9]+(\-[a-z0-9]+)?(\.[a-z0-9]+(\-[a-z0-9]+)?)*\.[a-z]{2,4}$/i
-    if (!emailRegex.test(notification.email)) {
-        ElMessage.error('Please submit the correct email address')
+    if (notification.email && !emailRegex.test(notification.email)) {
+        ElMessage.error('Please submit the correct email address（或留空）')
         return false
     }
 
@@ -955,48 +958,21 @@ const stopPolling = () => {
 // -->
 const downloadStrategyExample = () => {
     try {
-        let filePath = ''
-        let fileName = ''
-        
-        // 根据当前策略选择对应的示例文件
-        switch(strategy.value) {
-            case 'split':
-                // Split策略：下载训练数据示例
-                filePath = 'train_example/example_pseudo_data.txt'
-                fileName = 'example_pseudo_data.txt'
-                break
-            case 'upload':
-                // Upload策略：下载包含训练/验证/测试数据的压缩包
-                filePath = 'train_example.zip'
-                fileName = 'train_example.zip'
-                break
-            case 'kfold':
-                // K-Fold策略：下载训练数据示例
-                filePath = 'train_example/example_pseudo_data.txt'
-                fileName = 'example_pseudo_data.txt'
-                break
-            default:
-                throw new Error('未知的训练策略')
-        }
-        
-        // 构建下载链接
-        const downloadUrl = `http://localhost:8001/example/${filePath}`
-        
-        console.log(`📥 根据策略[${strategy.value}]下载示例文件: ${fileName}`)
-        
-        // 触发下载
+        const fileName = 'train_example.zip'
+        // 直接从后端暴露的 example 目录下载（避免 Vite public/example 缺失导致返回 html）
+        const downloadUrl = `http://localhost:8005/example/${fileName}`
+
         const link = document.createElement('a')
         link.href = downloadUrl
         link.download = fileName
-        link.target = '_blank'
+        link.target = '_blank' // 新窗口打开，避免阻塞当前页面
         link.style.display = 'none'
-        
+
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
-        
     } catch (error: any) {
-        console.error('❓️ 策略示例文件下载失败:', error)
+        console.error('❓️ 示例文件下载失败:', error)
         ElMessage.error(`下载失败: ${error.message || '未知错误'}`)
     }
 }

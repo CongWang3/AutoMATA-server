@@ -48,9 +48,48 @@ get_stars <- function(p){
 # 1. 读取数据. 数据第一列为组别信息,列名为Group，其他数据类型均为数字, 列名不同
 table_data <- read.table(opt$input, header = TRUE, sep = "\t", check.names = FALSE)
 
+# 数据验证：检查文件是否正确读取
+if (nrow(table_data) == 0) {
+    stop("错误：数据文件为空或格式不正确，请检查上传的文件")
+}
+
+if (ncol(table_data) < 2) {
+    stop("错误：数据文件至少需要两列（组别列和至少一个数据列）")
+}
+
+# 检查第一列是否为组别信息
+if (colnames(table_data)[1] != "Group") {
+    warning("警告：第一列列名不是'Group'，但仍将其作为组别信息处理")
+}
+
 # 2. 主成分分析，并标准化, 删除组别信息进行pca
 # res.pca <- PCA(table_data, graph = FALSE)  # res.pca$eig的转置==pca
-pca <- summary(rda(dplyr::select(table_data, colnames(table_data)[-1]), scale=T))
+
+# 提取数值列进行验证
+data_cols <- dplyr::select(table_data, colnames(table_data)[-1])
+
+# 检查是否有足够的数值数据进行 PCA
+if (ncol(data_cols) == 0) {
+    stop("错误：没有可用于 PCA 分析的数值数据列")
+}
+
+# 尝试转换为数值矩阵并检查
+tryCatch({
+    data_matrix <- as.matrix(data_cols)
+    storage.mode(data_matrix) <- "numeric"
+    
+    # 检查是否有 NA 值
+    if (any(is.na(data_matrix))) {
+        na_count <- sum(is.na(data_matrix))
+        warning(paste("警告：数据中包含", na_count, "个 NA 值，已替换为 0"))
+        data_matrix[is.na(data_matrix)] <- 0
+    }
+    
+    # 执行 PCA 分析
+    pca <- summary(rda(data_matrix, scale=T))
+}, error = function(e) {
+    stop(paste("错误：PCA 分析失败 -", e$message, "\\n请检查数据格式是否正确（第一列为组别，其余列为数值型数据）"))
+})
 # 记录PC1和PC2的解释度
 pc1_Explained <- round(pca$cont$importance[2, 1]*100, 2)
 pc2_Explained <- round(pca$cont$importance[2, 2]*100, 2)

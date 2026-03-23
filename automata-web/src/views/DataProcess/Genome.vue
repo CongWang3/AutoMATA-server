@@ -26,7 +26,7 @@
       example-note="示例数据包含多个物种的GeneID和TPM值"
       @submit-success="handleSuccess"
     />
-    
+    <!-- 示例文件在这： /xp/www/AutoMATA/automata-web/dist/example/test_geneid_multi_species.txt -->
     <!-- 任务结果弹窗 -->
     <el-dialog
       v-model="showResultDialog"

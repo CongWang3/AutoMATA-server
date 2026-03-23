@@ -477,16 +477,39 @@ const downloadExampleData = () => {
   }
   
   const fileName = props.exampleFileName || 'example_data.txt'
-  const link = document.createElement('a')
-  link.href = props.exampleDataUrl
-  link.download = fileName
-  link.style.display = 'none'
   
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  // 使用后端 API 下载示例数据
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
+  // 从 exampleDataUrl 中提取分析类型，例如：/example/draw_example/pca_example.txt -> pca
+  const analysisType = extractAnalysisType(props.exampleDataUrl)
   
-  ElMessage.success(`示例数据已开始下载: ${fileName}`)
+  if (analysisType) {
+    const downloadUrl = `${apiBaseUrl}/api/v1/data-process/examples/draw/${analysisType}`
+    window.open(downloadUrl, '_blank')
+    ElMessage.success(`示例数据已开始下载：${fileName}`)
+  } else {
+    // 降级处理：直接下载静态文件
+    const link = document.createElement('a')
+    link.href = props.exampleDataUrl
+    link.download = fileName
+    link.style.display = 'none'
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    ElMessage.success(`示例数据已开始下载：${fileName}`)
+  }
+}
+
+// 从 URL 中提取分析类型
+const extractAnalysisType = (url: string): string | null => {
+  // 匹配 /example/draw_example/{type}_example.txt 格式
+  const match = url.match(/\/example\/draw_example\/([\w-]+)_example\.txt/)
+  if (match && match[1]) {
+    return match[1]
+  }
+  return null
 }
 
 // 下载第二个示例数据

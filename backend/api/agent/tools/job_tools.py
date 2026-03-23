@@ -4,8 +4,8 @@
 """
 import logging
 import json
-from typing import Optional
-from langchain_core.tools import tool
+from typing import Optional, Annotated
+from langchain_core.tools import tool, InjectedToolArg
 from langchain_core.runnables import RunnableConfig
 
 from config.database import SessionLocal
@@ -41,7 +41,7 @@ def query_jobs(
     job_type: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = 10,
-    config: RunnableConfig = None
+    config: Annotated[RunnableConfig, InjectedToolArg] = {}
 ) -> str:
     """
     查询用户的作业列表。
@@ -86,14 +86,19 @@ def query_jobs(
         tool_context = configurable.get("tool_context", {})
         
         if not user_id:
+            logger.warning("[Job Tools] user_id 为空，config 内容: %s", configurable)
             return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
         
-        # 获取或创建数据库会话
-        db = tool_context.get("db")
-        should_close_db = False
-        if db is None:
-            db = SessionLocal()
-            should_close_db = True
+        # 确保 user_id 为整数（数据库字段为 Integer）
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"[Job Tools] user_id 类型转换失败: {user_id}")
+            return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
+        
+        # 创建数据库会话
+        db = SessionLocal()
+        should_close_db = True
         
         # 构建查询
         query = db.query(Job).filter(Job.user_id == user_id)
@@ -169,7 +174,7 @@ def query_jobs(
 @tool
 def get_job_detail(
     job_id: str,
-    config: RunnableConfig = None
+    config: Annotated[RunnableConfig, InjectedToolArg] = {}
 ) -> str:
     """
     获取指定作业的详细信息。
@@ -193,14 +198,19 @@ def get_job_detail(
         tool_context = configurable.get("tool_context", {})
         
         if not user_id:
+            logger.warning("[Job Tools] user_id 为空，config 内容: %s", configurable)
             return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
         
-        # 获取或创建数据库会话
-        db = tool_context.get("db")
-        should_close_db = False
-        if db is None:
-            db = SessionLocal()
-            should_close_db = True
+        # 确保 user_id 为整数（数据库字段为 Integer）
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"[Job Tools] user_id 类型转换失败: {user_id}")
+            return json.dumps({"error": "未找到用户信息，请重新登录"}, ensure_ascii=False)
+        
+        # 创建数据库会话
+        db = SessionLocal()
+        should_close_db = True
         
         # 查询作业
         job = db.query(Job).filter(
