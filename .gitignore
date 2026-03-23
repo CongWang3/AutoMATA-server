@@ -33,6 +33,7 @@ environment.yaml
 spec-file.txt
 
 backend/tests/*
+!backend/tests/test_training_service_zip_validation.py
 vendor/phpmailer/phpmailer/language/phpmailer.lang-ja.php
 node_modules/.package-lock.json
 node_modules/.bin/esbuild

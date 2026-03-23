@@ -172,6 +172,21 @@ def _get_kfold_value(params: Dict[str, Any]) -> str:
     return "0"  # 不使用 kfold
 
 
+def _is_zip_deliverable(zip_path: str) -> bool:
+    """
+    判断 zip 文件是否可交付。
+
+    交付条件：
+    - zip 文件存在
+    - zip 文件大小 > 0
+    """
+    try:
+        p = Path(zip_path)
+        return p.exists() and p.stat().st_size > 0
+    except OSError:
+        return False
+
+
 class TrainingService:
     """模型训练服务类"""
 
@@ -236,6 +251,7 @@ class TrainingService:
         model_type: str,
         parameters: Dict[str, Any],
         dataset_path: Optional[str] = None,
+        email: Optional[str] = None,
     ) -> Job:
         """
         创建监督学习训练任务
@@ -251,7 +267,8 @@ class TrainingService:
             model_type=model_type,
             training_type="supervised",
             parameters=parameters,
-            dataset_path=dataset_path
+            dataset_path=dataset_path,
+            email=email,
         )
 
     async def create_unsupervised_task(
@@ -260,6 +277,7 @@ class TrainingService:
         model_type: str,
         parameters: Dict[str, Any],
         dataset_path: Optional[str] = None,
+        email: Optional[str] = None,
     ) -> Job:
         """
         创建无监督学习训练任务
@@ -275,7 +293,8 @@ class TrainingService:
             model_type=model_type,
             training_type="unsupervised",
             parameters=parameters,
-            dataset_path=dataset_path
+            dataset_path=dataset_path,
+            email=email,
         )
 
     async def create_semi_supervised_task(
@@ -284,6 +303,7 @@ class TrainingService:
         model_type: str,
         parameters: Dict[str, Any],
         dataset_path: Optional[str] = None,
+        email: Optional[str] = None,
     ) -> Job:
         """
         创建半监督学习训练任务
@@ -299,7 +319,8 @@ class TrainingService:
             model_type=model_type,
             training_type="semi_supervised",
             parameters=parameters,
-            dataset_path=dataset_path
+            dataset_path=dataset_path,
+            email=email,
         )
 
     async def _create_training_task(
@@ -309,6 +330,7 @@ class TrainingService:
         training_type: str,
         parameters: Dict[str, Any],
         dataset_path: Optional[str] = None,
+        email: Optional[str] = None,
     ) -> Job:
         """
         创建训练任务的通用方法
@@ -351,6 +373,8 @@ class TrainingService:
             self.db.add(job)
             self.db.commit()
 
+            resolved_email = email if email is not None else parameters.get("email")
+
             # 异步执行训练任务
             asyncio.create_task(
                 self._execute_training(
@@ -359,7 +383,7 @@ class TrainingService:
                     training_type=training_type,
                     parameters=parameters,
                     dataset_path=dataset_path,
-                    email=parameters.get("email"),
+                    email=resolved_email,
                 )
             )
 
@@ -519,14 +543,18 @@ class TrainingService:
 
             # 训练完成后，压缩 result 目录
             zip_file = str(result_dir) + ".zip"
+            import zipfile
             try:
-                import zipfile
                 with zipfile.ZipFile(zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
                     for path in result_dir.rglob("*"):
                         if path.is_file():
                             zf.write(path, path.relative_to(result_dir))
             except Exception as e:
-                logger.warning(f"[TRAIN] 结果压缩失败: {e}")
+                raise RuntimeError(f"结果压缩失败: {e}") from e
+
+            # 压缩后校验 zip 是否可交付
+            if not _is_zip_deliverable(zip_file):
+                raise RuntimeError("zip 不可交付（文件不存在或为空）")
 
             # 更新任务状态为完成
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
@@ -573,7 +601,12 @@ class TrainingService:
         except Exception as e:
             logger.exception(f"[TRAIN] 训练执行失败: job_id={job_id}, error={e}")
             error_msg = f"训练过程发生错误: {str(e)}"
-            await self._handle_training_failure(job_id, error_msg)
+            await self._handle_training_failure(
+                job_id=job_id,
+                error_message=error_msg,
+                email=email,
+                training_type=training_type,
+            )
 
     async def _execute_supervised_training_core(
         self,
@@ -947,13 +980,21 @@ class TrainingService:
         if result.returncode != 0:
             raise RuntimeError(result.stderr or "半监督学习训练脚本执行失败")
 
-    async def _handle_training_failure(self, job_id: str, error_message: str):
+    async def _handle_training_failure(
+        self,
+        job_id: str,
+        error_message: str,
+        email: Optional[str] = None,
+        training_type: Optional[str] = None,
+    ):
         """
         统一处理训练失败的情况
         
         Args:
             job_id: 任务ID
             error_message: 错误信息
+            email: 收件邮箱（可选）
+            training_type: 训练类型（用于邮件标题/内容，可选）
         """
         job = self.db.query(Job).filter(Job.job_id == job_id).first()
         if job:
@@ -978,4 +1019,16 @@ class TrainingService:
             )
         except Exception as e:
             logger.debug(f"WebSocket 状态推送失败: {e}")
+
+        # 发送失败邮件（返回值忽略；不影响 job 状态判定）
+        if email:
+            try:
+                await email_service.send_failure_email(
+                    to_email=email,
+                    job_id=job_id,
+                    analysis_type=f"{training_type}模型训练" if training_type else "模型训练",
+                    error_message=error_message,
+                )
+            except Exception as e:
+                logger.warning(f"发送失败邮件失败（不影响任务结果）: {e}")
 
