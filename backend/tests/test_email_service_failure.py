@@ -156,6 +156,41 @@ def test_send_failure_email_formats_safe_html_and_sends_once() -> None:
         assert sentinel_escaped not in html_body
 
 
+def test_send_failure_email_sanitizes_to_header_against_crlf_injection() -> None:
+    service = EmailService()
+    service.enabled = True
+    service.smtp_ssl = True  # 该用例仅 mock SMTP_SSL
+    service.smtp_password = "test-password"
+
+    # 如果 To 头未清洗，可能触发 header splitting 或引入额外头字段。
+    to_email = "user@example.com\r\nBcc:evil@example.com"
+    expected_to = EmailService._sanitize_header_value(to_email)
+
+    with patch("api.services.email_service.smtplib.SMTP_SSL") as mock_smtp_ssl:
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+
+        result = asyncio.run(
+            service.send_failure_email(
+                to_email=to_email,
+                job_id="job-crlf-injection",
+                analysis_type="FailureCase",
+                error_message="error text",
+            )
+        )
+
+        assert result is True
+        mock_server.send_message.assert_called_once()
+
+        sent_msg = mock_server.send_message.call_args[0][0]
+        to_header = str(sent_msg["To"])
+        assert to_header == expected_to
+        assert "\r" not in to_header and "\n" not in to_header
+
+        header_names = [k for (k, _) in sent_msg.items()]
+        assert not any(name.lower() == "bcc" for name in header_names)
+
+
 def test_send_failure_email_catches_smtp_exception_and_returns_false() -> None:
     service = EmailService()
     service.enabled = True

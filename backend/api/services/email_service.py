@@ -104,8 +104,9 @@ class EmailService:
             msg = MIMEMultipart()
             safe_from_name = self._sanitize_header_value(self.from_name)
             safe_smtp_user = self._sanitize_header_value(self.smtp_user)
+            safe_to_email = self._sanitize_header_value(to_email)
             msg["From"] = f"{safe_from_name} <{safe_smtp_user}>"
-            msg["To"] = to_email
+            msg["To"] = safe_to_email
             safe_analysis_type_header = self._sanitize_header_value(analysis_type)
             msg["Subject"] = f"AutoMATA Failure - {safe_analysis_type_header}"
 
@@ -204,8 +205,9 @@ class EmailService:
             msg = MIMEMultipart()
             safe_from_name = self._sanitize_header_value(self.from_name)
             safe_smtp_user = self._sanitize_header_value(self.smtp_user)
+            safe_to_email = self._sanitize_header_value(to_email)
             msg['From'] = f"{safe_from_name} <{safe_smtp_user}>"
-            msg['To'] = to_email
+            msg['To'] = safe_to_email
             safe_analysis_type_header = self._sanitize_header_value(analysis_type)
             msg['Subject'] = f'AutoMATA Result - {safe_analysis_type_header}'
             safe_analysis_type_html = html_module.escape(str(analysis_type))
