@@ -129,43 +129,15 @@
             </ul>
           </li>
           
-          <li class="nav-item dropdown">
-            <a 
-              class="nav-link dropdown-toggle" 
-              role="button" 
-              id="analysisDropdown"
-              data-bs-toggle="dropdown" 
-              aria-expanded="false"
+          <li class="nav-item">
+            <router-link
+              to="/data-analysis"
+              class="nav-link"
+              :class="{ active: $route.path.startsWith('/data-analysis') }"
             >
               <el-icon class="menu-icon"><PieChart /></el-icon>
               数据分析
-            </a>
-            <ul class="dropdown-menu" aria-labelledby="analysisDropdown">
-              <li>
-                <router-link 
-                  to="/data-analysis" 
-                  class="dropdown-item"
-                >
-                  差异表达
-                </router-link>
-              </li>
-              <li>
-                <router-link 
-                  to="/data-analysis/go" 
-                  class="dropdown-item"
-                >
-                  富集分析
-                </router-link>
-              </li>
-              <li>
-                <router-link 
-                  to="/data-analysis/pca" 
-                  class="dropdown-item"
-                >
-                  可视化
-                </router-link>
-              </li>
-            </ul>
+            </router-link>
           </li>
           
           <li class="nav-item">

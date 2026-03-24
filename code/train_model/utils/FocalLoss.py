@@ -21,12 +21,15 @@ class FocalLoss(nn.Module):
         self.num_classes = num_classes
 
         # Handle alpha for class balancing in multi-class tasks
-        if task_type == 'multi-class' and alpha is not None and isinstance(alpha, (list, torch.Tensor)):
+        if task_type == 'multi-class' and alpha is not None:
             assert num_classes is not None, "num_classes must be specified for multi-class classification"
             if isinstance(alpha, list):
-                self.alpha = torch.Tensor(alpha)
-            else:
-                self.alpha = alpha
+                self.alpha = torch.tensor(alpha, dtype=torch.float32)
+            elif isinstance(alpha, torch.Tensor):
+                self.alpha = alpha.float()
+            elif isinstance(alpha, (float, int)):
+                # Scalar alpha is broadcast to all classes to keep API compatible.
+                self.alpha = torch.full((num_classes,), float(alpha), dtype=torch.float32)
 
     def forward(self, inputs, targets):
         """
@@ -89,7 +92,7 @@ class FocalLoss(nn.Module):
         targets_one_hot = F.one_hot(targets, num_classes=self.num_classes).float()
 
         # Compute cross-entropy for each class
-        ce_loss = -targets_one_hot * torch.log(probs)
+        ce_loss = -targets_one_hot * torch.log(probs.clamp(min=1e-12))
 
         # Compute focal weight
         p_t = torch.sum(probs * targets_one_hot, dim=1)  # p_t for each sample

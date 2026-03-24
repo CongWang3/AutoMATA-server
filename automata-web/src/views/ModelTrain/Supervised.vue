@@ -7,7 +7,7 @@
                     <el-card class="form-card">
                         <template #header>
                             <div class="card-header">
-                                <span class="title">监督学习模型训练</span>
+                                <span class="title">Supervised learning model training</span>
                                 <el-tag type="info">Supervised Learning</el-tag>
                             </div>
                         </template>
@@ -17,13 +17,17 @@
                                 <!-- 步骤 1：选择策略并上传文件 -->
                                 <div class="step-section mb-4">
                                     <div class="step-header d-flex justify-content-between align-items-center">
-                                        <h5 class="step-title mb-0">
+                                        <!-- <h5 class="step-title mb-0">
                                             <span class="step-number">1</span>
                                             选择策略并上传数据
+                                        </h5> -->
+                                        <h5 class="section-title">
+                                            1. Select Strategy and Upload Data
+                                            <span class="section-subtitle">Required</span>
                                         </h5>
                                         <button type="button" class="btn btn-outline-primary btn-sm" @click="downloadStrategyExample">
                                             <i class="fas fa-download me-1"></i>
-                                            下载示例数据
+                                            Download Example Data
                                         </button>
                                     </div>
                                     <div class="strategy-options mb-4 mt-3">
@@ -60,7 +64,7 @@
                                     <!-- 数据集上传区域 -->
                                     <div class="upload-section" v-if="strategy === 'split'">
                                         <div class="mb-3">
-                                            <label class="form-label">上传数据集</label>
+                                            <label class="form-label">Upload Dataset</label>
                                             <input type="file" class="form-control"
                                                 @change="handleFileUpload($event, 'dataset')"
                                                 accept=".txt,.csv,.xlsx,.xls" required>
@@ -81,24 +85,24 @@
                                                 </span>
                                             </div>
                                         </div>
-                                        <label class="form-label">当前比例</label>
+                                        <label class="form-label">Current Ratio</label>
                                         <div class="ratio-controls d-flex align-items-center">
                                             <div class="ratio-item d-flex align-items-center me-4">
-                                                <label class="ratio-label me-2">训练集：</label>
+                                                <label class="ratio-label me-2">Train Set:</label>
                                                 <input type="number" class="form-control ratio-input text-center"
                                                     v-model="splitRatio.train" min="1" max="10" step="1"
                                                     @input="updateRatios" style="width: 180px;">
                                             </div>
                                             <span class="ratio-separator me-4">-</span>
                                             <div class="ratio-item d-flex align-items-center me-4">
-                                                <label class="ratio-label me-2">验证集：</label>
+                                                <label class="ratio-label me-2">Validation Set:</label>
                                                 <input type="number" class="form-control ratio-input text-center"
                                                     v-model="splitRatio.validation" min="1" max="10" step="1"
                                                     @input="updateRatios" style="width: 180px;">
                                             </div>
                                             <span class="ratio-separator me-4">-</span>
                                             <div class="ratio-item d-flex align-items-center">
-                                                <label class="ratio-label me-2">测试集：</label>
+                                                <label class="ratio-label me-2">Test Set:</label>
                                                 <input type="number" class="form-control ratio-input text-center"
                                                     v-model="splitRatio.test" min="1" max="10" step="1" readonly
                                                     style="width: 180px; background-color: #e9ecef;">
@@ -110,7 +114,7 @@
                                     <div class="upload-section" v-if="strategy === 'upload'">
                                         <div class="row g-3">
                                             <div class="col-md-4">
-                                                <label class="form-label">训练集</label>
+                                                <label class="form-label">Upload Training Set</label>
                                                 <input type="file" class="form-control"
                                                     @change="handleFileUpload($event, 'train')"
                                                     accept=".txt,.csv,.xlsx,.xls" required>
@@ -133,7 +137,7 @@
                                                 </div>
                                             </div>
                                             <div class="col-md-4">
-                                                <label class="form-label">验证集</label>
+                                                <label class="form-label">Upload Validation Set</label>
                                                 <input type="file" class="form-control"
                                                     @change="handleFileUpload($event, 'validation')"
                                                     accept=".txt,.csv,.xlsx,.xls" required>
@@ -156,7 +160,7 @@
                                                 </div>
                                             </div>
                                             <div class="col-md-4">
-                                                <label class="form-label">测试集</label>
+                                                <label class="form-label">Upload Test Set</label>
                                                 <input type="file" class="form-control"
                                                     @change="handleFileUpload($event, 'test')"
                                                     accept=".txt,.csv,.xlsx,.xls" required>
@@ -179,15 +183,13 @@
                                         </div>
                                     </div>
 
-                                    <!-- K 折交叉验证区域 -->
+                                    <!-- K 折交叉验证区域（与 modelTrainPage.php：训练集 + K + 测试集 一致） -->
                                     <div class="upload-section" v-if="strategy === 'kfold'">
                                         <div class="mb-3">
-                                            <label class="form-label">上传数据集</label>
+                                            <label class="form-label">Upload training set</label>
                                             <input type="file" class="form-control"
                                                 @change="handleFileUpload($event, 'kfoldDataset')"
                                                 accept=".txt,.csv,.xlsx,.xls" required>
-                                           
-                                            <!-- 上传进度条 -->
                                             <div v-if="uploadProgress.kfoldDataset > 0 && uploadProgress.kfoldDataset < 100"
                                                 class="mt-2">
                                                 <div class="progress">
@@ -205,9 +207,29 @@
                                             </div>
                                         </div>
                                         <div class="mb-3">
-                                            <label class="form-label">K 值</label>
+                                            <label class="form-label">K value</label>
                                             <input type="number" class="form-control" v-model="kfoldValue" min="2"
-                                                max="10" placeholder="5">
+                                                max="10" placeholder="3">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Upload testing set</label>
+                                            <input type="file" class="form-control"
+                                                @change="handleFileUpload($event, 'kfoldTest')"
+                                                accept=".txt,.csv,.xlsx,.xls" required>
+                                            <div v-if="uploadProgress.kfoldTest > 0 && uploadProgress.kfoldTest < 100"
+                                                class="mt-2">
+                                                <div class="progress">
+                                                    <div class="progress-bar" role="progressbar"
+                                                        :style="{ width: uploadProgress.kfoldTest + '%' }">
+                                                        {{ uploadProgress.kfoldTest }}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div v-if="uploadedFiles.kfoldTest" class="mt-2">
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check-circle me-1"></i>{{ uploadedFiles.kfoldTest }}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -215,17 +237,15 @@
                                 <!-- 步骤 2：选择模型 -->
                                 <div class="step-section mb-4">
                                     <div class="step-header d-flex justify-content-between align-items-center">
-                                        <h5 class="step-title mb-0">
+                                        <!-- <h5 class="step-title mb-0">
                                             <span class="step-number">2</span>
                                             选择模型
                                             <span class="step-subtitle">Choose Model</span>
+                                        </h5> -->
+                                        <h5 class="section-title">
+                                            2. Choose Model
+                                            <span class="section-subtitle">Required</span>
                                         </h5>
-                                        <button type="button" class="btn btn-outline-primary btn-sm"
-                                            :class="{ 'active': isAllSelected }" @click="selectAllModels">
-                                            <i class="fas fa-check-square me-1" v-if="isAllSelected"></i>
-                                            <i class="far fa-square me-1" v-else></i>
-                                            All
-                                        </button>
                                     </div>
 
                                     <div class="model-selection mt-3">
@@ -237,21 +257,21 @@
                                         </div>
 
                                         <div v-else class="row">
-                                            <div v-if="availableModels && availableModels.length > 0">
+                                            <!-- <div v-if="availableModels && availableModels.length > 0">
                                                 <p class="text-muted mb-3">共找到 {{ availableModels.length }} 个可用模型</p>
                                             </div>
                                             <div v-else>
                                                 <p class="text-warning">暂无可用模型，请检查后端服务</p>
-                                            </div>
+                                            </div> -->
                                             <div class="col-md-6 mb-3" v-for="model in availableModels" :key="model.id">
                                                 <div class="model-card"
-                                                    :class="{ 'selected': selectedModels.includes(model.id) }"
-                                                    @click="toggleModelSelection(model.id)">
+                                                    :class="{ 'selected': selectedModel === model.id }"
+                                                    @click="selectModel(model.id)">
                                                     <div class="model-header">
-                                                        <input class="form-check-input me-2" type="checkbox"
+                                                        <input class="form-check-input me-2" type="radio" name="supervised_model_type"
                                                             :id="'model_' + model.id"
-                                                            :checked="selectedModels.includes(model.id)"
-                                                            @change="toggleModelSelection(model.id)">
+                                                            :checked="selectedModel === model.id"
+                                                            @change="selectModel(model.id)">
                                                         <label class="form-check-label fw-bold"
                                                             :for="'model_' + model.id">
                                                             {{ model.name }}
@@ -264,60 +284,75 @@
                                             </div>
                                         </div>
 
-                                        <div class="all-models-info mt-3 p-3 bg-light rounded">
-                                            <small class="text-muted">
-                                                <i class="fas fa-info-circle me-1"></i>
-                                                以上所有模型将使用同一份数据并行训练
-                                            </small>
-                                        </div>
                                     </div>
                                 </div>
 
                                 <!-- 步骤 3：设置训练超参数 -->
                                 <div class="step-section mb-4">
-                                    <h5 class="step-title">
+                                    <!-- <h5 class="step-title">
                                         <span class="step-number">3</span>
                                         设置训练超参数
                                         <span class="step-subtitle">Set Training Hyperparameters</span>
+                                    </h5> -->
+
+                                    <h5 class="section-title">
+                                        3. Set Training Hyperparameters
+                                        <span class="section-subtitle">Required</span>
                                     </h5>
 
                                     <div class="hyperparameters-form">
                                         <div class="row g-3">
                                             <div class="col-md-4">
-                                                <label class="form-label">训练轮数 *</label>
+                                                <label class="form-label">Epoch *</label>
                                                 <input type="number" class="form-control" id="epoch"
                                                     v-model="hyperparameters.epoch" min="1" max="1000" required>
                                             </div>
 
                                             <div class="col-md-4">
-                                                <label class="form-label">学习率 *</label>
+                                                <label class="form-label">Learning Rate *</label>
                                                 <input type="number" class="form-control" id="lr"
-                                                    v-model="hyperparameters.learningRate" step="0.001" min="0.001"
+                                                    v-model="hyperparameters.learningRate" step="0.00001" min="0.00001"
                                                     max="1" required>
                                             </div>
 
                                             <div class="col-md-4">
-                                                <label class="form-label">早停耐心值 *</label>
+                                                <label class="form-label">Early Stopping Patience *</label>
                                                 <input type="number" class="form-control" id="es"
                                                     v-model="hyperparameters.earlyStopping" min="1" max="100" required>
                                             </div>
 
                                             <div class="col-md-4">
-                                                <label class="form-label">批处理大小</label>
+                                                <label class="form-label">Batch Size *</label>
                                                 <input type="number" class="form-control"
-                                                    v-model="hyperparameters.batchSize" min="1" max="1024">
+                                                    v-model="hyperparameters.batchSize" min="1" max="256">
                                             </div>
 
                                             <div class="col-md-4">
-                                                <label class="form-label">随机种子</label>
+                                                <label class="form-label">Random Seed *</label>
                                                 <input type="number" class="form-control"
                                                     v-model="hyperparameters.randomSeed" min="0" max="999999">
                                             </div>
 
                                             <div class="col-md-4">
-                                                <label class="form-label">标签数量</label>
+                                                <label class="form-label">Label Count *</label>
                                                 <input type="number" class="form-control"
                                                     v-model="hyperparameters.labelCount" min="2" max="1000">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">Loss Function *</label>
+                                                <select class="form-select" v-model="hyperparameters.lossFunction">
+                                                    <option value="crossentropy">CrossEntropyLoss</option>
+                                                    <option value="focalloss">FocalLoss</option>
+                                                    <option value="nllloss">NLLLoss</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">Optimizer *</label>
+                                                <select class="form-select" v-model="hyperparameters.optimizerFunction">
+                                                    <option value="adam">Adam</option>
+                                                    <option value="sgd">SGD</option>
+                                                    <option value="rmsprop">RMSprop</option>
+                                                </select>
                                             </div>
                                         </div>
                                     </div>
@@ -326,18 +361,19 @@
                                 <!-- 通知信息 -->
                                 <div class="notification-section mb-4">
                                     <h5 class="section-title">
-                                        通知信息
-                                        <span class="section-subtitle">Notification</span>
+                                        <!-- 通知信息 -->
+                                        4. Notification
+                                        <span class="section-subtitle">Optional</span>
                                     </h5>
                                     <div class="row g-3">
                                         <div class="col-12">
-                                            <label class="form-label">Email（可选）</label>
+                                            <!-- <label class="form-label">Email（Optional ）</label> -->
                                             <input
                                                 type="email"
                                                 class="form-control"
                                                 id="email"
                                                 v-model="notification.email"
-                                                placeholder="Please input your email address（可选，用于接收训练结果通知）"
+                                                placeholder="Please input your email address（Optional, for receiving training result notifications）"
                                             >
                                         </div>
                                     </div>
@@ -407,7 +443,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { trainingApi, MODEL_PARAMETERS } from '@/api'
+import { trainingApi } from '@/api'
 import { WebSocketService } from '@/api/websocket'
 import JobStatus from '@/components/Job/JobStatus.vue'
 import { ElMessage } from 'element-plus'
@@ -445,15 +481,16 @@ interface UploadedFileInfo {
 const router = useRouter()
 // 响应式数据
 const strategy = ref('split')
-const selectedModels = ref<string[]>(['cnn']) // 默认选择CNN
-const kfoldValue = ref(5)
+const selectedModel = ref('cnn') // 单选模型（默认CNN）
+const kfoldValue = ref(3)
 
 const uploadedFiles = reactive<Record<string, string>>({
     dataset: '',
     train: '',
     validation: '',
     test: '',
-    kfoldDataset: ''
+    kfoldDataset: '',
+    kfoldTest: ''
 })
 
 // 文件上传进度
@@ -462,7 +499,8 @@ const uploadProgress = reactive<Record<string, number>>({
     train: 0,
     validation: 0,
     test: 0,
-    kfoldDataset: 0
+    kfoldDataset: 0,
+    kfoldTest: 0
 })
 
 // 已上传文件信息
@@ -471,7 +509,8 @@ const uploadedFileInfo = reactive<Record<string, UploadedFileInfo | null>>({
     train: null,
     validation: null,
     test: null,
-    kfoldDataset: null
+    kfoldDataset: null,
+    kfoldTest: null
 })
 
 const splitRatio = reactive({
@@ -486,7 +525,9 @@ const hyperparameters = reactive({
     earlyStopping: 10,
     batchSize: 32,
     randomSeed: 42,
-    labelCount: 2
+    labelCount: 2,
+    lossFunction: 'crossentropy',
+    optimizerFunction: 'adam',
 })
 
 const notification = reactive({
@@ -545,7 +586,17 @@ const statusText = ref('Initializing...')
 const trainingResults = ref<Record<string, any>>({})
 
 // 可用模型 - 从API获取
-const availableModels = ref<Array<{ id: string; name: string; description: string }>>([])
+const availableModels = ref<Array<{ id: string; name: string; description: string }>>([
+    { id: 'cnn', name: 'CNN', description: 'Excels at extracting discriminative features from 1D signals with local patterns.' },
+    { id: 'lstm', name: 'LSTM', description: 'Designed for modeling data with long-term dependencies.' },
+    { id: 'rnn', name: 'RNN', description: 'Used for processing simple sequences with short-term dependencies.' },
+    { id: 'mlp', name: 'MLP', description: 'General-purpose benchmark model for non-linear classification.' },
+    { id: 'autoencoder', name: 'AutoEncoder', description: 'Learns robust feature representation via denoising and compression.' },
+    { id: 'transformer', name: 'Transformer', description: 'Models global context using self-attention.' },
+    { id: 'som', name: 'SOM', description: 'Suitable for discovering inherent cluster structures within data.' },
+    { id: 'rbfn', name: 'RBFNN', description: 'Suitable for fast learning and local approximation.' },
+    // { id: 'all', name: 'All', description: 'Train all models in parallel on the same data.' },
+])
 const loadingModels = ref(false)
 
 // 任务状态
@@ -583,13 +634,9 @@ const simplifiedRatioDisplay = computed(() => {
     return `${trainPart}:${validationPart}:${testPart}`
 })
 
-const isAllSelected = computed(() => {
-    return selectedModels.value.length === availableModels.value.length
-})
-
 const isFormValid = computed(() => {
     // 检查基本必填项
-    const basicValid = selectedModels.value.length > 0 &&
+    const basicValid = !!selectedModel.value &&
         hyperparameters.epoch &&
         hyperparameters.learningRate &&
         hyperparameters.earlyStopping
@@ -601,7 +648,7 @@ const isFormValid = computed(() => {
     } else if (strategy.value === 'upload') {
         filesValid = !!(uploadedFiles.train && uploadedFiles.validation && uploadedFiles.test)
     } else if (strategy.value === 'kfold') {
-        filesValid = !!(uploadedFiles.kfoldDataset && kfoldValue.value)
+        filesValid = !!(uploadedFiles.kfoldDataset && uploadedFiles.kfoldTest && kfoldValue.value)
     }
 
     return basicValid && filesValid
@@ -680,40 +727,7 @@ const updateRatios = () => {
 }
 
 const selectModel = (modelId: string) => {
-    const index = selectedModels.value.indexOf(modelId)
-    if (index > -1) {
-        selectedModels.value.splice(index, 1)
-    } else {
-        selectedModels.value.push(modelId)
-    }
-}
-
-const toggleModelSelection = (modelId: string) => {
-    const index = selectedModels.value.indexOf(modelId)
-    if (index > -1) {
-        selectedModels.value.splice(index, 1)
-    } else {
-        selectedModels.value.push(modelId)
-    }
-}
-
-const selectAllModels = () => {
-    if (isAllSelected.value) {
-        selectedModels.value = []
-    } else {
-        selectedModels.value = availableModels.value.map(model => model.id)
-    }
-}
-
-const isSelected = (modelId: string) => {
-    return selectedModels.value.includes(modelId)
-}
-
-const getModelNames = () => {
-    return selectedModels.value.map(id => {
-        const model = availableModels.value.find(m => m.id === id)
-        return model ? model.name : ''
-    }).join(', ')
+    selectedModel.value = modelId
 }
 
 const getModelName = (modelId: string) => {
@@ -739,7 +753,9 @@ const handleSubmit = async () => {
             batch_size: hyperparameters.batchSize,
             seed: hyperparameters.randomSeed,
             early_stopping: hyperparameters.earlyStopping,
-            label_count: hyperparameters.labelCount
+            label_count: hyperparameters.labelCount,
+            loss_function: hyperparameters.lossFunction,
+            optimizer_function: hyperparameters.optimizerFunction,
         }
 
         // 根据策略添加特定参数
@@ -751,17 +767,23 @@ const handleSubmit = async () => {
             }
         } else if (strategy.value === 'kfold') {
             parameters.kfold = kfoldValue.value
+            parameters.kfold_train_dataset_file_id = uploadedFileInfo.kfoldDataset?.id
+            parameters.kfold_test_dataset_file_id = uploadedFileInfo.kfoldTest?.id
+        } else if (strategy.value === 'upload') {
+            // 与 PHP modelTrain.php 一致：三份文件分别落盘为 _data / _val / _test
+            parameters.train_dataset_file_id = uploadedFileInfo.train?.id
+            parameters.validation_dataset_file_id = uploadedFileInfo.validation?.id
+            parameters.test_dataset_file_id = uploadedFileInfo.test?.id
         }
 
         // 准备训练任务数据
-        const modelType = selectedModels.value.length === 1 
-            ? selectedModels.value[0] 
-            : 'all'
+        const modelType = selectedModel.value
 
         const trainingParams = {
-            task_name: `Supervised_${getModelNames()}_${Date.now()}`,
+            task_name: `Supervised_${getModelName(modelType)}_${Date.now()}`,
             model_type: modelType,
             parameters: parameters,
+            // upload：三文件 ID 在 parameters 中传递；dataset_path 仅作兼容/占位（训练集）
             dataset_path: getDatasetPathWithFileIds(),
             email: notification.email
         }
@@ -821,8 +843,8 @@ const checkInput = () => {
 const resetForm = () => {
     // 重置表单数据
     strategy.value = 'split'
-    selectedModels.value = ['cnn']
-    kfoldValue.value = 5
+    selectedModel.value = 'cnn'
+    kfoldValue.value = 3
 
     // 重置文件上传状态
     Object.keys(uploadedFiles).forEach(key => {
@@ -849,6 +871,8 @@ const resetForm = () => {
     hyperparameters.batchSize = 32
     hyperparameters.randomSeed = 42
     hyperparameters.labelCount = 2
+    hyperparameters.lossFunction = 'crossentropy'
+    hyperparameters.optimizerFunction = 'adam'
 
     // 重置通知设置：如果用户已清空（emailTouched=true），则保持为空
     const nextEmail = emailTouched.value ? notification.email : (userEmailCache.value || '')
@@ -889,25 +913,8 @@ const handleClose = () => {
 
 // 加载可用模型
 const loadAvailableModels = async () => {
-    loadingModels.value = true
-    try {
-        const models = await trainingApi.getAvailableModels()
-        availableModels.value = models.map((model: any) => ({
-            id: model.model_type,
-            name: model.model_type.toUpperCase(),
-            description: model.description
-        }))
-    } catch (error) {
-        console.error('加载模型列表失败:', error)
-        // 使用默认模型列表作为后备
-        availableModels.value = [
-            { id: 'cnn', name: 'CNN', description: '卷积神经网络' },
-            { id: 'lstm', name: 'LSTM', description: '长短期记忆网络' },
-            { id: 'mlp', name: 'MLP', description: '多层感知机' }
-        ]
-    } finally {
-        loadingModels.value = false
-    }
+    // 模型列表按 PHP 页面固定，不再依赖后端返回顺序/内容
+    loadingModels.value = false
 }
 
 const getDatasetPath = () => {
@@ -916,7 +923,7 @@ const getDatasetPath = () => {
     } else if (strategy.value === 'upload') {
         return `${uploadedFiles.train},${uploadedFiles.validation},${uploadedFiles.test}`
     } else if (strategy.value === 'kfold') {
-        return uploadedFiles.kfoldDataset
+        return `${uploadedFiles.kfoldDataset},${uploadedFiles.kfoldTest}`
     }
     return ''
 }

@@ -9,6 +9,7 @@
 
 import json
 import logging
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ from api.models.job import Job, JobType, JobStatus
 from api.websocket.task_manager import task_status_manager
 from api.utils.security import security_validator
 from api.services.email_service import email_service
+from config.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -54,23 +56,43 @@ SUPERVISED_OPTIMIZERS = {
 
 # 无监督学习 VAE 配置
 VAE_LOSS_FUNCTIONS = {
-    0: "mse", 1: "mae", 2: "huber", 3: "smooth_l1", 4: "log_cosh",
-    5: "bce", 6: "bce_with_logits", 7: "kl_div", 8: "cosine_embedding",
-    9: "poisson_nll", 10: "gaussian_nll", 11: "beta_vae", 12: "info_vae", 13: "disentangled_vae",
-    "mse": "mse", "mae": "mae", "huber": "huber", "smooth_l1": "smooth_l1",
-    "log_cosh": "log_cosh", "bce": "bce", "bce_with_logits": "bce_with_logits",
-    "kl_div": "kl_div", "cosine_embedding": "cosine_embedding",
-    "poisson_nll": "poisson_nll", "gaussian_nll": "gaussian_nll",
-    "beta_vae": "beta_vae", "info_vae": "info_vae", "disentangled_vae": "disentangled_vae"
+    0: "mse",
+    1: "mae",
+    2: "smooth_l1",
+    3: "focal",
+    4: "contrastive",
+    5: "spectral",
+    6: "wasserstein",
+    7: "perceptual",
+    8: "cosine",
+    9: "kl_div",
+    10: "regularization",
+    11: "bce",
+    12: "huber",
+    13: "infonce",
+    "mse": "mse",
+    "mae": "mae",
+    "smooth_l1": "smooth_l1",
+    "focal": "focal",
+    "contrastive": "contrastive",
+    "spectral": "spectral",
+    "wasserstein": "wasserstein",
+    "perceptual": "perceptual",
+    "cosine": "cosine",
+    "kl_div": "kl_div",
+    "regularization": "regularization",
+    "bce": "bce",
+    "huber": "huber",
+    "infonce": "infonce",
 }
 
 # 无监督学习 DeepCluster 配置
 DEEPCLUSTER_LOSS_FUNCTIONS = {
-    0: "kmeans_ce", 1: "spectral", 2: "agglomerative", 3: "mean_shift",
-    4: "gmm", 5: "contrastive", 6: "triplet", 7: "reconstruction",
-    "kmeans_ce": "kmeans_ce", "spectral": "spectral", "agglomerative": "agglomerative",
-    "mean_shift": "mean_shift", "gmm": "gmm", "contrastive": "contrastive",
-    "triplet": "triplet", "reconstruction": "reconstruction"
+    0: "deepcluster", 1: "combined", 2: "center", 3: "contrastive",
+    4: "spectral", 5: "entropy", 6: "compactness", 7: "separation",
+    "deepcluster": "deepcluster", "combined": "combined", "center": "center",
+    "contrastive": "contrastive", "spectral": "spectral", "entropy": "entropy",
+    "compactness": "compactness", "separation": "separation"
 }
 
 UNSUPERVISED_OPTIMIZERS = {
@@ -375,9 +397,10 @@ class TrainingService:
 
             resolved_email = email if email is not None else parameters.get("email")
 
-            # 异步执行训练任务
+            # 异步执行训练任务（使用独立DB会话，避免请求会话关闭导致后台任务连接失效）
             asyncio.create_task(
-                self._execute_training(
+                self._execute_training_background(
+                    user_id=int(self.user.id),
                     job_id=job_id,
                     model_type=model_type,
                     training_type=training_type,
@@ -393,6 +416,35 @@ class TrainingService:
             logger.exception(f"创建训练任务失败: {e}")
             self.db.rollback()
             raise HTTPException(status_code=500, detail=f"创建训练任务失败: {e}")
+
+    async def _execute_training_background(
+        self,
+        user_id: int,
+        job_id: str,
+        model_type: str,
+        training_type: str,
+        parameters: Dict[str, Any],
+        dataset_path: Optional[str],
+        email: Optional[str] = None,
+    ):
+        bg_db = SessionLocal()
+        try:
+            bg_user = bg_db.query(User).filter(User.id == user_id).first()
+            if not bg_user:
+                raise RuntimeError(f"后台训练未找到用户: {user_id}")
+            bg_service = TrainingService(db=bg_db, user=bg_user)
+            await bg_service._execute_training(
+                job_id=job_id,
+                model_type=model_type,
+                training_type=training_type,
+                parameters=parameters,
+                dataset_path=dataset_path,
+                email=email,
+            )
+        except Exception as e:
+            raise
+        finally:
+            bg_db.close()
 
     async def _execute_training(
         self,
@@ -439,13 +491,48 @@ class TrainingService:
             jobs_dir.mkdir(parents=True, exist_ok=True)
             result_dir.mkdir(parents=True, exist_ok=True)
 
-            # 处理数据集文件
-            data_file = None
-            if dataset_path:
+            # 处理数据集文件（与 PHP modelTrain.php 对齐）
+            # - split/kfold：单文件 -> {job_id}_data.txt
+            # - upload：三文件 -> {job_id}_data.txt / _val.txt / _test.txt
+            strategy = parameters.get("strategy", "split")
+            if training_type in ("supervised", "unsupervised", "semi_supervised") and strategy == "upload":
+                train_fid = parameters.get("train_dataset_file_id")
+                val_fid = parameters.get("validation_dataset_file_id")
+                test_fid = parameters.get("test_dataset_file_id")
+                if train_fid and val_fid and test_fid:
+                    for fid, suffix in (
+                        (train_fid, "_data.txt"),
+                        (val_fid, "_val.txt"),
+                        (test_fid, "_test.txt"),
+                    ):
+                        src = self._validate_dataset_path(f"file://{fid}")
+                        shutil.copy2(str(src), str(jobs_dir / f"{job_id}{suffix}"))
+                elif dataset_path:
+                    src = self._validate_dataset_path(dataset_path)
+                    shutil.copy2(str(src), str(jobs_dir / f"{job_id}_data.txt"))
+                else:
+                    raise ValueError(
+                        "upload 策略需要分别上传训练集、验证集、测试集，或提供有效的 dataset_path"
+                    )
+            elif training_type in ("supervised", "unsupervised", "semi_supervised") and strategy == "kfold":
+                # 与 PHP modelTrain.php KFold 分支一致：训练集 -> _data.txt，测试集 -> _test.txt
+                train_fid = parameters.get("kfold_train_dataset_file_id")
+                test_fid = parameters.get("kfold_test_dataset_file_id")
+                if train_fid and test_fid:
+                    src_train = self._validate_dataset_path(f"file://{train_fid}")
+                    shutil.copy2(str(src_train), str(jobs_dir / f"{job_id}_data.txt"))
+                    src_test = self._validate_dataset_path(f"file://{test_fid}")
+                    shutil.copy2(str(src_test), str(jobs_dir / f"{job_id}_test.txt"))
+                elif dataset_path:
+                    src = self._validate_dataset_path(dataset_path)
+                    shutil.copy2(str(src), str(jobs_dir / f"{job_id}_data.txt"))
+                else:
+                    raise ValueError(
+                        "kfold 策略需要上传训练集与测试集（及 K 值），或提供有效的 dataset_path"
+                    )
+            elif dataset_path:
                 src = self._validate_dataset_path(dataset_path)
-                data_file = jobs_dir / f"{job_id}_data.txt"
-                import shutil
-                shutil.copy2(str(src), str(data_file))
+                shutil.copy2(str(src), str(jobs_dir / f"{job_id}_data.txt"))
 
             # 更新进度：加载数据
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
@@ -657,9 +744,14 @@ class TrainingService:
             "adam"
         )
 
-        # 不支持 SOM
-        if model_type.lower() == "som":
-            raise RuntimeError("当前暂不支持 SOM 模型训练")
+        normalized_model_type = str(model_type).lower()
+        supported_model_types = {"cnn", "lstm", "rnn", "mlp", "autoencoder", "transformer", "som", "rbfn", "all"}
+        if normalized_model_type not in supported_model_types:
+            logger.warning(
+                "[TRAIN][SUPERVISED] 非法 model_type=%s，回退为 cnn",
+                model_type
+            )
+            normalized_model_type = "cnn"
 
         # 模型到脚本映射
         base_code_map = {
@@ -669,6 +761,7 @@ class TrainingService:
             "mlp": "mlp",
             "autoencoder": "autoencoder",
             "transformer": "transformer",
+            "som": "som",
             "rbfn": "rbfn",
         }
 
@@ -694,7 +787,7 @@ class TrainingService:
                 "--type", train_type
             ]
 
-        if model_type.lower() == "all":
+        if normalized_model_type == "all":
             # all 模式：对多种模型循环训练
             for m_type, code_type in base_code_map.items():
                 sub_result_dir = result_dir / code_type
@@ -702,40 +795,47 @@ class TrainingService:
                 script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
                 
                 cmd = build_supervised_cmd(script_path, "all")
+                terminal_log = sub_result_dir / "terminal.log"
 
                 logger.info(f"[TRAIN][SUPERVISED][ALL] 开始执行训练脚本({m_type}): {' '.join(cmd)}")
+                with open(terminal_log, "w", encoding="utf-8") as log_fp:
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        cwd="/xp/www/AutoMATA",
+                        shell=False,
+                        timeout=3600
+                    )
+                    stdout_all.append(result.stdout or "")
+                if result.returncode != 0:
+                    raise RuntimeError(f"{m_type} 训练失败: {result.stderr}")
+        else:
+            code_type = base_code_map.get(normalized_model_type)
+            if not code_type:
+                raise RuntimeError(f"不支持的监督学习模型类型: {normalized_model_type}")
+
+            script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
+            
+            cmd = build_supervised_cmd(script_path, "single")
+            terminal_log = result_dir / "terminal.log"
+
+            logger.info(f"[TRAIN][SUPERVISED] 开始执行训练脚本: {' '.join(cmd)}")
+            with open(terminal_log, "w", encoding="utf-8") as log_fp:
                 result = subprocess.run(
                     cmd,
-                    capture_output=True,
-                    text=True,
+                    stdout=log_fp,
+                    stderr=subprocess.STDOUT,
                     cwd="/xp/www/AutoMATA",
                     shell=False,
                     timeout=3600
                 )
                 stdout_all.append(result.stdout or "")
-                if result.returncode != 0:
-                    raise RuntimeError(f"{m_type} 训练失败: {result.stderr}")
-        else:
-            code_type = base_code_map.get(model_type.lower())
-            if not code_type:
-                raise RuntimeError(f"不支持的监督学习模型类型: {model_type}")
-
-            script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
-            
-            cmd = build_supervised_cmd(script_path, "single")
-
-            logger.info(f"[TRAIN][SUPERVISED] 开始执行训练脚本: {' '.join(cmd)}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd="/xp/www/AutoMATA",
-                shell=False,
-                timeout=3600
-            )
-            stdout_all.append(result.stdout or "")
             if result.returncode != 0:
                 raise RuntimeError(result.stderr or "监督学习训练脚本执行失败")
+                # raise RuntimeError(
+                #     f"监督学习训练脚本执行失败（详情见日志: {terminal_log}）"
+                # )
 
     async def _execute_unsupervised_training_core(
         self,
@@ -788,7 +888,7 @@ class TrainingService:
             loss_function = _resolve_loss_function(
                 parameters.get("loss_function"),
                 DEEPCLUSTER_LOSS_FUNCTIONS,
-                "kmeans_ce"
+                "deepcluster"
             )
         else:
             loss_function = str(parameters.get("loss_function", "mse"))
@@ -812,7 +912,9 @@ class TrainingService:
         # 准备输出路径
         model_path = str(result_dir / f"{job_id}_{code_type}_model.pt")
         scaler_path = str(result_dir / f"{job_id}_{code_type}_scaler.pkl")
-        evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.json")
+        # 训练脚本会先将 evaluation_path 作为图像路径传给 plt.savefig，
+        # 再在脚本内部将 .png 派生为 .json 结果文件路径。
+        evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.png")
 
         python_exec = "/opt/anaconda/envs/automata/bin/python"
         script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
@@ -837,14 +939,20 @@ class TrainingService:
         ]
 
         logger.info(f"[TRAIN][UNSUPERVISED] 开始执行训练脚本: {' '.join(cmd)}")
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd="/xp/www/AutoMATA",
-            shell=False,
-            timeout=3600
-        )
+        terminal_log = result_dir / "terminal.log"
+        with open(terminal_log, "w", encoding="utf-8") as log_fp:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd="/xp/www/AutoMATA",
+                shell=False,
+                timeout=3600
+            )
+            log_fp.write(result.stdout or "")
+            if result.stderr:
+                log_fp.write("\n[stderr]\n")
+                log_fp.write(result.stderr)
         
         if result.returncode != 0:
             raise RuntimeError(result.stderr or "无监督学习训练脚本执行失败")
@@ -927,7 +1035,7 @@ class TrainingService:
         # 准备输出路径
         model_path = str(result_dir / f"{job_id}_{code_type}_model.pt")
         scaler_path = str(result_dir / f"{job_id}_{code_type}_scaler.pkl")
-        evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.json")
+        evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.png")
 
         python_exec = "/opt/anaconda/envs/automata/bin/python"
         script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
@@ -960,22 +1068,30 @@ class TrainingService:
 
         # 添加 Pseudo 特有参数
         if model_lower == "pseudo":
+            pseudo_beta = str(parameters.get("pseudo_beta", parameters.get("beta", 0.5)))
             confidence_threshold = str(parameters.get("confidence_threshold", 0.8))
             pseudo_ratio = str(parameters.get("pseudo_ratio", 0.5))
             cmd.extend([
+                "--beta", pseudo_beta,
                 "--confidence_threshold", confidence_threshold,
                 "--pseudo_ratio", pseudo_ratio
             ])
 
         logger.info(f"[TRAIN][SEMI-SUPERVISED] 开始执行训练脚本: {' '.join(cmd)}")
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd="/xp/www/AutoMATA",
-            shell=False,
-            timeout=3600
-        )
+        terminal_log = result_dir / "terminal.log"
+        with open(terminal_log, "w", encoding="utf-8") as log_fp:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd="/xp/www/AutoMATA",
+                shell=False,
+                timeout=3600
+            )
+            log_fp.write(result.stdout or "")
+            if result.stderr:
+                log_fp.write("\n[stderr]\n")
+                log_fp.write(result.stderr)
         
         if result.returncode != 0:
             raise RuntimeError(result.stderr or "半监督学习训练脚本执行失败")

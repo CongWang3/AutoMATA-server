@@ -4,16 +4,13 @@
 
 - 参考：`modelTrainPage_un.php`、`modelTrain_un.php`（与监督页同一套 **upload / split / kfold** 策略语义）。
 - 目标：**仅**要求「选择策略 + 上传文件」的前后端行为与 PHP 一致（含 Jobs 目录下 `{jobID}_data.txt` / `_val.txt` / `_test.txt` 的落盘规则）；**不要求**损失函数、优化器下拉与 PHP 选项完全一致，可继续使用当前 Vue 较长列表，只要传入脚本的值被 `VAE.py` / `deepcluster.py` 接受即可。
-- 非目标：重做无监督结果页、邮件、zip 等已有 FastAPI 链路（除非与落盘冲突）。
+- 非目标：重做无监督结果页、zip 等已有 FastAPI 链路（除非与本次策略/邮件转发需求冲突）。
 
 ## 实施范围（与用户约定对齐）
 
-- **主修改面**：`automata-web/src/views/ModelTrain/Unsupervised.vue` + 无监督任务对应后端（主要为 `backend/api/services/training_service.py` 中 `_execute_training` 数据集落盘段，及必要时 `create_unsupervised_task` 的校验与 `parameters` 透传）。
-- **重要依赖（现状）**：无监督页通过 `BaseTrainingForm` 渲染策略上传区。当前组件内 **`handleTrainSelected` / `handleValidationSelected` / `handleKfoldSelected` 仅打日志**，未调用上传接口，也未把各文件的 **数据库 `id`** 放进 `submit` 载荷；`split` 用的 `handleDatasetSelected` 与测试集用的 `handleTestSelected` 才会上传并记录路径。因此：**只改 `Unsupervised.vue` 与后端无法完成 `upload` / `kfold` 的多文件 ID 传递**，除非二选一：
-  1. **推荐**：对 `BaseTrainingForm.vue` 做**最小**补齐——与 `handleDatasetSelected`、`handleTestSelected` 同模式：`trainingApi.uploadFile`（或 `FileUploader` 的 `upload-complete` 解析出 `id`）写入 ref，在 `onSubmit` 时合并进 `submit`（字段名与监督一致：`train_dataset_file_id` 等，或统一用 `file_path` + 后端解析，但以前者与现后端分支一致为佳）。
-  2. **备选**：仅在 `Unsupervised.vue` 内复制监督页式上传与 ID 收集逻辑，弱化或绕过 `BaseTrainingForm` 的策略区——**不增新文件**，但重复代码多、维护成本高，**非首选**。
-
-以下「影响文件」在坚持「仅 Unsupervised + 后端」时，将 **(1)** 记为**允许的最小共享组件补丁**。
+- **仅改两处**：`automata-web/src/views/ModelTrain/Unsupervised.vue` + `backend/api/services/training_service.py`。
+- **明确不改**：`BaseTrainingForm.vue`（用户决策 B）。
+- **新增目标**：无监督训练任务的邮件转发链路与监督训练一致（任务成功/失败通知策略一致、触发点一致、参数透传一致）。
 
 ## PHP 行为摘要（契约）
 
@@ -25,60 +22,75 @@
 
 ## 方案对比
 
-### 方案 A（推荐）：后端 `_execute_training` 按 `training_type` + `strategy` 分支落盘（与监督同源风格）
+### 方案 A（推荐）：`Unsupervised.vue` 内复制监督页上传与参数组装；后端 `_execute_training` 统一落盘
 
-- **做法**：在 `TrainingService._execute_training` 中，对 `unsupervised`（及必要时 `semi_supervised` 若未来对齐）复用与 `supervised` 相同的分支结构：`upload` 三 ID、`kfold` 两 ID、`split`/默认单 `dataset_path`。
-- **参数契约**：与监督一致，在 `parameters` 中传递 `train_dataset_file_id` / `validation_dataset_file_id` / `test_dataset_file_id`（upload）、`kfold_train_dataset_file_id` / `kfold_test_dataset_file_id`（kfold）；`split` 仍可用顶层 `dataset_path: file://...`。
-- **优点**：单一落盘入口、与监督维护方式一致、易测。
-- **缺点**：`parameters` 字段名与监督共用，需在文档中写清「无监督也使用相同键」。
+- **做法**：在 `Unsupervised.vue` 内新增并管理独立上传控件与上传状态（train/val/test、kfold_train/kfold_test、split_dataset），用 `trainingApi.uploadFile` 获取文件记录 `id/file_path`；提交时按监督页同名参数传到后端。后端在 `_execute_training` 中对 `unsupervised` 复用监督落盘分支（upload 三文件、kfold 两文件、split 单文件）。
+- **参数契约**：与监督一致，`parameters` 传 `train_dataset_file_id` / `validation_dataset_file_id` / `test_dataset_file_id` / `kfold_train_dataset_file_id` / `kfold_test_dataset_file_id`；`dataset_path` 在 split 必传，在 upload/kfold 可传训练集路径作兼容。
+- **优点**：满足「不改 BaseTrainingForm」约束；后端保持统一落盘入口。
+- **缺点**：`Unsupervised.vue` 会引入一段与监督相似的上传逻辑，存在重复。
 
-### 方案 B：仅在 `_execute_unsupervised_training_core` 内复制文件
+### 方案 B：仅依赖当前 `BaseTrainingForm` 输出，后端做兜底解析
 
-- **优点**：改动局部在 unsupervised 核心。
-- **缺点**：与监督 `_execute_training` 重复路径逻辑，易漂移。
+- **优点**：前端改动少。
+- **缺点**：`BaseTrainingForm` 当前不会给出 upload/kfold 所需多文件 ID，无法稳定对齐 PHP 契约，风险高。
 
 ### 方案 C：前端把多文件拼进 `dataset_path` 字符串由后端解析
 
 - **缺点**：脆弱、与现有 `file://` 安全校验不一致，**不推荐**。
 
+### 方案 D：改 `BaseTrainingForm` 补齐上传字段
+
+- **优点**：复用最好、重复最少。
+- **缺点**：与用户“B：不碰 BaseTrainingForm”冲突，不采用。
+
 **结论：采用方案 A。**
 
 ## 详细设计
 
-### 1）前端（主：`Unsupervised.vue`；配套：见上文「实施范围」）
+### 1）前端（`Unsupervised.vue`，不改共享表单）
 
-- **策略 UI**：继续用现有 `BaseTrainingForm`，与 PHP 对齐的配置调整包括：打开三文件上传（例如 `showTestUpload: true`，与监督默认一致）、`split` / `kfold` 区块保持组件已有布局。
-- **提交**：`Unsupervised.vue` 的 `handleSubmit` 在 `upload` / `kfold` 下从表单 `submit` 载荷读取各文件 ID（依赖 `BaseTrainingForm` 补齐后提供的字段），写入 `parameters`：`train_dataset_file_id`、`validation_dataset_file_id`、`test_dataset_file_id`、`kfold_train_dataset_file_id`、`kfold_test_dataset_file_id`；`split` 继续传 `ratio` 与 `dataset_path`（`file://...`）。`dataset_path` 与监督类似可作为训练集占位/兼容。
-- **校验**：在 `handleSubmit`（及必要时后端）校验各策略必填项与 K 值范围，与 PHP 语义一致。
+- **策略 UI**：在 `Unsupervised.vue` 内新增监督同款策略区（split/upload/kfold）与上传器，不再依赖 `BaseTrainingForm` 内置策略上传块产出多文件字段。
+- **上传逻辑**：每个上传位独立调用 `trainingApi.uploadFile`，保存 `uploadedFileInfo.*.id` 与 `uploadedFileInfo.*.file_path`；切换策略时清空历史上传状态，避免串用。
+- **提交组装**：`handleSubmit` 按策略写入监督同名参数键：`train_dataset_file_id`、`validation_dataset_file_id`、`test_dataset_file_id`、`kfold_train_dataset_file_id`、`kfold_test_dataset_file_id`；split 继续传 `ratio` + `dataset_path`。
+- **校验**：前端提交前做策略必填检查（upload 三文件、kfold 两文件+K、split 单文件+比例），并保留后端二次校验。
 
 ### 2）后端（`training_service.py`）
 
 - 在 `_execute_training` 的「处理数据集文件」段，将当前仅针对 `supervised` 的 `upload` / `kfold` 分支**扩展**为：`training_type in ("supervised", "unsupervised")` 时执行相同落盘逻辑（`semi_supervised` 保持现状，除非另有 spec）。
 - `split` 与默认：非上述分支时，维持「单 `dataset_path` → `_data.txt`」。
 - 不改变无监督脚本命令拼装位置（仍在 `_execute_unsupervised_training_core`），仅保证进入脚本前 Jobs 目录文件布局与 PHP 一致。
+- 参数键名约定：前端/任务参数保持 `kfold`；脚本命令层按现有实现映射为 `--k_folds`。
 
-### 3）损失 / 优化器
+### 3）邮件转发（与监督一致）
+
+- **后端触发点**：无监督任务沿用与监督相同的邮件发送触发逻辑（成功邮件与失败邮件），不创建额外异步通道。
+- **前端透传**：`Unsupervised.vue` 提交时确保 `email` 与监督一致透传到任务创建接口；空邮箱时不发邮件。
+- **一致性要求**：邮件主题、正文模板、附件/下载链接策略与监督保持一致（由现有 `email_service` 与训练服务公共逻辑负责）。
+- 若现有 `email_service` 模板已公共复用，则本次不改模板实现，仅校验无监督调用路径与监督触发点一致。
+
+### 4）损失 / 优化器
 
 - 不修改 PHP 枚举；前端继续提交当前 `loss_function` / `optimizer`（或 `optimizer_function`）字符串。
 - 若某选项导致脚本报错，视为「脚本不支持」而非本 spec 范围；可在后续单独做白名单或文档说明。
 
-### 4）错误处理
+### 5）错误处理
 
 - 缺少必填文件或 ID 时：创建任务前或执行前 `ValueError` / `HTTPException`，信息明确（与监督同类文案风格）。
 
-### 5）测试与验收
+### 6）测试与验收
 
 - 手工：三种策略各跑一轮，检查 `download_data/Jobs/{jobId}/` 下文件是否与 PHP 表一致。
+- 文件断言清单：`upload` 必有 `_data/_val/_test`；`split` 仅有 `_data`（无 `_val/_test`）；`kfold` 必有 `_data/_test`（无 `_val`）。
+- 手工：无监督成功与失败各触发一轮，验证邮件行为与监督任务一致（有邮箱发送、无邮箱不发送、文案模板一致）。
 - 自动化（可选）：对 `_execute_training` 中 unsupervised+upload 的复制逻辑做单元测试（mock DB 文件记录）。
 
 ## 影响文件（计划）
 
 - **必选**：`automata-web/src/views/ModelTrain/Unsupervised.vue`、`backend/api/services/training_service.py`
-- **强烈推荐（最小配套）**：`automata-web/src/components/Training/BaseTrainingForm.vue`（补齐 train/val/kfold 训练集的上传与 submit 载荷中的 ID 字段）
 
 ## 实施顺序
 
-1. （若采纳配套）补齐 `BaseTrainingForm` 中多文件上传与 ID 进入 `submit` 载荷。  
-2. 调整 `Unsupervised.vue` 的 `formConfig` 与 `handleSubmit`（含校验与 `parameters` / `dataset_path`）。  
-3. 扩展 `_execute_training` 落盘分支，使 `unsupervised` 与 `supervised` 共享同一套 `upload` / `kfold` 复制逻辑。  
-4. 联调与最小测试。
+1. 在 `Unsupervised.vue` 内补齐监督式上传与策略状态管理（不改 `BaseTrainingForm`）。  
+2. 调整 `handleSubmit` 参数组装与策略校验。  
+3. 扩展 `_execute_training` 落盘分支，使 `unsupervised` 与 `supervised` 共享同一套 `upload` / `kfold` 复制逻辑，并确认邮件发送链路一致。  
+4. 联调与最小测试（含邮件路径验证）。

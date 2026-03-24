@@ -80,10 +80,7 @@ class Classifier(nn.Module):  # 16, 8, 2
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
@@ -214,6 +211,8 @@ def load_model(autoencoder, classifier, autoencoder_path, classifier_path):
     classifier.load_state_dict(torch.load(classifier_path))
     print("model load successfully!")
 
+
+
 # 一审
 def set_random_seed(seed):
     """设置随机种子确保可重现性"""
@@ -343,7 +342,7 @@ if __name__ == '__main__':
     
 
     # 加载训练数据集
-    X_train, Y_train = load_data("train", jobID=jobID)
+    X_train, Y_train, feature_indices = load_data("train", jobID=jobID, feature_method=feature_method)
     
     # 自动检测实际类别数量，覆盖命令行参数
     actual_num_classes = len(torch.unique(Y_train))
@@ -373,7 +372,8 @@ if __name__ == '__main__':
 
             # define model
             autoencoder = Autoencoder(input_dim, hidden_size_1, hidden_size_2, hidden_size_3, lr, dropout_rate).to(device)
-            classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function).to(device)  # 输出分类概率
+            classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function, r_method, r_weight).to(device)  # 输出分类概率
+
 
             # begin training
             val_loss_s = []  # 存储每个 epoch 的损失值
@@ -445,11 +445,12 @@ if __name__ == '__main__':
 
     else:
         autoencoder = Autoencoder(input_dim, hidden_size_1, hidden_size_2, hidden_size_3, lr, dropout_rate).to(device)
-        classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function).to(device)  # 输出分类概率
+        # classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function).to(device)  # 输出分类概率
+        classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function, r_method, r_weight).to(device)  # 输出分类概率
         
         train_dataset =  torch.utils.data.TensorDataset(X_train, Y_train)
         train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-        X_val, Y_val = load_data("validate", jobID=jobID)
+        X_val, Y_val, _ = load_data("validate", jobID=jobID, feature_indices=feature_indices)
         val_dataset =  torch.utils.data.TensorDataset(X_val, Y_val)
         val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
 
@@ -548,7 +549,8 @@ if __name__ == '__main__':
         'hidden_size_2': hidden_size_2,
         'hidden_size_3': hidden_size_3,
         'learning_rate': lr,
-        'dropout_rate': dropout_rate
+        'dropout_rate': dropout_rate,
+        'feature_indices': feature_indices
     }, savename)
 
     torch.save({
@@ -558,20 +560,15 @@ if __name__ == '__main__':
         'output_size': output_size,
         'learning_rate': lr,
         'loss_function': loss_function,
-        'optimizer_function': optimizer_function
+        'optimizer_function': optimizer_function,
+        'r_method': r_method,
+        'r_weight': r_weight,
+        'feature_indices': feature_indices
     }, savename_cls)
 
 
-
-    '''加载模型'''
-    # with open(savename, 'rb') as infile:
-    #     autoencoder = pickle.load(infile)
-    # with open(savename_cls, 'rb') as infile:
-    #     classifier = pickle.load(infile)
-
-    '''测试模型'''
-    # 加载测试数据集
-    X_test, Y_test = load_data("test", jobID=jobID)
+    '''test model'''
+    X_test, Y_test, _ = load_data("test", jobID=jobID, feature_indices=feature_indices)
     test_dataset =  torch.utils.data.TensorDataset(X_test, Y_test)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
     acc, precision, recall, f1 = test(dataloader=test_loader, autoencoder = autoencoder, classifier = classifier)

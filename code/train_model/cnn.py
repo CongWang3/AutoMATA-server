@@ -143,10 +143,7 @@ class Cnn(nn.Module):
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 

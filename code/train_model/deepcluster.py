@@ -1217,7 +1217,7 @@ def kfold_cross_validation(args, k_folds=5):
     # print("Split training-testing set...")
     # Prepare data
     dim, train_loader, _, test_loader, scaler = prepare_data(
-        args.random_seed, args.batch_size, args.ratio, args.jobid, args.jobid, k_folds
+        args.random_seed, args.batch_size, args.ratio, args.jobid, k_folds
     )
     
     

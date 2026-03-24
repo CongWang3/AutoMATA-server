@@ -1,12 +1,12 @@
 <template>
   <div class="data-analysis-index">
     <div class="page-header">
-      <h1>数据分析</h1>
-      <p>选择一个分析工具开始您的数据分析之旅</p>
+      <h1>Data Analysis</h1>
+      <p>Select an analysis tool to start your data analysis journey</p>
     </div>
     
     <!-- 可视化分析 -->
-    <h2 class="section-title">可视化分析</h2>
+    <h2 class="section-title">Visualization Analysis</h2>
     <el-row :gutter="20">
       <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="item in visualizationTools" :key="item.path">
         <el-card shadow="hover" class="tool-card" @click="$router.push(item.path)">
@@ -17,7 +17,7 @@
     </el-row>
     
     <!-- 富集与网络分析 -->
-    <h2 class="section-title">富集与网络分析</h2>
+    <h2 class="section-title">Enrichment and Network Analysis</h2>
     <el-row :gutter="20">
       <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="item in enrichmentTools" :key="item.path">
         <el-card shadow="hover" class="tool-card" @click="$router.push(item.path)">
@@ -28,12 +28,12 @@
     </el-row>
     
     <!-- 综合分析 -->
-    <h2 class="section-title">综合分析</h2>
+    <h2 class="section-title">Comprehensive Analysis</h2>
     <el-row :gutter="20">
       <el-col :xs="24" :sm="12" :md="8" :lg="6">
         <el-card shadow="hover" class="tool-card" @click="$router.push('/data-analysis/comprehensive')">
-          <h3>综合差异表达分析</h3>
-          <p>一键完成差异分析、火山图、聚类热图、GO/KEGG富集分析</p>
+          <h3>Comprehensive Differential Expression Analysis</h3>
+          <p>One-click workflow for differential expression, volcano plot, cluster heatmap, and GO/KEGG enrichment</p>
         </el-card>
       </el-col>
     </el-row>
@@ -44,56 +44,51 @@
 const visualizationTools = [
   {
     path: '/data-analysis/pca',
-    title: 'PCA分析',
-    description: '主成分分析，用于样本间差异和聚类的可视化'
+    title: 'Principal Component Analysis',
+    description: 'PCA can assess inter-group differences and intra-group sample duplication'
   },
   {
     path: '/data-analysis/heatmap',
-    title: '相关性热图',
-    description: '展示样本或基因之间的相关性矩阵'
+    title: 'Correlation Heatmap',
+    description: 'Correlation analysis mainly focuses on sample differences between groups and sample duplication within groups'
   },
   {
     path: '/data-analysis/volcano',
-    title: '火山图',
-    description: '展示差异表达基因的统计显著性和倍数变化'
+    title: 'Volcano Plot with GSEA',
+    description: 'Volcano plot can quickly and intuitively identify genes with statistically significant multiplicative differences'
   },
   {
     path: '/data-analysis/venn',
-    title: '韦恩图',
-    description: '展示多个基因集之间的交集和并集关系'
+    title: 'Venn Plot',
+    description: 'Venn Plot demonstrates the intersecting and non-intersecting parts of the data, often used in genetic screening'
   },
   {
     path: '/data-analysis/cluster',
-    title: '差异基因聚类热图',
-    description: '对差异表达基因进行层次聚类分析'
-  },
-  {
-    path: '/data-analysis/dumbbell',
-    title: '哑铃图',
-    description: '展示基因在不同条件下的表达变化'
+    title: 'Differential Gene Cluster Heatmap',
+    description: 'Expression of differential genes in different samples'
   },
   {
     path: '/data-analysis/dumbbell-bar',
-    title: '哑铃柱状图',
-    description: '结合哑铃图和柱状图展示表达变化'
+    title: 'Dumbbell with Bar Plot',
+    description: 'Dumbbell with Bar Plot can clearly see the differences between data'
   }
 ]
 
 const enrichmentTools = [
   {
     path: '/data-analysis/go',
-    title: 'GO富集分析',
-    description: '基因本体论富集分析，包括BP、MF、CC三个类别'
+    title: 'GO Enrichment',
+    description: 'GO Enrichment is used to determine the enrichment of a set list of genes in gene ontology'
   },
   {
     path: '/data-analysis/kegg',
-    title: 'KEGG富集分析',
-    description: 'KEGG通路富集分析，揭示基因参与的生物学通路'
+    title: 'KEGG Enrichment',
+    description: 'KEGG Enrichment annotates genes for pathways and analyses the major metabolic and signal transduction pathways'
   },
   {
     path: '/data-analysis/ppi',
-    title: 'PPI网络分析',
-    description: '蛋白质-蛋白质相互作用网络构建与可视化'
+    title: 'PPI Network',
+    description: 'Protein-Protein Interaction Network is used to visualize functional relationships and interactions between proteins in a cellular context'
   }
 ]
 </script>

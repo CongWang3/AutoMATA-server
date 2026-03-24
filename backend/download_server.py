@@ -36,7 +36,6 @@ MAX_SKEW = 60  # 允许的时间偏差，单位秒
 DEBUG_LOG_PATH = "/xp/www/.cursor/debug-d7d881.log"
 DEBUG_SESSION_ID = "d7d881"
 
-
 def _debug_append_ndjson(hypothesis_id: str, location: str, message: str, data: Optional[dict] = None) -> None:
     """Append a single NDJSON line for debug mode."""
     if data is None:
@@ -57,6 +56,44 @@ def _debug_append_ndjson(hypothesis_id: str, location: str, message: str, data: 
     except Exception:
         # Never break download flow because of logging.
         return
+
+
+# 示例文件根目录（用于 /example/{file_path} 下载）
+EXAMPLE_DIR = (Path(__file__).resolve().parent.parent / "example").resolve()
+
+
+async def handle_example_file(request: web.Request) -> web.FileResponse:
+    """
+    处理示例文件下载（/example/{file_path}）
+    - 使用 EXAMPLE_DIR 受控目录
+    - 防止路径遍历
+    """
+    file_path = request.match_info.get("file_path", "")
+
+    try:
+        target_path = (EXAMPLE_DIR / file_path).resolve()
+    except Exception:
+        raise web.HTTPNotFound(text="文件不存在")
+
+    # 防止路径遍历：必须落在 EXAMPLE_DIR 内
+    if not (target_path == EXAMPLE_DIR or EXAMPLE_DIR in target_path.parents):
+        raise web.HTTPNotFound(text="文件不存在")
+
+    if not target_path.exists() or not target_path.is_file():
+        raise web.HTTPNotFound(text="文件不存在")
+
+    origin = request.headers.get("Origin", "")
+    allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
+
+    return web.FileResponse(
+        path=str(target_path),
+        headers={
+            "Content-Disposition": f'attachment; filename="{target_path.name}"',
+            "Cache-Control": "no-cache",
+            "Access-Control-Allow-Origin": allow_origin,
+        },
+    )
+
 
 # 全局数据库引擎（复用连接池）
 engine: Engine = create_engine(settings.DATABASE_URL)
@@ -446,11 +483,11 @@ def create_app() -> web.Application:
     
     # 路由
     app.router.add_get('/health', health_check)
+    app.router.add_get('/example/{file_path:.*}', handle_example_file)
     app.router.add_get('/download/{file_id}', handle_download)
     app.router.add_options('/download/{file_id}', handle_cors_preflight)
     app.router.add_get('/job-result/{job_id}', handle_job_result_download)
     app.router.add_options('/job-result/{job_id}', handle_cors_preflight)
-    
     return app
 
 
