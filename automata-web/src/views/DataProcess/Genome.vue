@@ -5,9 +5,9 @@
       ref="formComponent"
       title="基因组数据处理"
       subtitle="Genome Data Processing"
-      file-label="1. 上传基因表达数据"
+      file-label="上传基因表达数据"
       file-tip="仅支持 txt、csv、tsv 格式的文件"
-      nomenclature-label="2. 基因命名方式"
+      nomenclature-label="基因命名方式"
       nomenclature-placeholder="请选择基因命名方式"
       :nomenclature-options="[
         { label: 'Gene ID', value: 'GeneID' },
@@ -26,7 +26,7 @@
       example-note="示例数据包含多个物种的GeneID和TPM值"
       @submit-success="handleSuccess"
     />
-    <!-- 示例文件在这： /xp/www/AutoMATA/automata-web/dist/example/test_geneid_multi_species.txt -->
+    <!-- 示例文件在这：/xp/www/AutoMATA/automata-web/public/example/test_geneid_multi_species.txt -->
     <!-- 任务结果弹窗 -->
     <el-dialog
       v-model="showResultDialog"

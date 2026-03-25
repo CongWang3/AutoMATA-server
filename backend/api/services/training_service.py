@@ -719,6 +719,9 @@ class TrainingService:
         --output_size <int>        # 分类数
         --random_seed <int>        # 随机种子
         --type <str>               # "single"或"all"
+        可选（按模型追加）:
+        --r_method --r_weight --dropout_rate --feature_method
+        SOM 仅支持 --feature_method
         """
         # 使用辅助函数处理数据集策略
         kfold_value = _get_kfold_value(parameters)
@@ -731,6 +734,47 @@ class TrainingService:
         bs = str(parameters.get("batch_size", 32))
         labels = str(parameters.get("label_count", parameters.get("labels", 2)))
         seed = str(parameters.get("seed", parameters.get("random_seed", 42)))
+
+        def _norm_opt_str(val: Any) -> Optional[str]:
+            if val is None:
+                return None
+            s = str(val).strip()
+            if not s or s.lower() in ("none", "null"):
+                return None
+            return s
+
+        r_method = _norm_opt_str(
+            parameters.get("r_method", parameters.get("regularization_method"))
+        )
+        try:
+            r_weight_f = float(
+                parameters.get("r_weight", parameters.get("regularization_weight", 0.0))
+            )
+        except (TypeError, ValueError):
+            r_weight_f = 0.0
+        try:
+            dropout_rate_f = float(
+                parameters.get("dropout_rate", parameters.get("dropout", 0.0))
+            )
+        except (TypeError, ValueError):
+            dropout_rate_f = 0.0
+        feature_method = _norm_opt_str(
+            parameters.get("feature_method", parameters.get("feature_selection_method"))
+        )
+
+        def _append_supervised_extra_args(cmd_list: list, model_key: str) -> None:
+            """按脚本能力追加 CLI；与 code/train_model 各模型 argparse 一致。"""
+            mk = str(model_key).lower()
+            if mk == "som":
+                if feature_method:
+                    cmd_list.extend(["--feature_method", feature_method])
+                return
+            if r_method:
+                cmd_list.extend(["--r_method", r_method])
+            cmd_list.extend(["--r_weight", str(r_weight_f)])
+            cmd_list.extend(["--dropout_rate", str(dropout_rate_f)])
+            if feature_method:
+                cmd_list.extend(["--feature_method", feature_method])
         
         # 使用映射解析损失函数和优化器
         loss_function = _resolve_loss_function(
@@ -768,9 +812,9 @@ class TrainingService:
         python_exec = "/opt/anaconda/envs/automata/bin/python"
         stdout_all: list[str] = []
 
-        def build_supervised_cmd(script_path: str, train_type: str) -> list:
+        def build_supervised_cmd(script_path: str, train_type: str, extras_for: str) -> list:
             """构建监督学习命令行参数"""
-            return [
+            cmd = [
                 python_exec,
                 script_path,
                 "--jobID", str(job_id),
@@ -784,8 +828,10 @@ class TrainingService:
                 "--optimizer_function", optimizer,
                 "--output_size", labels,
                 "--random_seed", seed,
-                "--type", train_type
+                "--type", train_type,
             ]
+            _append_supervised_extra_args(cmd, extras_for)
+            return cmd
 
         if normalized_model_type == "all":
             # all 模式：对多种模型循环训练
@@ -794,7 +840,7 @@ class TrainingService:
                 sub_result_dir.mkdir(parents=True, exist_ok=True)
                 script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
                 
-                cmd = build_supervised_cmd(script_path, "all")
+                cmd = build_supervised_cmd(script_path, "all", m_type)
                 terminal_log = sub_result_dir / "terminal.log"
 
                 logger.info(f"[TRAIN][SUPERVISED][ALL] 开始执行训练脚本({m_type}): {' '.join(cmd)}")
@@ -817,7 +863,7 @@ class TrainingService:
 
             script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
             
-            cmd = build_supervised_cmd(script_path, "single")
+            cmd = build_supervised_cmd(script_path, "single", normalized_model_type)
             terminal_log = result_dir / "terminal.log"
 
             logger.info(f"[TRAIN][SUPERVISED] 开始执行训练脚本: {' '.join(cmd)}")

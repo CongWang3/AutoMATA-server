@@ -71,7 +71,7 @@ ven <- venndetail(final_list)
 
 result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/venn", sep="")
 
-if (type=="Venn"){
+if (type=="venn"){
     # 传统venn图
     pdf(paste(result_path, ".pdf",sep=""), width = 8, height = 8)
     plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5,cex=3)
@@ -96,7 +96,7 @@ if (type=="Venn"){
     svg(paste(result_path,".svg",sep=""), width = 8, height = 8)
     plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5,cex=3)
     dev.off()
-}else if (type=="Vennpie"){
+}else if (type=="vennpie"){
     # Venn饼图
     pdf(paste(result_path,".pdf",sep=""), width = 8, height = 8)
     plot(ven, type="vennpie")
@@ -121,7 +121,7 @@ if (type=="Venn"){
     svg(paste(result_path,".svg",sep=""), width = 8, height = 8)
     plot(ven, type="vennpie")
     dev.off()  # 关闭设备以保存文件
-}else if (type=="Barplot") {
+}else if (type=="barplot") {
     # barplot
     p1 <- dplot(ven, order = TRUE, textsize = 4)
     for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){

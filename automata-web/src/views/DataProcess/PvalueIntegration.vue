@@ -17,7 +17,7 @@
         class="pvalue-form"
       >
         <!-- 1. 组学文件 1 -->
-        <el-form-item label="1. 上传组学文件 1" prop="file1">
+        <el-form-item label="上传组学文件 1" prop="file1">
           <el-upload
             class="upload-block"
             drag
@@ -51,7 +51,7 @@
         </el-form-item>
 
         <!-- 2. 组学文件 2 -->
-        <el-form-item label="2. 上传组学文件 2" prop="file2">
+        <el-form-item label="上传组学文件 2" prop="file2">
           <el-upload
             class="upload-block"
             drag
@@ -85,7 +85,7 @@
         </el-form-item>
 
         <!-- 3. 组学文件 3 -->
-        <el-form-item label="3. 上传组学文件 3" prop="file3">
+        <el-form-item label="上传组学文件 3" prop="file3">
           <el-upload
             class="upload-block"
             drag
@@ -119,7 +119,7 @@
         </el-form-item>
 
         <!-- 4. 方法选择 -->
-        <el-form-item label="4. 选择 pvalue 整合方法" prop="method">
+        <el-form-item label="选择 pvalue 整合方法" prop="method">
           <el-select
             v-model="formData.method"
             placeholder="请选择 pvalue 整合方法"

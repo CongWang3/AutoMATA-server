@@ -18,13 +18,13 @@ import type { AnalysisField } from '@/api/analysis'
 const analysisFields: AnalysisField[] = [
   {
     type: 'radio',
-    name: 'plot',
+    name: 'plot_type',
     label: 'Choose plot type',
-    defaultValue: 'Venn',
+    defaultValue: 'venn',
     options: [
-      { label: 'Classic venn plot', value: 'Venn' },
-      { label: 'Vennpie plot', value: 'Vennpie' },
-      { label: 'Bar plot', value: 'Barplot' }
+      { label: 'Classic venn plot', value: 'venn' },
+      { label: 'Vennpie plot', value: 'vennpie' },
+      { label: 'Bar plot', value: 'barplot' }
     ]
   }
 ]

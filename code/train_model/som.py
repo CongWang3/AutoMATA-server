@@ -187,6 +187,7 @@ if __name__ == '__main__':
     parser.add_argument("--output_size", default=2, type=int)  # 分类数
     parser.add_argument("--type", default="single", type=str)  # all表示运行所有模型，修改result路径；single表示只运行当前模型
     parser.add_argument('--random_seed', type=int, default=42, help='随机种子')  # 一审新增
+    parser.add_argument('--feature_method', type=str, default=None, help='Feature selection method: PCC, SPEARMAN, CHI2, RF, etc.')
 
 
     args = parser.parse_args()
@@ -201,6 +202,7 @@ if __name__ == '__main__':
     optimizer_function = args.optimizer_function
     output_size = args.output_size  # 分类数
     type = args.type
+    feature_method = args.feature_method if args.feature_method and args.feature_method.strip() else None
 
     print('jobID =',jobID)
     print('model = SOM')
@@ -215,6 +217,7 @@ if __name__ == '__main__':
     print('label number =', output_size)
     random_seed = args.random_seed  # 一审新增
     print('random seed =', random_seed)  # 一审新增
+    print('feature selection method =', feature_method if feature_method else 'none')
     set_random_seed(random_seed)  # 一审新增
 
 
@@ -231,7 +234,7 @@ if __name__ == '__main__':
         # https://blog.csdn.net/u013685264/article/details/126488633
         skf = StratifiedKFold(n_splits=kfold)  # 保证每次跑的时候分的数据都是一致的，注意 shuffle=False（默认）
         # 加载数据集
-        X_train_total, Y_train_total = load_data("train", jobID=jobID)
+        X_train_total, Y_train_total, feature_indices = load_data("train", jobID=jobID, feature_method=feature_method)
             
         # 自动检测实际类别数量，覆盖命令行参数
         actual_num_classes = len(torch.unique(torch.LongTensor(Y_train_total)))
@@ -257,7 +260,12 @@ if __name__ == '__main__':
             # 初始化模型
             som = MiniSom(size, size, M, sigma=3, learning_rate=lr, neighborhood_function='bubble')
             # 初始化权值
-            som.pca_weights_init(X_train)
+            try:
+                som.pca_weights_init(X_train)
+            except ValueError as e:
+                # MiniSom 的 pca 初始化要求特征维度至少 2；当特征选择导致剩余维度不足时自动回退。
+                print(f"[SOM] pca_weights_init failed ({e}); fallback to random_weights_init.")
+                som.random_weights_init(X_train)
             # 模型训练
             som.train_batch(X_train, iterations, verbose=False)
 
@@ -282,7 +290,7 @@ if __name__ == '__main__':
     else:
         # 不用 kfold
         # 加载训练数据集
-        X_train, Y_train = load_data("train", jobID=jobID)
+        X_train, Y_train, feature_indices = load_data("train", jobID=jobID, feature_method=feature_method)
             
         # 自动检测实际类别数量，覆盖命令行参数
         actual_num_classes = len(torch.unique(torch.LongTensor(Y_train)))
@@ -292,7 +300,7 @@ if __name__ == '__main__':
             output_size = actual_num_classes
             
         X_train, Y_train = np.array(X_train), np.array(Y_train)
-        X_val, Y_val = load_data("validate", jobID=jobID)
+        X_val, Y_val, _ = load_data("validate", jobID=jobID, feature_indices=feature_indices)
         X_val, Y_val = np.array(X_val), np.array(Y_val)
         # 样本数量
         N = X_train.shape[0]
@@ -308,7 +316,12 @@ if __name__ == '__main__':
         # 初始化模型
         som = MiniSom(size, size, M, sigma=3, learning_rate=lr, neighborhood_function='bubble')
         # 初始化权值
-        som.pca_weights_init(X_train)
+        try:
+            som.pca_weights_init(X_train)
+        except ValueError as e:
+            # MiniSom 的 pca 初始化要求特征维度至少 2；当特征选择导致剩余维度不足时自动回退。
+            print(f"[SOM] pca_weights_init failed ({e}); fallback to random_weights_init.")
+            som.random_weights_init(X_train)
         # 模型训练
         som.train_batch(X_train, iterations, verbose=False)
 
@@ -325,6 +338,11 @@ if __name__ == '__main__':
         print("validation acc = {}, precision = {}, recall = {}, f1 = {}".format(round(acc,4), round(precision,4), round(recall,4), round(f1,4)))
 
 
+    if feature_indices is not None:
+        print("selected feature indices (1-based):", feature_indices + 1)
+    else:
+        print("feature selection: none (all features)")
+
     print("Done!")  # 训练结束
 
     
@@ -339,12 +357,23 @@ if __name__ == '__main__':
         os.makedirs(result_path)
         
     savename = result_path+'model.pth'
-    savename_2 = result_path+'winmap.pkl'
+    # savename_2 = result_path+'winmap.pkl'
 
-    with open(savename_2, 'wb') as outfile:
-        pickle.dump(winmap, outfile)
-    with open(savename, 'wb') as outfile:
-        pickle.dump(som, outfile)
+    # with open(savename_2, 'wb') as outfile:
+    #     pickle.dump(winmap, outfile)
+    # with open(savename, 'wb') as outfile:
+    #     pickle.dump(som, outfile)
+    checkpoint = {
+        'som': som,
+        'winmap': winmap,
+        'feature_indices': feature_indices,
+        'output_size': output_size,
+        'learning_rate': lr,
+        'epochs': epochs,
+        'kfold': kfold,
+        'batch_size': batch_size,
+    }
+    torch.save(checkpoint, savename)
 
     # torch.save({
     #     'epochs': epochs,
@@ -363,7 +392,7 @@ if __name__ == '__main__':
     
 
     # 加载测试数据集
-    X_test, Y_test = load_data("test", jobID=jobID)
+    X_test, Y_test, _ = load_data("test", jobID=jobID, feature_indices=feature_indices)
     
     # 进行分类预测
     y_pred = classify(som, X_test, winmap)

@@ -25,6 +25,7 @@ from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from sklearn.metrics import precision_recall_fscore_support
 from utils.earlystopping import EarlyStopping  # 保存性能最好的模型torch.save
+from utils.regularization import apply_regularization_loss, apply_max_norm_constraint, create_optimizer_with_reg
 import pickle
 
 # 计算运行时间
@@ -65,6 +66,7 @@ def train(dataloader, model):
         # print('output.shape =', output.shape)  # torch.Size([34, 2])
 
         loss = model.criterion(output, Y_data)  # label.squeeze().long() # 通过交叉熵损失函数计算损失值loss
+        loss = apply_regularization_loss(loss, model, model.r_method, model.r_weight)
 
         train_loss += loss.item()  # 计算损失
         true_label_list.append(Y_data.cpu().detach().numpy())
@@ -74,6 +76,8 @@ def train(dataloader, model):
         model.optimier.zero_grad()  # 梯度值清零
         loss.backward()  # 反向传播计算得到每个参数的梯度值
         model.optimier.step()  # 根据梯度更新网络参数
+        if model.r_method == "maxnorm":
+            apply_max_norm_constraint(model, model.r_weight)
 
     y_true = np.concatenate(true_label_list)
     y_pred = np.concatenate(pred_label_list)
@@ -135,13 +139,16 @@ def test(dataloader, model):
 
 
 class RBFN(nn.Module):
-    def __init__(self,centers_dim,out_dim,centers,sigma):
+    def __init__(self,centers_dim,out_dim,centers,sigma,dropout_rate=0.0, r_method=None, r_weight=0.0):
         super(RBFN,self).__init__()
         self.flatten = nn.Flatten()#变成二维的
         self.centers_dim=centers_dim
         self.out_dim=out_dim
+        self.r_method = r_method
+        self.r_weight = r_weight
         self.centers = nn.Parameter(centers)
         self.sigma = nn.Parameter(sigma)
+        self.dropout = nn.Dropout(dropout_rate)
         self.linear = nn.Linear(self.centers_dim, self.out_dim)
 
         self.learning_rate = lr
@@ -150,24 +157,17 @@ class RBFN(nn.Module):
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if out_dim == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=out_dim)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=out_dim)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
-        if optimizer_function == "adam":
-            self.optimier = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimier = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)
-        elif optimizer_function == "rmsprop":
-            self.optimier = optim.RMSprop(self.parameters(), lr=self.learning_rate)
+        self.optimier = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
  
     def forward(self,X):
         x= self.flatten(X)
         distance = torch.cdist(x, self.centers)
         gauss = torch.exp(-distance ** 2 / (2 * self.sigma ** 2))
+        gauss = self.dropout(gauss)
         y=self.linear(gauss)
         # 一审
         if self.loss_function == "nllloss":
@@ -206,6 +206,10 @@ if __name__ == "__main__":
     parser.add_argument("--output_size", default=2, type=int)  # 分类数
     parser.add_argument("--type", default="single", type=str)  # all表示运行所有模型，修改result路径；single表示只运行当前模型
     parser.add_argument('--random_seed', type=int, default=42, help='random seed')  # 一审新增
+    parser.add_argument('--r_method', type=str, default=None, help='Regularization method: l1, l2, maxnorm, sparsity, or none')
+    parser.add_argument('--r_weight', type=float, default=0.0, help='Regularization weight/strength')
+    parser.add_argument('--dropout_rate', type=float, default=0.0, help='Dropout rate')
+    parser.add_argument('--feature_method', type=str, default=None, help='Feature selection method: PCC, SPEARMAN, CHI2, RF, etc.')
 
 
     args = parser.parse_args()
@@ -220,6 +224,10 @@ if __name__ == "__main__":
     optimizer_function = args.optimizer_function
     out_dim = args.output_size  # 分类数
     type = args.type
+    r_method = args.r_method if args.r_method and args.r_method != "none" else None
+    r_weight = args.r_weight
+    dropout_rate = args.dropout_rate
+    feature_method = args.feature_method if args.feature_method and args.feature_method.strip() else None
 
     print('jobID =',jobID)
     print('model = RBFN')
@@ -234,6 +242,10 @@ if __name__ == "__main__":
     print('label number =', out_dim)
     random_seed = args.random_seed  # 一审新增
     print('random seed =', random_seed)  # 一审新增
+    print('regularization method =', r_method if r_method else 'none')
+    print('regularization weight =', r_weight)
+    print('dropout rate =', dropout_rate)
+    print('feature selection method =', feature_method if feature_method else 'none')
     set_random_seed(random_seed)  # 一审新增
 
     # 可以设置大点
@@ -259,14 +271,14 @@ if __name__ == "__main__":
     
 
     '''训练模型'''
-    X_train, Y_train = load_data("train", jobID=jobID)
+    X_train, Y_train, feature_indices = load_data("train", jobID=jobID, feature_method=feature_method)
     
     # 自动检测实际类别数量，覆盖命令行参数
     actual_num_classes = len(torch.unique(Y_train))
-    if actual_num_classes != output_size:
-        print(f"警告：用户设置的类别数 ({output_size}) 与数据实际类别数 ({actual_num_classes}) 不一致")
+    if actual_num_classes != out_dim:
+        print(f"警告：用户设置的类别数 ({out_dim}) 与数据实际类别数 ({actual_num_classes}) 不一致")
         print(f"自动使用实际类别数：{actual_num_classes}")
-        output_size = actual_num_classes
+        out_dim = actual_num_classes
     
     # n_samples should be >= n_clusters
     if (centers_dim > X_train.shape[0]):
@@ -291,7 +303,7 @@ if __name__ == "__main__":
             centers,sigma=P_centers(X_train,centers_dim)
             
             # define model
-            model= RBFN(centers_dim,out_dim,centers,sigma).to(device)
+            model= RBFN(centers_dim,out_dim,centers,sigma,dropout_rate, r_method, r_weight).to(device)
 
             val_acc_s = []  # 存储每个 epoch 的准确率
             val_loss_s = []  # 存储每个 epoch 的损失值
@@ -336,7 +348,7 @@ if __name__ == "__main__":
         train_dataset =  torch.utils.data.TensorDataset(X_train, Y_train)
         train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 
-        X_val, Y_val = load_data("validate", jobID=jobID)
+        X_val, Y_val, _ = load_data("validate", jobID=jobID, feature_indices=feature_indices)
         val_dataset =  torch.utils.data.TensorDataset(X_val, Y_val)
         val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
 
@@ -344,7 +356,7 @@ if __name__ == "__main__":
         #聚类产生聚类中心等
         centers,sigma=P_centers(X_train,centers_dim)
         
-        model= RBFN(centers_dim,out_dim,centers,sigma).to(device)
+        model= RBFN(centers_dim,out_dim,centers,sigma,dropout_rate, r_method, r_weight).to(device)
 
         val_acc_s = []  # 存储每个 epoch 的准确率
         val_loss_s = []  # 存储每个 epoch 的损失值
@@ -405,9 +417,13 @@ if __name__ == "__main__":
         'centers_dim': centers_dim,
         'input_dim': input_dim,
         'out_dim': out_dim,
+        'dropout_rate': dropout_rate,
+        'r_method': r_method,
+        'r_weight': r_weight,
         'learning_rate': lr,
         'centers': centers,
-        'sigma': sigma
+        'sigma': sigma,
+        'feature_indices': feature_indices
     }, savename)
 
     '''加载模型'''
@@ -416,7 +432,7 @@ if __name__ == "__main__":
 
     '''测试模型'''
     # 加载测试数据集
-    X_test, Y_test = load_data("test", jobID=jobID)
+    X_test, Y_test, _ = load_data("test", jobID=jobID, feature_indices=feature_indices)
     test_dataset =  torch.utils.data.TensorDataset(X_test, Y_test)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
 

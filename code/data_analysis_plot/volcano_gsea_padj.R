@@ -26,7 +26,7 @@ option_list <- list(
   make_option(c("-c", "--top"), type="integer", default=30, action="store", help="This parameter shows the higher-order gene that needs to be displayed"),  # 200  200  30  30
   make_option(c("-d", "--top_fc_thr"), type="double", default=0.09, action="store", help="This parameter is the threshold of logFC for the higher-order gene"),  # 0  2  0.09  0.09
   make_option(c("-e", "--top_padj_thr"), type="double", default=0.15, action="store", help="This parameter shows is the threshold of padj for the higher-order gene"),  # 0.01  0.01 0.15  0.15
-  make_option(c("-f", "--gene_sig"), type="character", default="DKK1,AXL,CTSV,CCND1,CDK6,NKX3-1,CST6",action="store", help="This argument is showing marked genes")  # KRAS,FOSL1,MYC  B2M  CXCL3,CXCL8
+  make_option(c("-f", "--gene_sig"), type="character", default="",action="store", help="This argument is showing marked genes")  # KRAS,FOSL1,MYC  B2M  CXCL3,CXCL8
   # BLCA: all_sig: CDK6,WNT5A,SFRP1,HPSE  up_genes：CDK6,HPSE
   # PAAD: all_sig: TGFB2,NKX3–1,TNFSF18,CDK6,WNT11,GCG,WNT7A,DKK1,KLK7,AXL,CTSV,CCND1  up_genes：DKK1,AXL,CTSV,CCND1,CDK6,NKX3-1
   # STAD: all_sig: CDKN2A,DLD,GLS,MTF1  up_genes：DKK1,CST6

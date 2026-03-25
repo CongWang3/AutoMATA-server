@@ -354,6 +354,55 @@
                                                     <option value="rmsprop">RMSprop</option>
                                                 </select>
                                             </div>
+
+                                            <div class="col-md-4" v-if="modelExtraCaps.regularization">
+                                                <label class="form-label">Regularization method</label>
+                                                <select
+                                                    class="form-select"
+                                                    v-model="hyperparameters.regularizationMethod"
+                                                >
+                                                    <option value="">None</option>
+                                                    <option value="l1">L1</option>
+                                                    <option value="l2">L2</option>
+                                                    <option value="maxnorm">Max norm</option>
+                                                    <option value="sparsity">Sparsity</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4" v-if="modelExtraCaps.regularization">
+                                                <label class="form-label">Regularization weight / strength</label>
+                                                <input
+                                                    type="number"
+                                                    class="form-control"
+                                                    v-model.number="hyperparameters.regularizationWeight"
+                                                    step="0.0001"
+                                                    min="0"
+                                                >
+                                            </div>
+                                            <div class="col-md-4" v-if="modelExtraCaps.dropout">
+                                                <label class="form-label">Dropout rate</label>
+                                                <input
+                                                    type="number"
+                                                    class="form-control"
+                                                    v-model.number="hyperparameters.dropoutRate"
+                                                    step="0.01"
+                                                    min="0"
+                                                    max="1"
+                                                >
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">Feature selection method</label>
+                                                <select
+                                                    class="form-select"
+                                                    v-model="hyperparameters.featureMethod"
+                                                    :disabled="!modelExtraCaps.featureSelection"
+                                                >
+                                                    <option value="">None</option>
+                                                    <option value="PCC">Pearson</option>
+                                                    <option value="SPEARMAN">Spearman</option>
+                                                    <option value="CHI2">Chi-squared</option>
+                                                    <option value="RF">Random Forest</option>
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -528,6 +577,20 @@ const hyperparameters = reactive({
     labelCount: 2,
     lossFunction: 'crossentropy',
     optimizerFunction: 'adam',
+    /** 与后端 / 脚本一致：空字符串表示 None */
+    regularizationMethod: '',
+    regularizationWeight: 0.0,
+    dropoutRate: 0.0,
+    featureMethod: '',
+})
+
+/** 当前监督模型是否支持正则 / Dropout / 特征选择（与 train_model 脚本对齐） */
+const modelExtraCaps = computed(() => {
+    const id = selectedModel.value
+    if (id === 'som') {
+        return { regularization: false, dropout: false, featureSelection: true }
+    }
+    return { regularization: true, dropout: true, featureSelection: true }
 })
 
 const notification = reactive({
@@ -758,6 +821,16 @@ const handleSubmit = async () => {
             optimizer_function: hyperparameters.optimizerFunction,
         }
 
+        const caps = modelExtraCaps.value
+        parameters.r_method = caps.regularization
+            ? (hyperparameters.regularizationMethod || null)
+            : null
+        parameters.r_weight = caps.regularization ? hyperparameters.regularizationWeight : 0.0
+        parameters.dropout_rate = caps.dropout ? hyperparameters.dropoutRate : 0.0
+        parameters.feature_method = caps.featureSelection
+            ? (hyperparameters.featureMethod || null)
+            : null
+
         // 根据策略添加特定参数
         if (strategy.value === 'split') {
             parameters.split_ratio = {
@@ -873,6 +946,10 @@ const resetForm = () => {
     hyperparameters.labelCount = 2
     hyperparameters.lossFunction = 'crossentropy'
     hyperparameters.optimizerFunction = 'adam'
+    hyperparameters.regularizationMethod = ''
+    hyperparameters.regularizationWeight = 0.0
+    hyperparameters.dropoutRate = 0.0
+    hyperparameters.featureMethod = ''
 
     // 重置通知设置：如果用户已清空（emailTouched=true），则保持为空
     const nextEmail = emailTouched.value ? notification.email : (userEmailCache.value || '')

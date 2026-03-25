@@ -449,6 +449,117 @@ async def handle_job_result_download(request: web.Request) -> web.StreamResponse
         return web.Response(text="下载服务内部错误", status=500)
 
 
+def _resolve_data_analysis_result_file(job_id: str, filename: str) -> Tuple[Optional[Path], Optional[str]]:
+    """
+    解析数据分析任务结果目录下的单个文件路径.
+    - 仅允许 job_type = data_analysis
+    - filename 必须为安全文件名（无路径分隔符）
+    """
+    if not job_id or not filename:
+        return None, None
+    name = urllib.parse.unquote(filename)
+    if ".." in name or "/" in name or "\\" in name:
+        return None, None
+    safe_name = Path(name).name
+    if not safe_name:
+        return None, None
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT result_file FROM jobs WHERE job_id = :job_id "
+                    "AND job_type = 'data_analysis'"
+                ),
+                {"job_id": job_id},
+            ).fetchone()
+        if not row or not row[0]:
+            return None, None
+        base = Path(row[0])
+        if base.is_dir():
+            result_dir = base.resolve()
+            target = (result_dir / safe_name).resolve()
+            if target.parent != result_dir:
+                return None, None
+            if not target.is_file():
+                return None, None
+            return target, safe_name
+        if base.is_file():
+            if safe_name != base.name:
+                return None, None
+            return base.resolve(), safe_name
+        return None, None
+    except Exception as e:
+        logger.exception(f"[ANALYSIS-RESULT] 解析路径失败: {e}")
+        return None, None
+
+
+async def handle_analysis_result_download(request: web.Request) -> web.StreamResponse:
+    """
+    GET /analysis-result/{job_id}/{filename}
+    供前端直接拉取数据分析产物（与 AnalysisAPI.getResultFileUrl 约定一致）。
+    注意：当前实现不包含 uid/token 鉴权，仅适用于内网或后续由网关统一鉴权；
+    公网部署请改为签名链接或走主 API。
+    """
+    try:
+        job_id = request.match_info.get("job_id", "")
+        filename = request.match_info.get("filename", "")
+        file_path, out_name = _resolve_data_analysis_result_file(job_id, filename)
+        if not file_path or not out_name:
+            return web.Response(text="文件不存在", status=404)
+
+        media_type_map = {
+            ".pdf": "application/pdf",
+            ".png": "image/png",
+            ".svg": "image/svg+xml",
+            ".tiff": "image/tiff",
+            ".tif": "image/tiff",
+            ".jpeg": "image/jpeg",
+            ".jpg": "image/jpeg",
+            ".bmp": "image/bmp",
+            ".txt": "text/plain",
+        }
+        suffix = file_path.suffix.lower()
+        content_type = media_type_map.get(suffix, "application/octet-stream")
+        inline_types = {".png", ".jpg", ".jpeg", ".svg", ".gif", ".bmp", ".webp"}
+        disposition = "inline" if suffix in inline_types else "attachment"
+
+        file_size = file_path.stat().st_size
+        encoded_filename = urllib.parse.quote(out_name, safe="")
+        origin = request.headers.get("Origin", "")
+        allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
+
+        response = web.StreamResponse(
+            status=200,
+            headers={
+                "Content-Type": content_type,
+                "Content-Length": str(file_size),
+                "Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_filename}",
+                "Cache-Control": "no-cache",
+                "Access-Control-Allow-Origin": allow_origin,
+            },
+        )
+        await response.prepare(request)
+
+        chunk_size = 64 * 1024
+        rate_limit = 5 * 1024 * 1024
+        chunks_per_second = rate_limit // chunk_size
+        delay_per_chunk = 1.0 / chunks_per_second if chunks_per_second > 0 else 0.01
+
+        with open(file_path, "rb") as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                await response.write(chunk)
+                await asyncio.sleep(delay_per_chunk)
+
+        logger.info(f"[ANALYSIS-RESULT] 传输完成: {file_path}")
+        return response
+    except Exception as e:
+        logger.exception(f"[ANALYSIS-RESULT] 下载服务内部错误: {e}")
+        return web.Response(text="下载服务内部错误", status=500)
+
+
 async def handle_cors_preflight(request: web.Request) -> web.Response:
     """
     处理 CORS 预检请求
@@ -488,6 +599,8 @@ def create_app() -> web.Application:
     app.router.add_options('/download/{file_id}', handle_cors_preflight)
     app.router.add_get('/job-result/{job_id}', handle_job_result_download)
     app.router.add_options('/job-result/{job_id}', handle_cors_preflight)
+    app.router.add_get('/analysis-result/{job_id}/{filename}', handle_analysis_result_download)
+    app.router.add_options('/analysis-result/{job_id}/{filename}', handle_cors_preflight)
     return app
 
 

@@ -17,7 +17,7 @@
         class="integration-form"
       >
         <!-- 1. 表型数据 -->
-        <el-form-item label="1. 上传表型数据" prop="phenoFile">
+        <el-form-item label="上传表型数据" prop="phenoFile">
           <el-upload
             class="upload-block"
             drag
@@ -51,7 +51,7 @@
         </el-form-item>
 
         <!-- 2. 基因组数据 -->
-        <el-form-item label="2. 上传基因组数据" prop="omics1File">
+        <el-form-item label="上传基因组数据" prop="omics1File">
           <el-upload
             class="upload-block"
             drag
@@ -85,7 +85,7 @@
         </el-form-item>
 
         <!-- 3. 转录组数据 -->
-        <el-form-item label="3. 上传转录组数据" prop="omics2File">
+        <el-form-item label="上传转录组数据" prop="omics2File">
           <el-upload
             class="upload-block"
             drag
@@ -119,7 +119,7 @@
         </el-form-item>
 
         <!-- 4. 蛋白组数据 -->
-        <el-form-item label="4. 上传蛋白组数据" prop="omics3File">
+        <el-form-item label="上传蛋白组数据" prop="omics3File">
           <el-upload
             class="upload-block"
             drag

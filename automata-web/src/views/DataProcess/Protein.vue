@@ -5,9 +5,9 @@
       ref="formComponent"
       title="蛋白质数据处理"
       subtitle="Protein Data Processing"
-      file-label="1. 上传蛋白质表达数据"
+      file-label="上传蛋白质表达数据"
       file-tip="仅支持 txt、csv、tsv 格式的文件"
-      nomenclature-label="2. 蛋白质命名方式"
+      nomenclature-label="蛋白质命名方式"
       nomenclature-placeholder="请选择蛋白质命名方式"
       :nomenclature-options="[
         { label: 'UniProt Entry', value: 'Entry' },

@@ -6,9 +6,9 @@
       title="转录组数据处理"
       subtitle="Transcriptome Data Processing"
       tag-type="success"
-      file-label="1. 上传 mRNA 表达数据"
+      file-label="上传 mRNA 表达数据"
       file-tip="仅支持 txt、csv、tsv 格式的文件"
-      nomenclature-label="2. mRNA 命名方式"
+      nomenclature-label="mRNA 命名方式"
       nomenclature-placeholder="请选择 mRNA 命名方式"
       :nomenclature-options="[
         { label: 'Refseq Accession (e.g. NM_001422116)', value: 'Refseq' },

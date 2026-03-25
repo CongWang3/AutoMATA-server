@@ -35,6 +35,7 @@ import torch
 from sklearn.metrics import accuracy_score,recall_score,precision_score,f1_score,matthews_corrcoef,confusion_matrix,roc_auc_score,classification_report,multilabel_confusion_matrix,hamming_loss
 from utils.plot_utils import plotfig
 from utils.earlystopping import EarlyStopping  # 保存性能最好的模型torch.save
+from utils.regularization import apply_regularization_loss, apply_max_norm_constraint, create_optimizer_with_reg
 
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 torch.manual_seed(2022)
@@ -60,6 +61,7 @@ def train(dataloader, model):
         # print('Y_data.shape =', Y_data.shape)  # torch.Size([17])
         
         loss = model.criterion(output, Y_data)  # label.squeeze().long() # 通过交叉熵损失函数计算损失值loss
+        loss = apply_regularization_loss(loss, model, model.r_method, model.r_weight)
 
         train_loss += loss.item()  # 计算损失
         true_label_list.append(Y_data.cpu().detach().numpy())
@@ -68,6 +70,8 @@ def train(dataloader, model):
         model.optimier.zero_grad()  # 梯度值清零
         loss.backward()  # 反向传播计算得到每个参数的梯度值
         model.optimier.step()  # 根据梯度更新网络参数
+        if model.r_method == "maxnorm":
+            apply_max_norm_constraint(model, model.r_weight)
 
     y_true = np.concatenate(true_label_list)
     y_pred = np.concatenate(pred_label_list)
@@ -131,9 +135,11 @@ def test(dataloader, model):
 
 
 class MLPModel(nn.Module):
-    def __init__(self, n_inputs,  linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function):
+    def __init__(self, n_inputs,  linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function, r_method=None, r_weight=0.0):
         super(MLPModel, self).__init__()
         self.output_size = output_size  # 记录flatten层的输出维度
+        self.r_method = r_method
+        self.r_weight = r_weight
         # input to first hidden layer
         self.hidden1 = Linear(n_inputs, linear_size_1)
         kaiming_uniform_(self.hidden1.weight, nonlinearity='relu')
@@ -156,19 +162,11 @@ class MLPModel(nn.Module):
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
-        if optimizer_function == "adam":
-            self.optimier = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimier = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)
-        elif optimizer_function == "rmsprop":
-            self.optimier = optim.RMSprop(self.parameters(), lr=self.learning_rate)
+        self.optimier = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
  
     def forward(self, X):
         # input to first hidden layer
@@ -216,7 +214,10 @@ if __name__ == "__main__":
     parser.add_argument("--output_size", default=2, type=int)  # 分类数
     parser.add_argument("--type", default="single", type=str)  # all表示运行所有模型，修改result路径；single表示只运行当前模型
     parser.add_argument('--random_seed', type=int, default=42, help='random seed')  # 一审新增
-
+    parser.add_argument('--r_method', type=str, default=None, help='Regularization method: l1, l2, maxnorm, sparsity, or none')
+    parser.add_argument('--r_weight', type=float, default=0.0, help='Regularization weight/strength')
+    parser.add_argument('--dropout_rate', type=float, default=0.0, help='Dropout rate')
+    parser.add_argument('--feature_method', type=str, default=None, help='Feature selection method: PCC, SPEARMAN, CHI2, RF.')
 
     args = parser.parse_args()
     jobID = args.jobID
@@ -244,13 +245,18 @@ if __name__ == "__main__":
     print('label number =', output_size)
     random_seed = args.random_seed  # 一审新增
     print('random seed =', random_seed)  # 一审新增
+    r_method = args.r_method if args.r_method and args.r_method != "none" else None
+    r_weight = args.r_weight
+    dropout_rate = args.dropout_rate
+    feature_method = args.feature_method if args.feature_method and args.feature_method.strip() else None
+    print('regularization method =', r_method if r_method else 'none')
+    print('regularization weight =', r_weight)
+    print('dropout rate =', dropout_rate)
+    print('feature selection method =', feature_method if feature_method else 'none')
     set_random_seed(random_seed)  # 一审新增
-
 
     linear_size_1 = 64
     linear_size_2 = 32
-    dropout_rate = 0.0  # dropout层的比例
-
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -271,8 +277,8 @@ if __name__ == "__main__":
         process(jobID=jobID, ratio=ratio)
     
 
-    # 加载训练数据集
-    X_train, Y_train = load_data("train", jobID=jobID)
+    # 加载训练数据集（可选特征选择）
+    X_train, Y_train, feature_indices = load_data("train", jobID=jobID, feature_method=feature_method)
 
     # 自动检测实际类别数量，覆盖命令行参数
     actual_num_classes = len(torch.unique(Y_train))
@@ -304,7 +310,7 @@ if __name__ == "__main__":
             val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
 
             # define model
-            mlp = MLPModel(input_size, linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function).to(device)
+            mlp = MLPModel(input_size, linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function, r_method, r_weight).to(device)
             val_acc_s = []  # 存储每个 epoch 的准确率
             val_loss_s = []  # 存储每个 epoch 的损失值
             train_acc_s = []  # 存储每个 epoch 的准确率
@@ -344,10 +350,10 @@ if __name__ == "__main__":
     else:
         # 不用kfold
         # 加载验证数据集
-        mlp = MLPModel(input_size, linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function).to(device)
+        mlp = MLPModel(input_size, linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function, r_method, r_weight).to(device)
         train_dataset =  torch.utils.data.TensorDataset(X_train, Y_train)
         train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-        X_val, Y_val = load_data("validate", jobID=jobID)
+        X_val, Y_val, _ = load_data("validate", jobID=jobID, feature_indices=feature_indices)
         val_dataset =  torch.utils.data.TensorDataset(X_val, Y_val)
         val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
 
@@ -400,7 +406,10 @@ if __name__ == "__main__":
         'linear_size_1': linear_size_1,
         'linear_size_2': linear_size_2,
         'learning_rate': lr,
-        'dropout_rate': dropout_rate
+        'dropout_rate': dropout_rate,
+        'r_method': r_method,
+        'r_weight': r_weight,
+        'feature_indices': feature_indices,
     }, savename)
 
 
@@ -425,7 +434,7 @@ if __name__ == "__main__":
 
     '''测试模型'''
     # 加载测试数据集
-    X_test, Y_test = load_data("test", jobID=jobID)
+    X_test, Y_test, _ = load_data("test", jobID=jobID, feature_indices=feature_indices)
     test_dataset =  torch.utils.data.TensorDataset(X_test, Y_test)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
 

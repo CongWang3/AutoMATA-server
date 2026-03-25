@@ -1,7 +1,7 @@
 <template>
   <AnalysisForm
     title="PCA Analysis"
-    subtitle="主成分分析"
+    subtitle="Principal Component Analysis"
     :fields="analysisFields"
     :on-submit="handleSubmit"
     example-data-url="/example/draw_example/pca_example.txt"
@@ -75,7 +75,7 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'select',
     name: 'method',
-    label: 'PERMANOVA distance method',
+    label: 'PERMANOVA distance',
     defaultValue: 'bray',
     options: permanovaMethods,
     visible: (formValues) => formValues.permanova === 'TRUE'

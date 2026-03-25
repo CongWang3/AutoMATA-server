@@ -61,7 +61,7 @@
 
         <!-- 第二个文件上传（可选，用于综合分析等） -->
         <el-form-item 
-          v-if="multipleFiles" 
+          v-if="showSecondFile" 
           :label="secondFileLabel || '2. Upload second file'" 
           prop="secondFile"
         >
@@ -75,8 +75,8 @@
               :limit="1"
               :on-change="handleSecondFileChange"
               :on-exceed="handleExceed"
-              :accept="acceptTypes"
-              :before-upload="beforeUpload"
+              :accept="secondAcceptTypes || acceptTypes"
+              :before-upload="beforeSecondUpload"
             >
               <el-icon class="el-icon--upload"><upload-filled /></el-icon>
               <div class="el-upload__text">
@@ -85,7 +85,9 @@
               <template #tip>
                 <div class="upload-tip-container">
                   <div class="tip-content">
-                    <span class="file-types">{{ fileTip || '仅支持 txt、csv、tsv 格式的文件' }}</span>
+                    <span class="file-types">
+                      {{ secondFileTip || fileTip || '仅支持 txt、csv、tsv 格式的文件' }}
+                    </span>
                     <el-button 
                       v-if="secondExampleUrl" 
                       type="primary" 
@@ -176,7 +178,7 @@
         </el-form-item>
 
         <!-- 提交按钮 -->
-        <el-form-item>
+        <el-form-item class="analysis-form-centered-row">
           <el-button 
             type="primary" 
             @click="submitForm"
@@ -190,7 +192,10 @@
         </el-form-item>
 
         <!-- 示例图片展示 -->
-        <el-form-item v-if="exampleImageUrl">
+        <el-form-item
+          v-if="exampleImageUrl"
+          class="analysis-form-centered-row"
+        >
           <div class="example-image-container">
             <p class="example-label">Example Figure is as follows:</p>
             <img :src="exampleImageUrl" :alt="title" class="example-image" />
@@ -206,62 +211,16 @@
       :close-on-click-modal="false"
       @close="handleDialogClose"
     >
-      <TaskResultDisplay
+      <AnalysisResultPanel
         v-if="showResultDialog && currentJobId"
         :job-id="currentJobId"
-        :params="jobParams"
-        :initial-status="jobStatus"
-        :initial-progress="jobProgress"
-        :compact="true"
-        :hide-data-type="true"
-        :hide-organism="true"
-        nomenclature-label="Analysis Type"
-        @status-change="handleStatusChange"
+        :status="jobStatus"
+        :progress="jobProgress"
+        :analysis-type-label="jobParams.gene_nomenclature"
+        :param-rows="submittedAnalysisParams"
+        :result-files="analysisResults"
+        :error-message="analysisLastError"
       />
-
-      <!-- 分析结果展示（图片预览 + 下载） -->
-      <div v-if="analysisResults.length > 0" class="analysis-results">
-        <el-divider>分析结果</el-divider>
-        <div class="result-files">
-          <div v-for="file in analysisResults" :key="file.filename" class="result-file-item">
-            <!-- 图片预览 -->
-            <div v-if="isImageFile(file.filename)" class="image-preview">
-              <el-image
-                :src="file.url"
-                :preview-src-list="[file.url]"
-                fit="contain"
-                class="result-image"
-              />
-            </div>
-            <!-- 文件下载 -->
-            <div class="file-download">
-              <span class="file-name">{{ file.filename }}</span>
-              <el-button 
-                type="primary" 
-                size="small"
-                @click="downloadFile(file)"
-              >
-                下载 {{ file.format.toUpperCase() }}
-              </el-button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 多格式下载按钮组 -->
-        <div v-if="hasImageResults" class="download-formats">
-          <el-divider content-position="left">下载其他格式</el-divider>
-          <el-button-group>
-            <el-button 
-              v-for="format in downloadFormats" 
-              :key="format" 
-              size="small"
-              @click="downloadInFormat(format)"
-            >
-              {{ format.toUpperCase() }}
-            </el-button>
-          </el-button-group>
-        </div>
-      </div>
 
       <template #footer>
         <div class="dialog-footer">
@@ -277,9 +236,10 @@ import { ref, reactive, computed, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules, UploadFile } from 'element-plus'
-import TaskResultDisplay from './TaskResultDisplay.vue'
+import AnalysisResultPanel from './AnalysisResultPanel.vue'
 import { webSocketService } from '@/api/websocket'
-import type { AnalysisField, AnalysisResultFile } from '@/api/analysis'
+import { AnalysisAPI, type AnalysisField, type AnalysisResultFile } from '@/api/analysis'
+import type { AnalysisParamRow } from './AnalysisResultPanel.vue'
 
 // ==================== Props 定义 ====================
 
@@ -300,25 +260,38 @@ interface Props {
   exampleNote?: string
   /** 是否支持多文件上传 */
   multipleFiles?: boolean
+  /**
+   * 第二个文件是否显示（可选）
+   * - 若提供函数，则根据当前表单 formValues 决定
+   * - 若未提供，则回退到 multipleFiles
+   */
+  secondFileVisible?: boolean | ((formValues: Record<string, any>) => boolean)
   /** 第二个文件上传标签 */
   secondFileLabel?: string
   /** 第二个示例数据URL */
   secondExampleUrl?: string
   /** 第二个示例文件名 */
   secondExampleFileName?: string
+  /** 提交到后端的第二个文件字段名 */
+  secondFileFieldName?: string
   /** 主文件上传标签 */
   fileLabel?: string
   /** 文件类型提示 */
   fileTip?: string
   /** 接受的文件类型 */
   acceptTypes?: string
+  /** 第二个文件接受的后缀（用于可选第二文件场景） */
+  secondAcceptTypes?: string
   /** 示例图片URL */
   exampleImageUrl?: string
+  /** 第二个文件上传区域提示文案 */
+  secondFileTip?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   multipleFiles: false,
-  acceptTypes: '.txt,.csv,.tsv'
+  acceptTypes: '.txt,.csv,.tsv',
+  secondFileFieldName: 'file2'
 })
 
 const emit = defineEmits<{
@@ -337,6 +310,10 @@ const currentJobId = ref('')
 const jobStatus = ref('WAITING')
 const jobProgress = ref(0)
 const analysisResults = ref<AnalysisResultFile[]>([])
+/** 提交快照：结果弹窗中展示与 AnalysisField 一致的参数行 */
+const submittedAnalysisParams = ref<AnalysisParamRow[]>([])
+/** 分析失败时的后端错误摘要 */
+const analysisLastError = ref('')
 
 // 表单值（动态字段 + 固定字段）
 const formValues = reactive<Record<string, any>>({
@@ -345,15 +322,22 @@ const formValues = reactive<Record<string, any>>({
   email: ''
 })
 
+const showSecondFile = computed(() => {
+  if (typeof props.secondFileVisible === 'function') {
+    return !!props.secondFileVisible(formValues)
+  }
+  if (typeof props.secondFileVisible === 'boolean') {
+    return props.secondFileVisible
+  }
+  return !!props.multipleFiles
+})
+
 // 任务参数（用于结果展示）
 const jobParams = reactive({
   gene_nomenclature: '',
   data_type: '',
   organism: ''
 })
-
-// 下载格式列表
-const downloadFormats = ['pdf', 'png', 'svg', 'tiff', 'jpeg', 'bmp']
 
 // WebSocket 管理
 const taskWsService = ref<any>(null)
@@ -371,21 +355,17 @@ const visibleFields = computed(() => {
   })
 })
 
-// 是否有图片结果
-const hasImageResults = computed(() => {
-  return analysisResults.value.some(file => isImageFile(file.filename))
-})
-
 // 表单验证规则
 const formRules = computed<FormRules>(() => {
   const rules: FormRules = {
-    file: [{ required: true, message: '请上传文件', trigger: 'change' }],
+    file: [{ required: true, message: '', trigger: 'change' }],
     email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }]
   }
 
   // 双文件模式下验证第二个文件
-  if (props.multipleFiles) {
-    rules.secondFile = [{ required: true, message: '请上传第二个文件', trigger: 'change' }]
+  if (showSecondFile.value) {
+    rules.secondFile = [{ required: true, message: '', trigger: 'change' }]
+
   }
 
   return rules
@@ -399,9 +379,13 @@ const initFormValues = () => {
     if (field.defaultValue !== undefined) {
       formValues[field.name] = field.defaultValue
     } else if (field.type === 'select' && field.options?.length) {
-      formValues[field.name] = field.options[0].value
+      const options = field.options
+      const first = options?.[0]
+      if (first) formValues[field.name] = first.value
     } else if (field.type === 'radio' && field.options?.length) {
-      formValues[field.name] = field.options[0].value
+      const options = field.options
+      const first = options?.[0]
+      if (first) formValues[field.name] = first.value
     } else if (field.type === 'number') {
       formValues[field.name] = field.min ?? 0
     } else {
@@ -419,14 +403,48 @@ watch(() => props.fields, () => {
 
 // 获取字段序号（考虑文件上传）
 const getFieldIndex = (index: number): number => {
-  const baseIndex = props.multipleFiles ? 3 : 2
+  const baseIndex = showSecondFile.value ? 3 : 2
   return baseIndex + index
 }
 
-// 获取字段验证规则
+// 获取字段验证规则（默认必填：显示红星并与「上传数据」一致；显式 required: false 为可选项）
+function buildSubmittedAnalysisParams(): AnalysisParamRow[] {
+  const rows: AnalysisParamRow[] = []
+  for (const field of visibleFields.value) {
+    const raw = formValues[field.name]
+    let display =
+      raw === undefined || raw === null || raw === '' ? '' : String(raw)
+    if (field.type === 'radio' || field.type === 'select') {
+      const opt = field.options?.find((o) => String(o.value) === String(raw))
+      if (opt) display = String(opt.label)
+    }
+    rows.push({ label: field.label, value: display })
+  }
+  return rows
+}
+
+async function hydrateAnalysisResults(jobId: string) {
+  try {
+    const r = await AnalysisAPI.getResult(jobId)
+    if (r.result_files?.length) {
+      analysisResults.value = r.result_files.map((f) => ({
+        filename: f.filename,
+        format: f.format,
+        url: AnalysisAPI.getResultFileUrl(jobId, f.filename)
+      }))
+    }
+  } catch (e) {
+    console.error('拉取分析结果文件列表失败:', e)
+  }
+}
+
 const getFieldRules = (field: AnalysisField) => {
-  if (!field.required) return []
-  return [{ required: true, message: `请填写${field.label}`, trigger: 'blur' }]
+  if (field.required === false) return []
+  const trigger: 'blur' | 'change' =
+    field.type === 'radio' || field.type === 'select' || field.type === 'number'
+      ? 'change'
+      : 'blur'
+  return [{ required: true, message: `请填写${field.label}`, trigger }]
 }
 
 // 主文件上传处理
@@ -448,15 +466,16 @@ const handleExceed = () => {
 }
 
 const beforeUpload = (file: File): boolean => {
-  const allowedTypes = ['text/plain', 'text/csv', 'application/csv']
-  const allowedExtensions = ['.txt', '.csv', '.tsv']
-  
-  const isValidType = allowedTypes.includes(file.type)
   const fileName = file.name.toLowerCase()
+  const allowedExtensions = (props.acceptTypes || '')
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean)
+
   const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
-  
-  if (!isValidType && !hasValidExtension) {
-    ElMessage.error('只支持 txt、csv、tsv 格式的文件！')
+
+  if (!hasValidExtension) {
+    ElMessage.error('不支持的文件类型，请上传指定后缀的文件！')
     return false
   }
   
@@ -469,6 +488,30 @@ const beforeUpload = (file: File): boolean => {
   return true
 }
 
+const beforeSecondUpload = (file: File): boolean => {
+  const fileName = file.name.toLowerCase()
+  const accept = props.secondAcceptTypes ?? props.acceptTypes
+  const allowedExtensions = (accept || '')
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean)
+
+  const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
+
+  if (!hasValidExtension) {
+    ElMessage.error('不支持的文件类型，请上传指定后缀的文件！')
+    return false
+  }
+
+  const maxSize = 50 * 1024 * 1024 // 10MB
+  if (file.size > maxSize) {
+    ElMessage.error('文件大小不能超过50MB')
+    return false
+  }
+
+  return true
+}
+
 // 下载示例数据
 const downloadExampleData = () => {
   if (!props.exampleDataUrl) {
@@ -477,29 +520,39 @@ const downloadExampleData = () => {
   }
   
   const fileName = props.exampleFileName || 'example_data.txt'
+  const link = document.createElement('a')
+  link.href = props.exampleDataUrl
+  link.download = fileName
+  link.style.display = 'none'
   
-  // 使用后端 API 下载示例数据
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
-  // 从 exampleDataUrl 中提取分析类型，例如：/example/draw_example/pca_example.txt -> pca
-  const analysisType = extractAnalysisType(props.exampleDataUrl)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
   
-  if (analysisType) {
-    const downloadUrl = `${apiBaseUrl}/api/v1/data-process/examples/draw/${analysisType}`
-    window.open(downloadUrl, '_blank')
-    ElMessage.success(`示例数据已开始下载：${fileName}`)
-  } else {
-    // 降级处理：直接下载静态文件
-    const link = document.createElement('a')
-    link.href = props.exampleDataUrl
-    link.download = fileName
-    link.style.display = 'none'
+  ElMessage.success(`示例数据已开始下载: ${fileName}`)
+
+  // // 使用后端 API 下载示例数据
+  // const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
+  // // 从 exampleDataUrl 中提取分析类型，例如：/example/draw_example/pca_example.txt -> pca
+  // const analysisType = extractAnalysisType(props.exampleDataUrl)
+  
+  // if (analysisType) {
+  //   const downloadUrl = `${apiBaseUrl}/api/v1/data-process/examples/draw/${analysisType}`
+  //   window.open(downloadUrl, '_blank')
+  //   ElMessage.success(`示例数据已开始下载：${fileName}`)
+  // } else {
+  //   // 降级处理：直接下载静态文件
+  //   const link = document.createElement('a')
+  //   link.href = props.exampleDataUrl
+  //   link.download = fileName
+  //   link.style.display = 'none'
     
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  //   document.body.appendChild(link)
+  //   link.click()
+  //   document.body.removeChild(link)
     
-    ElMessage.success(`示例数据已开始下载：${fileName}`)
-  }
+  //   ElMessage.success(`示例数据已开始下载：${fileName}`)
+  // }
 }
 
 // 从 URL 中提取分析类型
@@ -532,26 +585,6 @@ const downloadSecondExampleData = () => {
   ElMessage.success(`示例数据已开始下载: ${fileName}`)
 }
 
-// 判断是否为图片文件
-const isImageFile = (filename: string): boolean => {
-  const imageExtensions = ['.png', '.jpg', '.jpeg', '.svg', '.pdf', '.tiff', '.bmp']
-  const lowerName = filename.toLowerCase()
-  return imageExtensions.some(ext => lowerName.endsWith(ext))
-}
-
-// 下载结果文件
-const downloadFile = (file: AnalysisResultFile) => {
-  window.open(file.url, '_blank')
-}
-
-// 以指定格式下载
-const downloadInFormat = (format: string) => {
-  if (!currentJobId.value) return
-  // 构建格式化下载URL
-  const downloadUrl = `http://localhost:8001/analysis-result/${currentJobId.value}/result.${format}`
-  window.open(downloadUrl, '_blank')
-}
-
 // WebSocket 连接
 const connectWebSocket = async () => {
   try {
@@ -563,13 +596,23 @@ const connectWebSocket = async () => {
       if (job_id === currentJobId.value) {
         jobStatus.value = taskStatus
         jobProgress.value = taskProgress || 0
+        if (error_message) {
+          analysisLastError.value = String(error_message)
+        }
         
         // 更新结果文件
         if (result_files && Array.isArray(result_files)) {
-          analysisResults.value = result_files
+          analysisResults.value = result_files.map((f: AnalysisResultFile) => ({
+            ...f,
+            url:
+              f.url ||
+              AnalysisAPI.getResultFileUrl(job_id, f.filename)
+          }))
         }
         
         if (taskStatus === 'COMPLETED' || taskStatus === 'Completed') {
+          analysisLastError.value = ''
+          void hydrateAnalysisResults(job_id)
           ElMessage.success(`分析任务 ${job_id} 已完成！`)
         } else if (taskStatus === 'FAILED' || taskStatus === 'Failed') {
           ElMessage.error(`分析任务 ${job_id} 失败: ${error_message || '未知错误'}`)
@@ -600,25 +643,14 @@ const submitForm = async () => {
   
   try {
     await formRef.value.validate()
-    
-    if (!formValues.file) {
-      ElMessage.error('请先上传文件')
-      return
-    }
-    
-    if (props.multipleFiles && !formValues.secondFile) {
-      ElMessage.error('请上传第二个文件')
-      return
-    }
-    
     submitting.value = true
     
     // 构造 FormData
     const requestData = new FormData()
     requestData.append('file', formValues.file)
     
-    if (props.multipleFiles && formValues.secondFile) {
-      requestData.append('file2', formValues.secondFile)
+    if (showSecondFile.value && formValues.secondFile) {
+      requestData.append(props.secondFileFieldName || 'file2', formValues.secondFile)
     }
     
     // 添加动态字段
@@ -636,6 +668,7 @@ const submitForm = async () => {
     
     // 保存参数用于结果显示
     jobParams.gene_nomenclature = props.title
+    submittedAnalysisParams.value = buildSubmittedAnalysisParams()
     
     // 连接 WebSocket
     if (!wsConnected.value) {
@@ -650,7 +683,9 @@ const submitForm = async () => {
     jobStatus.value = 'SUBMITTED'
     jobProgress.value = 0
     analysisResults.value = []
+    analysisLastError.value = ''
     showResultDialog.value = true
+    void hydrateAnalysisResults(result.job_id)
     
     emit('submit-success', result)
     
@@ -672,11 +707,6 @@ const resetForm = () => {
   initFormValues()
 }
 
-// 处理状态变化
-const handleStatusChange = (status: string) => {
-  jobStatus.value = status
-}
-
 // 关闭对话框
 const handleDialogClose = () => {
   showResultDialog.value = false
@@ -684,6 +714,8 @@ const handleDialogClose = () => {
   jobStatus.value = 'WAITING'
   jobProgress.value = 0
   analysisResults.value = []
+  submittedAnalysisParams.value = []
+  analysisLastError.value = ''
   resetForm()
 }
 
@@ -736,7 +768,7 @@ defineExpose({
 
 .upload-demo :deep(.el-upload-dragger) {
   width: 100%;
-  height: 150px;
+  height: 170px;
 }
 
 .upload-tip-container {
@@ -773,7 +805,8 @@ defineExpose({
 }
 
 .field-tip {
-  margin-top: 4px;
+  margin-top: -3px;
+  margin-bottom: -4px;
 }
 
 .submit-btn {
@@ -781,61 +814,27 @@ defineExpose({
 }
 
 .example-image-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   width: 100%;
+  max-width: 100%;
 }
 
 .example-label {
-  margin-bottom: 15px;
+  margin: 0 0 15px;
   color: #606266;
+  width: 100%;
 }
 
 .example-image {
+  display: block;
   max-width: 100%;
+  width: auto;
   height: auto;
   border: 1px solid #ebeef5;
   border-radius: 4px;
-}
-
-/* 结果展示样式 */
-.analysis-results {
-  margin-top: 20px;
-}
-
-.result-files {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.result-file-item {
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
-  padding: 12px;
-}
-
-.image-preview {
-  margin-bottom: 12px;
-}
-
-.result-image {
-  max-width: 100%;
-  max-height: 400px;
-}
-
-.file-download {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.file-name {
-  color: #606266;
-  font-size: 14px;
-}
-
-.download-formats {
-  margin-top: 20px;
 }
 
 .dialog-footer {
@@ -844,6 +843,21 @@ defineExpose({
 
 :deep(.el-form-item__label) {
   font-weight: 500;
+}
+
+/* 无 label 的表单项在全局 label-width 下仍会占标签列宽，导致内容偏右；此处占满整行并居中 */
+.analysis-form-content :deep(.analysis-form-centered-row.el-form-item .el-form-item__label) {
+  display: none;
+}
+
+.analysis-form-content :deep(.analysis-form-centered-row.el-form-item .el-form-item__content) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-left: 0 !important;
+  max-width: 100%;
 }
 
 /* 响应式布局 */
@@ -868,12 +882,6 @@ defineExpose({
     margin-left: 0;
     width: 100%;
     max-width: 200px;
-  }
-  
-  .file-download {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
   }
 }
 </style>
