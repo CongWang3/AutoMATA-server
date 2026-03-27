@@ -5,7 +5,7 @@ getOption('timeout')  # 解决超时
 options(timeout=100000)
 library(pheatmap)
 library(ggplot2)
-
+library(optparse)  # 命令行
 
 option_list <- list(
   make_option(c("-i", "--expression_file"), type="character", default="", action="store", help="This argument is expression file path"),
@@ -24,28 +24,71 @@ padj_thr <- opt$padj_thr
 # read data
 # fpkm <- read.csv("E:\\deskTop\\multi_omics\\manu\\多组学平台\\article\\case study2-analysis\\BLCA_fpkm.csv", row.names = 1)
 # group_info <- read.csv("E:\\deskTop\\multi_omics\\manu\\多组学平台\\article\\case study2-analysis\\BLCA_response_processed.csv")
-fpkm <- read.table(paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = ""), row.names = 1, header = TRUE, sep = "\t", check.names = FALSE,  stringsAsFactors = FALSE, fill = TRUE, comment.char = "", quote = "")
+fpkm <- read.table(
+  paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = ""),
+  header = TRUE,
+  sep = "\t",
+  check.names = FALSE,
+  stringsAsFactors = FALSE,
+  fill = TRUE,
+  comment.char = "",
+  quote = ""
+)
 group_info <- read.table(paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_info.txt", sep = ""), header = TRUE, sep = "\t", check.names = FALSE, fill = TRUE, comment.char = "")
 
 
-# 行名为空 删除此行 一审增加
-if(any(is.na(fpkm[,1]))) {
-  # 方案1：删除基因名为NA的行
-  fpkm <- fpkm[!is.na(fpkm[,1]), ]
-  # cat("已删除基因名为NA的行\n")
-  cat("The row with the gene name NA has been deleted\n")
+# # 行名为空 删除此行 一审增加
+# if(any(is.na(fpkm[,1]))) {
+#   # 方案1：删除基因名为NA的行
+#   fpkm <- fpkm[!is.na(fpkm[,1]), ]
+#   # cat("已删除基因名为NA的行\n")
+#   cat("The row with the gene name NA has been deleted\n")
+# }
+
+# # 如果有重复的行名，使用 make.unique 一审增加
+# if(any(duplicated(fpkm[,1]))) {
+#   rownames(fpkm) <- make.unique(as.character(fpkm[,1]))  # 重复值加后缀gene.1
+#   fpkm <- fpkm[, -1]  # 删除原始第一列
+# }
+# 先读取首列为普通列，再进行基因名清洗与去重（避免 read.table(row.names=1) 因重复行名直接报错）
+gene_names <- trimws(as.character(fpkm[[1]]))
+valid_gene <- !(is.na(gene_names) | gene_names == "")
+if (any(!valid_gene)) {
+  fpkm <- fpkm[valid_gene, , drop = FALSE]
+  gene_names <- gene_names[valid_gene]
+  cat("Rows with empty gene names have been removed\n")
+}
+if (any(duplicated(gene_names))) {
+  cat("Duplicate gene names detected; keeping first occurrence only\n")
+  keep_idx <- !duplicated(gene_names)
+  fpkm <- fpkm[keep_idx, , drop = FALSE]
+  gene_names <- gene_names[keep_idx]
+}
+rownames(fpkm) <- gene_names
+fpkm <- fpkm[, -1, drop = FALSE]
+
+# 对齐样本：确保表达矩阵列与分组文件 Sample 一一对应（且维度匹配）
+colnames(fpkm) <- trimws(colnames(fpkm))
+if ("Sample" %in% colnames(group_info)) {
+  group_info$Sample <- trimws(as.character(group_info$Sample))
+}
+if (!("Sample" %in% colnames(group_info)) || !("Group" %in% colnames(group_info))) {
+  stop("Group info file must contain columns: Sample and Group")
 }
 
-# 如果有重复的行名，使用 make.unique 一审增加
-if(any(duplicated(fpkm[,1]))) {
-  rownames(fpkm) <- make.unique(as.character(fpkm[,1]))  # 重复值加后缀gene.1
-  fpkm <- fpkm[, -1]  # 删除原始第一列
+expr_samples <- colnames(fpkm)
+info_samples <- as.character(group_info$Sample)
+common_samples <- intersect(expr_samples, info_samples)
+if (length(common_samples) < 2) {
+  stop("No matched samples between expression file header and group info file Sample column")
 }
 
+# 以表达矩阵列顺序为准进行重排，避免顺序错乱；并丢弃不匹配列
+fpkm <- fpkm[, common_samples, drop = FALSE]
+group_info <- group_info[match(common_samples, group_info$Sample), , drop = FALSE]
 
-# 删除表达量过低的数据行
-# https://zhuanlan.zhihu.com/p/608761490  https://www.jianshu.com/p/f009bea514af
-fpkm <- fpkm[which(rowSums(fpkm)!=0),] #删除表达量为0的基因
+# 确保表达矩阵为数值型
+fpkm[] <- lapply(fpkm, function(x) as.numeric(as.character(x)))
 
 # 空值处理 K近邻插补  一审增加
 if(any(is.na(fpkm))) {
@@ -59,6 +102,11 @@ if(any(is.na(fpkm))) {
 log_fpkm <- log2(fpkm + 1) #log化处理
 log_fpkm[log_fpkm == -Inf] = 0 #将log化后的负无穷值替换为0
 
+# 删除表达量为 0 的基因（保持 log_fpkm 与 fpkm 一致）
+keep_gene <- which(rowSums(fpkm) != 0)
+fpkm <- fpkm[keep_gene, , drop = FALSE]
+log_fpkm <- log_fpkm[keep_gene, , drop = FALSE]
+
 
 # construct design matrix
 # 1 代表正样本，复发 Recurrence，treament
@@ -66,6 +114,14 @@ log_fpkm[log_fpkm == -Inf] = 0 #将log化后的负无穷值替换为0
 groups <- factor(group_info$Group, levels = c("Control", "Treatment"))
 design <- model.matrix(~0 + groups)
 colnames(design) <- levels(groups)
+
+# 再次确保维度匹配（避免隐藏的 read.table(fill=TRUE) 扩列问题）
+if (ncol(log_fpkm) != nrow(design)) {
+  stop(paste0(
+    "Design matrix rows (", nrow(design),
+    ") do not match expression columns (", ncol(log_fpkm), ")."
+  ))
+}
 
 # run linear model
 fit <- lmFit(log_fpkm, design)
@@ -150,29 +206,45 @@ for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
 # https://zhuanlan.zhihu.com/p/531957349
 # 在原表达矩阵中找到差异表达基因
 library(ComplexHeatmap)
-df <- counts[intersect(rownames(counts),rownames(res1_select)),]
+# 这里使用 log_fpkm 作为表达矩阵（此前脚本里 counts 未定义会直接报错）
+counts <- as.matrix(log_fpkm)
+df <- counts[intersect(rownames(counts), rownames(res1_select)), , drop = FALSE]
 df2<- as.matrix(df)  
 col_annotation <- group_info                                               
 rownames(col_annotation) <- col_annotation[,1] ## 第一列转换为行名
 col_annotation <- col_annotation[,-1,drop=FALSE]  # 删除第一列 并保持为data frame
 
-p1 <- pheatmap(df2,
-                column_split = as.factor(group_info$Group), ####分开热图
-                color = colorRampPalette(c("purple", "white", "yellow"))(255),  # 使用蓝白红颜色映射
-                # breaks = seq(floor(min(df2)), ceiling(max(df2)), length.out = 256),  # 设置颜色断点
-                clustering_distance_rows = "euclidean",
-                clustering_distance_cols = "euclidean",
-                show_colnames = T,
-                show_rownames = T,
-                annotation_col = col_annotation,
-                annotation_colors = list(Group=c(Control='#cfc6fe',Treatment='#CCDFF1')),
-                fontsize = 20,
-                fontsize_col =20,  
-                heatmap_legend_param = list(legend_height = unit(4, "cm"),  # 设置图例高度
-                                            legend_width = 0.2),  # 设置图例宽度
-                scale = "row")  # 已进行了标准化，所以这里不再缩放
+if (nrow(df2) < 2 || ncol(df2) < 2) {
+  cat("No enough differential genes for cluster heatmap. Generate a blank placeholder figure.\n")
 
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/df_cluster_heatmap", sep="")
-for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
-  ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width=20, height=20)
+  blank <- ggplot() +
+    theme_void() +
+    annotate("text", x = 0, y = 0, label = "No differential genes", size = 8, color = "grey40") +
+    xlim(-1, 1) + ylim(-1, 1)
+
+  result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/df_cluster_heatmap", sep="")
+  for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+    ggsave(paste(result_path, dev, sep = "."), blank, device = dev, width = 20, height = 20)
+  }
+} else {
+  p1 <- pheatmap(df2,
+                  column_split = as.factor(group_info$Group), ####分开热图
+                  color = colorRampPalette(c("purple", "white", "yellow"))(255),  # 使用蓝白红颜色映射
+                  # breaks = seq(floor(min(df2)), ceiling(max(df2)), length.out = 256),  # 设置颜色断点
+                  clustering_distance_rows = "euclidean",
+                  clustering_distance_cols = "euclidean",
+                  show_colnames = T,
+                  show_rownames = T,
+                  annotation_col = col_annotation,
+                  annotation_colors = list(Group=c(Control='#cfc6fe',Treatment='#CCDFF1')),
+                  fontsize = 20,
+                  fontsize_col =20,  
+                  heatmap_legend_param = list(legend_height = unit(4, "cm"),  # 设置图例高度
+                                              legend_width = 0.2),  # 设置图例宽度
+                  scale = "row")  # 已进行了标准化，所以这里不再缩放
+  
+  result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/df_cluster_heatmap", sep="")
+  for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+    ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width=20, height=20)
+  }
 }

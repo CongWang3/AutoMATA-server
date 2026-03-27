@@ -1,7 +1,7 @@
 <template>
   <AnalysisForm
     title="Differential Gene Cluster Heatmap"
-    subtitle="差异基因聚类热图"
+    subtitle="Differential Gene Cluster Heatmap"
     :fields="analysisFields"
     :on-submit="handleSubmit"
     example-data-url="/example/draw_example/df_gene_cluster_example.txt"
@@ -30,7 +30,7 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'radio',
     name: 'show_col_name',
-    label: 'Whether to show column name',
+    label: 'Show column name',
     defaultValue: 'FALSE',
     options: [
       { label: 'Yes', value: 'TRUE' },
@@ -40,7 +40,7 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'radio',
     name: 'show_row_name',
-    label: 'Whether to show row name',
+    label: 'Show row name',
     defaultValue: 'TRUE',
     options: [
       { label: 'Yes', value: 'TRUE' },
@@ -50,24 +50,24 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'select',
     name: 'clustering_dis_row',
-    label: 'Clustering distance method for rows',
+    label: 'Cluster method for row',
     defaultValue: 'euclidean',
     options: clusteringDistanceMethods
   },
   {
     type: 'select',
     name: 'clustering_dis_col',
-    label: 'Clustering distance method for columns',
+    label: 'Cluster method for col',
     defaultValue: 'euclidean',
     options: clusteringDistanceMethods
   },
   {
     type: 'radio',
     name: 'scal',
-    label: 'Whether to center and scale data',
+    label: 'Center and scale data',
     defaultValue: 'none',
     options: [
-      { label: 'None', value: 'none' },
+      { label: 'No', value: 'none' },
       { label: 'Scale in row direction', value: 'row' },
       { label: 'Scale in column direction', value: 'col' }
     ]
@@ -75,7 +75,7 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'radio',
     name: 'annotation',
-    label: 'Add row/column annotation',
+    label: 'Row/col annotation',
     defaultValue: 'only_data',
     options: [
       { label: 'No', value: 'only_data' },

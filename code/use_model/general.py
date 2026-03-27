@@ -30,6 +30,7 @@ from sklearn.metrics import accuracy_score,recall_score,precision_score,f1_score
 from utils.plot_utils import plotfig
 from utils.earlystopping import EarlyStopping 
 from utils.FocalLoss import FocalLoss
+from utils.regularization import apply_regularization_loss, apply_max_norm_constraint, create_optimizer_with_reg
 
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
@@ -196,94 +197,96 @@ class Classifier(nn.Module):
         #     x = act(x)
         # return self.fc(x)
 
+
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers=1):
+    def __init__(self, input_size, hidden_size, output_size, num_layers=1, dropout_rate=0.0, r_method=None, r_weight=0.0):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, output_size)
         self.output_size = output_size
+        self.r_method = r_method
+        self.r_weight = r_weight
 
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.fc = nn.Linear(hidden_size, output_size)
 
         self.learning_rate = lr
         self.loss_function = loss_function  # 一审
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
-        if optimizer_function == "adam":
-            self.optimier = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimier = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)
-        elif optimizer_function == "rmsprop":
-            self.optimier = optim.RMSprop(self.parameters(), lr=self.learning_rate)
- 
+        self.optimier = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
+
     def forward(self, x):
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
         out, _ = self.lstm(x, (h0, c0))
-        out = self.fc(out[:, -1, :])
-
-        # 一审
+        out = self.dropout(out[:, -1, :])
+        out = self.fc(out)
         if self.loss_function == "nllloss":
             return F.log_softmax(out, dim=1)
         return out
-
+        # # 整合新加的softmax，crossentropy已经包含了softmax，所以结果不变
         # if (self.output_size == 2):
         #     act = nn.Softmax(dim=1).to(device)
         #     out = act(out)
-
         # return out
 
+
+
 class Cnn(nn.Module):
-    def __init__(self, conv_size_1=64, conv_size_2=32, output_size=2, dropout_rate=0.0, lr=0.001, loss_function="crossentropy", optimizer_function="adam"):
+    def __init__(self, conv_size_1, conv_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function, r_method=None, r_weight=0.0):
         super(Cnn, self).__init__()
-        self.output_size = output_size
+        self.output_size = output_size  # 记录flatten层的输出维度——分类数
+        self.r_method = r_method
+        self.r_weight = r_weight
+
         self.model1 = nn.Sequential(
             nn.Conv1d(1, conv_size_1, 2, stride=2, padding=6),  # nn.Conv1d(in_channels, out_channels, kernel_size
             nn.ReLU(),
-            nn.MaxPool1d(2), 
+            nn.MaxPool1d(2),  # torch.Size([34, 16, 31])
         )
 
         self.model2 = nn.Sequential(
             nn.Conv1d(conv_size_1, conv_size_2, 2, padding=6),
             nn.ReLU(),
-            nn.MaxPool1d(4), 
-            nn.Flatten(),
-            nn.Dropout(dropout_rate)
+            nn.MaxPool1d(4),  # torch.Size([34, 32, 7])
+            nn.Flatten(),  #torch.Size([34, 224])    (假如上一步的结果为[128, 32, 2]， 那么铺平之后就是[128, 64])
+            nn.Dropout(dropout_rate)  # 防止过拟合. dropout_rate=0没作用
         )
         
         self.learning_rate = lr
-        self.loss_function = loss_function  # 一审
         self.fc = nn.LazyLinear(self.output_size)  # 一审
+        self.loss_function = loss_function  # 一审
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
-        if optimizer_function == "adam":
-            self.optimier = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimier = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)
-        elif optimizer_function == "rmsprop":
-            self.optimier = optim.RMSprop(self.parameters(), lr=self.learning_rate)
+        self.optimier = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
 
     def forward(self, input):
+        # print(cnn)
+        # print('input_1 shape =', input.shape)  # torch.Size([34, 4])
         input = input.reshape(-1,1,input.shape[1])   #结果为torch.Size([34, 1, 4])  目的是把二维变为三维数据
+        # print('input_2 shape =', input.shape)
         x = self.model1(input)
+        # print('x_1 model1 shape =', x.shape)  # torch.Size([34, 224])
         x = self.model2(x)
+        # print('x_2 model1 shape =', x.shape)  # torch.Size([34, 224])
+        # fc = nn.Linear(in_features=x.shape[1], out_features=self.output_size, bias=True).to(device)
+        # x = fc(x)
+        # if (self.output_size == 2):
+        #     act = nn.Softmax(dim=1).to(device)
+        #     x = act(x)
+        # return x
         # 一审
         logits = self.fc(x)
         if self.loss_function == "nllloss":
@@ -291,20 +294,27 @@ class Cnn(nn.Module):
         return logits
 
 
-
 class MLPModel(nn.Module):
-    def __init__(self, n_inputs,  linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function):
+    def __init__(self, n_inputs,  linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function, r_method=None, r_weight=0.0):
         super(MLPModel, self).__init__()
-        self.output_size = output_size 
+        self.output_size = output_size  # 记录flatten层的输出维度
+        self.r_method = r_method
+        self.r_weight = r_weight
+        # input to first hidden layer
         self.hidden1 = Linear(n_inputs, linear_size_1)
         kaiming_uniform_(self.hidden1.weight, nonlinearity='relu')
         self.act1 = ReLU()
+        # second hidden layer
         self.hidden2 = Linear(linear_size_1, linear_size_2)
         kaiming_uniform_(self.hidden2.weight, nonlinearity='relu')
         self.act2 = ReLU()
+        # dropout层
         self.dropout = nn.Dropout(dropout_rate)
-        self.hidden3 = Linear(linear_size_2, output_size) 
+        # third hidden layer and output
+        self.hidden3 = Linear(linear_size_2, output_size)  # 二分类Linear(8, 1)，三分类的话改为Linear(8, 3)
         xavier_uniform_(self.hidden3.weight)
+        
+        # self.act3 = Softmax(dim=1)
 
         self.learning_rate = lr
         self.loss_function = loss_function  # 一审
@@ -312,34 +322,70 @@ class MLPModel(nn.Module):
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
-        if optimizer_function == "adam":
-            self.optimier = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimier = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)
-        elif optimizer_function == "rmsprop":
-            self.optimier = optim.RMSprop(self.parameters(), lr=self.learning_rate)
+        self.optimier = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
  
     def forward(self, X):
+        # input to first hidden layer
         X = self.hidden1(X)
         X = self.act1(X)
+        # second hidden layer
         X = self.hidden2(X)
         X = self.act2(X)
+        # dropout层
         X = self.dropout(X)
+        # output layer
         X = self.hidden3(X)
         # 一审
         if self.loss_function == "nllloss":
             return F.log_softmax(X, dim=1)
         return X
+        # if (self.output_size == 2):
+        #     act = nn.Softmax(dim=1).to(device)
+        #     X = act(X)
 
+        # return X
 
 class RBFN(nn.Module):
+    def __init__(self,centers_dim,out_dim,centers,sigma,dropout_rate=0.0, r_method=None, r_weight=0.0):
+        super(RBFN,self).__init__()
+        self.flatten = nn.Flatten()#变成二维的
+        self.centers_dim=centers_dim
+        self.out_dim=out_dim
+        self.r_method = r_method
+        self.r_weight = r_weight
+        self.centers = nn.Parameter(centers)
+        self.sigma = nn.Parameter(sigma)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.linear = nn.Linear(self.centers_dim, self.out_dim)
+
+        self.learning_rate = lr
+        self.loss_function = loss_function  # 一审
+
+        if loss_function == "crossentropy":
+            self.criterion = nn.CrossEntropyLoss()
+        elif loss_function == "focalloss":
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=out_dim)
+        elif loss_function == "nllloss":
+            self.criterion = nn.NLLLoss()
+
+        self.optimier = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
+ 
+    def forward(self,X):
+        x= self.flatten(X)
+        distance = torch.cdist(x, self.centers)
+        gauss = torch.exp(-distance ** 2 / (2 * self.sigma ** 2))
+        gauss = self.dropout(gauss)
+        y=self.linear(gauss)
+        # 一审
+        if self.loss_function == "nllloss":
+            return nn.functional.log_softmax(y, dim=1)
+        return y
+        
+  
     def __init__(self,centers_dim,out_dim,centers,sigma):
         super(RBFN,self).__init__()
         self.flatten = nn.Flatten()#变成二维的
@@ -382,13 +428,17 @@ class RBFN(nn.Module):
     
 
 class RNNModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers=1):
+    def __init__(self, input_size, hidden_size, output_size, num_layers=1, dropout_rate=0.0, r_method=None, r_weight=0.0):
         super(RNNModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, output_size)
         self.output_size = output_size
+        self.r_method = r_method
+        self.r_weight = r_weight
+
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.fc = nn.Linear(hidden_size, output_size)
 
         self.learning_rate = lr
         self.loss_function = loss_function  # 一审
@@ -396,32 +446,27 @@ class RNNModel(nn.Module):
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
-            
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
-            print('nono')
 
-        if optimizer_function == "adam":
-            self.optimier = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimier = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)
-        elif optimizer_function == "rmsprop":
-            self.optimier = optim.RMSprop(self.parameters(), lr=self.learning_rate)
- 
+        self.optimier = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
+
     def forward(self, x):
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
         out, hidden = self.rnn(x, h0)
-        out = self.fc(out[:, -1, :])
-
-        # 一审
+        out = self.dropout(out[:, -1, :])
+        out = self.fc(out)
         if self.loss_function == "nllloss":
             return F.log_softmax(out, dim=1)
         return out
 
+        # # 整合新加的softmax，crossentropy已经包含了softmax，所以结果不变
+        # if (self.output_size == 2):
+        #     act = nn.Softmax(dim=1).to(device)  
+        #     out = act(out)
+        # return out
 
 # 定义PositionalEncoding
 class PositionalEncoding(nn.Module):
@@ -455,9 +500,11 @@ class PositionalEncoding(nn.Module):
 
 # 定义Transformer模型
 class TransformerModel(nn.Module):
-    def __init__(self, input_dim, output_size, d_model, nhead, num_layers, dim_feedforward, dropout, loss_function, optimizer_function):
+    def __init__(self, input_dim, output_size, d_model, nhead, num_layers, dim_feedforward, dropout, loss_function, optimizer_function, r_method=None, r_weight=0.0):
         self.output_size = output_size  # 记录flatten层的输出维度——分类数
         super(TransformerModel, self).__init__()
+        self.r_method = r_method
+        self.r_weight = r_weight
         # 创建一个线性变换层，维度input_dim4→d_model
         # self.embedding = nn.Embedding(input_dim, d_model)  # 使用嵌入层 一个input_dim维的样本用d_model维表示, Embedding必须用整型数据，不能用float数据
         self.embedding = nn.Linear(input_dim, d_model)
@@ -470,39 +517,57 @@ class TransformerModel(nn.Module):
         # 维度d_model→output_dim
         self.fc = nn.Linear(d_model, output_size)
         self.d_model = d_model
-
+        self.output_size = output_size
         self.softmax = nn.Softmax(dim=1)
 
         self.learning_rate = lr
-        self.loss_function = loss_function
-
+        self.loss_function = loss_function  # 一审
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
-        if optimizer_function == "adam":
-            self.optimier = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimier = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)
-        elif optimizer_function == "rmsprop":
-            self.optimier = optim.RMSprop(self.parameters(), lr=self.learning_rate)
+        self.optimier = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
  
 
     def forward(self, src):
-        src = self.embedding(src) 
-        src = self.pos_encoder(src) 
-        output = self.transformer_encoder(src) 
-        output = output.permute(1, 0, 2) 
-        output = torch.mean(output, dim=1) 
-        output = self.fc(output) 
+        # print("1. src.shape =", src.shape)  # torch.Size([34, 4])
+        # src = src.permute(1, 0)
+        
+        # 缩放
+        # src = self.embedding(src) * np.sqrt(self.d_model)
+        src = self.embedding(src)  # torch.Size([34, 128])
+        # print("3. src.shape =", src.shape)
+        
+        # 加上位置嵌入
+        src = self.pos_encoder(src)  # torch.Size([34, 34, 128])
+        # print("4. src.shape =", src.shape)
+    
+        output = self.transformer_encoder(src)  # torch.Size([34, 34, 128])
+        # print("5. output.shape =", output.shape)
+        
+        # 调整输出形状为(batch, seq_len, d_model) seq_len设置为数据变量维度
+        output = output.permute(1, 0, 2)  # torch.Size([34, 34, 128])
+        # print("6. output.shape =", output.shape)
+        # 对所有位置的表示取平均
+        output = torch.mean(output, dim=1)  # torch.Size([34, 128])
+        # print("7. output.shape =", output.shape)
+        # 线性变换
+        output = self.fc(output)  # torch.Size([34, 1])
+        # print("8. output.shape =", output.shape)
 
-        # 一审
+        # # 使用sigmoid激活函数
+        # output = torch.sigmoid(output)  # torch.Size([34, 1]) 变为 torch.Size(34)
+        # # print("9. output.shape =", output.shape)
+
+        # # 使用softmax激活函数
+        # if (self.output_size == 2):
+        #     output = self.softmax(output)
+        
+        # return output
+         # 一审
         if self.loss_function == "nllloss":
             return F.log_softmax(output, dim=1)
         return output
@@ -548,7 +613,10 @@ if __name__ == "__main__":
         output_size = checkpoint_cls['output_size']
         loss_function = checkpoint_cls['loss_function']
         optimizer_function = checkpoint_cls['optimizer_function']
-        classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function)
+        r_method = checkpoint_cls.get('r_method', None)
+        r_weight = checkpoint_cls.get('r_weight', 0.0)
+
+        classifier = Classifier(hidden_size_3, cls_hidden_size, output_size, lr, loss_function, optimizer_function, r_method, r_weight).to(device)
         classifier.load_state_dict(checkpoint_cls['model_state_dict'])
 
     elif (model_type == 'CNN'):
@@ -562,9 +630,11 @@ if __name__ == "__main__":
         conv_size_1 = checkpoint['conv_size_1']
         conv_size_2 = checkpoint['conv_size_2']
 
-        print(loss_function)
+        r_method = checkpoint.get('r_method', None)
+        r_weight = checkpoint.get('r_weight', 0.0)
+        
 
-        model = Cnn(conv_size_1, conv_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function)
+        model = Cnn(conv_size_1, conv_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function, r_method, r_weight).to(device)
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'LSTM'):
@@ -576,7 +646,10 @@ if __name__ == "__main__":
         hidden_size = checkpoint['hidden_size']
         num_layers = checkpoint['num_layers']
         lr = checkpoint['learning_rate']
-        model = LSTMModel(input_size, hidden_size, output_size, num_layers).to(device)
+        dropout_rate = checkpoint.get('dropout_rate', 0.0)
+        r_method = checkpoint.get('r_method', None)
+        r_weight = checkpoint.get('r_weight', 0.0)
+        model = LSTMModel(input_size, hidden_size, output_size, num_layers, dropout_rate, r_method, r_weight).to(device)
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'MLP'):
@@ -588,8 +661,10 @@ if __name__ == "__main__":
         linear_size_1 = checkpoint['linear_size_1']
         linear_size_2 = checkpoint['linear_size_2']
         lr = checkpoint['learning_rate']
-        dropout_rate = checkpoint['dropout_rate']
-        model = MLPModel(input_size, linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function).to(device)
+        dropout_rate = checkpoint.get('dropout_rate', 0.0)
+        r_method = checkpoint.get('r_method', None)
+        r_weight = checkpoint.get('r_weight', 0.0)
+        model = MLPModel(input_size, linear_size_1, linear_size_2, output_size, dropout_rate, lr, loss_function, optimizer_function, r_method, r_weight).to(device)
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'RBFN'):
@@ -602,7 +677,10 @@ if __name__ == "__main__":
         centers = checkpoint['centers']
         lr = checkpoint['learning_rate']
         sigma = checkpoint['sigma']
-        model = RBFN(centers_dim,out_dim,centers,sigma).to(device)
+        dropout_rate = checkpoint.get('dropout_rate', 0.0)
+        r_method = checkpoint.get('r_method', None)
+        r_weight = checkpoint.get('r_weight', 0.0)
+        model = RBFN(centers_dim,out_dim,centers,sigma,dropout_rate, r_method, r_weight).to(device)
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'RNN'):
@@ -614,7 +692,10 @@ if __name__ == "__main__":
         hidden_size = checkpoint['hidden_size']
         num_layers = checkpoint['num_layers']
         lr = checkpoint['learning_rate']
-        model = RNNModel(input_size, hidden_size, output_size, num_layers).to(device)
+        dropout_rate = checkpoint.get('dropout_rate', 0.0)
+        r_method = checkpoint.get('r_method', None)
+        r_weight = checkpoint.get('r_weight', 0.0)
+        model = RNNModel(input_size, hidden_size, output_size, num_layers, dropout_rate, r_method, r_weight).to(device)
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'Transformer'):
@@ -629,12 +710,15 @@ if __name__ == "__main__":
         num_layers = checkpoint['num_layers']
         dim_feedforward = checkpoint['dim_feedforward']
         lr = checkpoint['learning_rate']
-        model = TransformerModel(input_dim, output_size, d_model, nhead, num_layers, dim_feedforward, dropout, loss_function, optimizer_function)
+        r_method = checkpoint.get('r_method', None)
+        r_weight = checkpoint.get('r_weight', 0.0)
+        model = TransformerModel(input_dim, output_size, d_model, nhead, num_layers, dim_feedforward, dropout, loss_function, optimizer_function, r_method, r_weight).to(device)
         model.load_state_dict(checkpoint['model_state_dict'])
 
 
     '''load testing data'''
-    X_test, Y_test, name = load_data("test", jobID=jobID)
+    feature_indices = checkpoint.get('feature_indices', None)
+    X_test, Y_test, name = load_data("test", jobID=jobID, feature_indices=feature_indices)
     test_dataset =  torch.utils.data.TensorDataset(X_test, Y_test)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 

@@ -1,12 +1,13 @@
 <template>
   <AnalysisForm
     title="KEGG Enrichment Analysis"
-    subtitle="KEGG 富集分析"
+    subtitle="KEGG Enrichment Analysis"
     :fields="analysisFields"
     :on-submit="handleSubmit"
     example-data-url="/example/draw_example/kegg_enrichment_example.txt"
     example-file-name="kegg_enrichment_example.txt"
     example-image-url="/images/kegg_example.png"
+    example-note="Chord, Cluster plots need input with 'logFC' column"
   />
 </template>
 
@@ -23,20 +24,20 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'select',
     name: 'organism',
-    label: 'The organism of the input data',
-    defaultValue: '0',
+    label: 'Organism',
+    defaultValue: 'hsa',
     options: [
-      { label: 'Homo sapiens', value: '0' },
-      { label: 'Bos taurus', value: '1' },
-      { label: 'Mus musculus', value: '2' },
-      { label: 'Drosophila melanogaster', value: '3' }
+      { label: 'Homo sapiens', value: 'hsa' },
+      { label: 'Bos taurus', value: 'bos' },
+      { label: 'Mus musculus', value: 'mmu' },
+      { label: 'Drosophila melanogaster', value: 'dme' }
     ],
     required: true
   },
   {
     type: 'number',
     name: 'pvalue',
-    label: 'pvalue threshold (range [0, 1])',
+    label: 'pvalue threshold',
     defaultValue: 0.1,
     min: 0,
     max: 1,
@@ -47,7 +48,7 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'number',
     name: 'qvalue',
-    label: 'qvalue threshold (range [0, 1])',
+    label: 'qvalue threshold',
     defaultValue: 0.1,
     min: 0,
     max: 1,
@@ -59,22 +60,22 @@ const analysisFields: AnalysisField[] = [
     type: 'select',
     name: 'correction',
     label: 'Correction Method',
-    defaultValue: '0',
+    defaultValue: 'BH',
     options: [
-      { label: 'BH (Benjamini-Hochberg)', value: '0' },
-      { label: 'BY (Benjamini-Yekutieli)', value: '1' },
-      { label: 'holm (Holm\'s step-down procedure)', value: '2' },
-      { label: 'hochberg (Hochberg\'s step-up procedure)', value: '3' },
-      { label: 'hommel (Hommel\'s procedure)', value: '5' },
-      { label: 'bonferroni (Bonferroni correction)', value: '6' },
-      { label: 'fdr (False Discovery Rate)', value: '7' },
-      { label: 'none', value: '8' }
+      { label: 'BH (Benjamini-Hochberg)', value: 'BH' },
+      { label: 'BY (Benjamini-Yekutieli)', value: 'BY' },
+      { label: 'holm (Holm\'s step-down procedure)', value: 'holm' },
+      { label: 'hochberg (Hochberg\'s step-up procedure)', value: 'hochberg' },
+      { label: 'hommel (Hommel\'s procedure)', value: 'hommel' },
+      { label: 'bonferroni (Bonferroni correction)', value: 'bonferroni' },
+      { label: 'fdr (False Discovery Rate)', value: 'fdr' },
+      { label: 'none', value: 'none' }
     ],
     required: true
   },
   {
     type: 'radio',
-    name: 'type',
+    name: 'plot_type',
     label: 'Plot type',
     defaultValue: 'bubble',
     options: [
@@ -86,7 +87,7 @@ const analysisFields: AnalysisField[] = [
   },
   {
     type: 'number',
-    name: 'termNum',
+    name: 'term_num',
     label: 'Number of terms to display',
     defaultValue: 5,
     min: 1,

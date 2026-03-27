@@ -16,7 +16,12 @@ from sqlalchemy.orm import Session
 
 from api.models.user import User
 from api.models.job import Job, JobType, JobStatus
-from api.schemas.analysis import AnalysisResponse, AnalysisResultFile, AnalysisResultResponse
+from api.schemas.analysis import (
+    AnalysisResponse,
+    AnalysisResultFile,
+    AnalysisResultResponse,
+    ComprehensiveEnrichmentRequest,
+)
 from api.utils.file_utils import save_uploaded_file
 from api.websocket.task_manager import task_status_manager
 from api.services.email_service import email_service
@@ -209,6 +214,42 @@ class AnalysisService:
                 self.db.commit()
             return False
     
+    async def _run_r_script_to_log(
+        self,
+        r_script: str,
+        cmd_args: List[str],
+        log_file: Path,
+        config_file: Optional[Path] = None
+    ) -> int:
+        """
+        执行 R 脚本并将 stdout/stderr 写入指定日志文件。
+        与 _execute_r_script 不同：不修改 Job 状态，不推送 WebSocket。
+
+        Returns:
+            进程退出码
+        """
+        r_script_path = str(self.R_SCRIPTS_DIR / r_script)
+        cmd = f"{self.RSCRIPT_PATH} {self.RSCRIPT_OPTIONS} {r_script_path} {' '.join(cmd_args)}"
+
+        if config_file is not None:
+            try:
+                with open(config_file, "w") as f:
+                    f.write(f"command: {cmd}\n")
+            except Exception as e:
+                logger.debug(f"写入 config 失败（不影响执行）: {e}")
+
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        full_cmd = f"{cmd} > {log_file} 2>&1"
+        logger.info(f"执行R脚本（自定义日志）: {full_cmd}")
+
+        process = await asyncio.create_subprocess_shell(
+            full_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await process.communicate()
+        return int(process.returncode or 0)
+
     # ==================== PCA 分析 ====================
     
     async def analyze_pca(
@@ -1056,6 +1097,20 @@ class AnalysisService:
                 job.status = JobStatus.PROCESSING
                 job.updated_at = datetime.now()
                 self.db.commit()
+
+                # 与其它分析保持一致：主动推送 WebSocket 状态，确保前端显示 processing 动画
+                try:
+                    await task_status_manager.send_task_status(
+                        str(self.user.id),
+                        {
+                            "job_id": job_id,
+                            "status": "Processing",
+                            "progress": 0,
+                            "message": "开始综合差异表达分析"
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"WebSocket状态推送失败（综合分析 Processing）: {e}")
             
             cmd = f"{self.RSCRIPT_PATH} {self.RSCRIPT_OPTIONS} {r_script_path} {' '.join(cmd_args)}"
             
@@ -1081,6 +1136,21 @@ class AnalysisService:
                 if process.returncode == 0:
                     job.status = JobStatus.COMPLETED
                     job.result_file = str(result_dir)
+
+                    # 推送 completed 状态（前端轮询兜底，这里用于保持一致体验）
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(self.user.id),
+                            {
+                                "job_id": job_id,
+                                "status": "Completed",
+                                "progress": 100,
+                                "result_file": str(result_dir),
+                                "message": "综合差异表达分析完成"
+                            }
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket状态推送失败（综合分析 Completed）: {e}")
                     
                     # 发送邮件通知
                     if email:
@@ -1100,6 +1170,20 @@ class AnalysisService:
                             error_msg = f.read()[-1000:]
                     job.status = JobStatus.FAILED
                     job.error_message = error_msg or "R脚本执行失败"
+
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(self.user.id),
+                            {
+                                "job_id": job_id,
+                                "status": "Failed",
+                                "progress": 0,
+                                "error_message": job.error_message,
+                                "message": "综合差异表达分析失败"
+                            }
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket状态推送失败（综合分析 Failed）: {e}")
                 
                 job.updated_at = datetime.now()
                 self.db.commit()
@@ -1112,6 +1196,256 @@ class AnalysisService:
                 job.error_message = str(e)
                 job.updated_at = datetime.now()
                 self.db.commit()
+
+    # ==================== 综合分析：继续 GO/KEGG 富集 ====================
+
+    async def analyze_comprehensive_enrichment(
+        self,
+        job_id: str,
+        req: ComprehensiveEnrichmentRequest
+    ) -> AnalysisResponse:
+        """
+        在综合分析结果基础上继续执行 GO + KEGG 富集（沿用同一 job_id）。
+        串行执行：GO -> KEGG。
+        """
+        try:
+            job = self.db.query(Job).filter(
+                Job.job_id == job_id,
+                Job.user_id == self.user.id
+            ).first()
+            if not job:
+                raise HTTPException(status_code=404, detail="任务不存在")
+
+            base_dir = Path("/xp/www/AutoMATA/download_data/Jobs")
+            job_dir = base_dir / job_id
+            result_dir = job_dir / "result"
+            if not result_dir.exists():
+                raise HTTPException(status_code=400, detail="该任务尚未生成 result 目录，无法继续富集分析")
+
+            select_file = result_dir / f"select_{req.type_analysis}.txt"
+            if not select_file.exists():
+                raise HTTPException(status_code=400, detail=f"缺少差异筛选文件: {select_file.name}")
+
+            # 记录追加参数（不影响主流程）
+            try:
+                existing = {}
+                if job.output_params:
+                    existing = json.loads(job.output_params) if isinstance(job.output_params, str) else {}
+                existing["comprehensive_enrichment"] = {
+                    "type_analysis": req.type_analysis,
+                    "go": {
+                        "organism": req.go_organism,
+                        "pvalue": req.go_pvalue,
+                        "qvalue": req.go_qvalue,
+                        "plot_type": req.go_plot_type,
+                        "term_num": req.go_term_num,
+                        "correction": req.go_correction,
+                    },
+                    "kegg": {
+                        "organism": req.kegg_organism,
+                        "pvalue": req.kegg_pvalue,
+                        "qvalue": req.kegg_qvalue,
+                        "plot_type": req.kegg_plot_type,
+                        "term_num": req.kegg_term_num,
+                        "correction": req.kegg_correction,
+                    },
+                }
+                job.output_params = json.dumps(existing, ensure_ascii=False)
+                job.updated_at = datetime.now()
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+
+            asyncio.create_task(self._execute_comprehensive_enrichment(job_id, job_dir, req))
+
+            return AnalysisResponse(
+                job_id=job_id,
+                status="Submitted",
+                message="综合分析继续GO+KEGG富集任务已提交",
+                created_at=datetime.now()
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"综合分析继续富集服务失败: {str(e)}")
+            self.db.rollback()
+            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+
+    async def _execute_comprehensive_enrichment(
+        self,
+        job_id: str,
+        job_dir: Path,
+        req: ComprehensiveEnrichmentRequest
+    ):
+        """串行执行 GO -> KEGG 富集分析（沿用同一 job_id），并分别写独立日志文件"""
+        result_dir = job_dir / "result"
+        select_file = result_dir / f"select_{req.type_analysis}.txt"
+
+        job = self.db.query(Job).filter(
+            Job.job_id == job_id,
+            Job.user_id == self.user.id
+        ).first()
+        if not job:
+            return
+
+        # 标记处理中（一次提交只在最终完成时推 Completed，避免前端误提示“已完成”）
+        try:
+            job.status = JobStatus.PROCESSING
+            job.result_file = str(result_dir)
+            job.updated_at = datetime.now()
+            self.db.commit()
+        except Exception as e:
+            logger.debug(f"更新综合富集状态失败（不影响执行）: {e}")
+            self.db.rollback()
+
+        try:
+            try:
+                await task_status_manager.send_task_status(
+                    str(self.user.id),
+                    {
+                        "job_id": job_id,
+                        "status": "Processing",
+                        "progress": 0,
+                        "message": "开始综合分析的 GO + KEGG 富集分析"
+                    }
+                )
+            except Exception as e:
+                logger.debug(f"WebSocket状态推送失败（综合富集 Processing）: {e}")
+
+            # GO
+            go_args = [
+                f"-i {select_file}",
+                f"-j {job_id}",
+                f"-a {req.go_plot_type}",
+                f"-b {req.go_organism}",
+                f"-c {req.go_pvalue}",
+                f"-d {req.go_qvalue}",
+                f"-f {req.type_analysis}",
+                f"-g {req.go_correction}",
+            ]
+            if req.go_plot_type in ["chord", "cluster", "bubble", "barplot"]:
+                go_args.append(f"-e {req.go_term_num}")
+
+            go_log = job_dir / "terminal_go_msg.txt"
+            go_cfg = job_dir / "config_go.txt"
+            rc_go = await self._run_r_script_to_log("go_enrichment.R", go_args, go_log, go_cfg)
+            if rc_go != 0:
+                err_tail = ""
+                try:
+                    if go_log.exists():
+                        with open(go_log, "r") as f:
+                            err_tail = f.read()[-1200:]
+                except Exception:
+                    pass
+
+                job.status = JobStatus.FAILED
+                job.error_message = err_tail or "GO富集分析失败"
+                job.updated_at = datetime.now()
+                self.db.commit()
+
+                try:
+                    await task_status_manager.send_task_status(
+                        str(self.user.id),
+                        {
+                            "job_id": job_id,
+                            "status": "Failed",
+                            "progress": 0,
+                            "error_message": (job.error_message or "")[:200],
+                            "message": "GO富集分析失败"
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"WebSocket状态推送失败（综合富集 GO Failed）: {e}")
+                return
+
+            # KEGG
+            kegg_args = [
+                f"-i {select_file}",
+                f"-j {job_id}",
+                f"-a {req.kegg_plot_type}",
+                f"-b {req.kegg_organism}",
+                f"-c {req.kegg_pvalue}",
+                f"-d {req.kegg_qvalue}",
+                f"-f {req.type_analysis}",
+                f"-g {req.kegg_correction}",
+            ]
+            if req.kegg_plot_type in ["chord", "cluster", "bubble"]:
+                kegg_args.append(f"-e {req.kegg_term_num}")
+
+            kegg_log = job_dir / "terminal_kegg_msg.txt"
+            kegg_cfg = job_dir / "config_kegg.txt"
+            rc_kegg = await self._run_r_script_to_log("kegg_enrichment.R", kegg_args, kegg_log, kegg_cfg)
+            if rc_kegg != 0:
+                err_tail = ""
+                try:
+                    if kegg_log.exists():
+                        with open(kegg_log, "r") as f:
+                            err_tail = f.read()[-1200:]
+                except Exception:
+                    pass
+
+                job.status = JobStatus.FAILED
+                job.error_message = err_tail or "KEGG富集分析失败"
+                job.updated_at = datetime.now()
+                self.db.commit()
+
+                try:
+                    await task_status_manager.send_task_status(
+                        str(self.user.id),
+                        {
+                            "job_id": job_id,
+                            "status": "Failed",
+                            "progress": 0,
+                            "error_message": (job.error_message or "")[:200],
+                            "message": "KEGG富集分析失败"
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"WebSocket状态推送失败（综合富集 KEGG Failed）: {e}")
+                return
+
+            # 两者都成功，才推 completed
+            job.status = JobStatus.COMPLETED
+            job.error_message = None
+            job.updated_at = datetime.now()
+            self.db.commit()
+
+            try:
+                await task_status_manager.send_task_status(
+                    str(self.user.id),
+                    {
+                        "job_id": job_id,
+                        "status": "Completed",
+                        "progress": 100,
+                        "result_file": str(result_dir),
+                        "message": "GO + KEGG 富集分析完成"
+                    }
+                )
+            except Exception as e:
+                logger.debug(f"WebSocket状态推送失败（综合富集 Completed）: {e}")
+
+        except Exception as e:
+            logger.error(f"综合富集执行失败: job_id={job_id}, error={str(e)}")
+            try:
+                job.status = JobStatus.FAILED
+                job.error_message = str(e)
+                job.updated_at = datetime.now()
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+            try:
+                await task_status_manager.send_task_status(
+                    str(self.user.id),
+                    {
+                        "job_id": job_id,
+                        "status": "Failed",
+                        "progress": 0,
+                        "error_message": str(e)[:200],
+                        "message": "综合富集分析失败"
+                    }
+                )
+            except Exception:
+                pass
     
     # ==================== 获取分析结果 ====================
     

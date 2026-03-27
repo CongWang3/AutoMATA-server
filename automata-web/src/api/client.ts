@@ -12,7 +12,8 @@ export class ApiClient {
       envBaseUrl: import.meta.env.VITE_API_BASE_URL,
       configBaseUrl: API_CONFIG.BASE_URL 
     })
-    
+
+        
     this.client = axios.create({
       baseURL,
       timeout: API_CONFIG.TIMEOUT,
@@ -39,9 +40,15 @@ export class ApiClient {
           method: config.method?.toUpperCase(),
           url: config.url,
           params: config.params,
-          data: config.data
+          data: config.data  // 原来的代码
+          // data: (() => {
+          //   const u = String(config.url || '')
+          //   if (u.includes('/auth/login') || u.includes('/auth/register')) return '[REDACTED]'
+          //   return config.data
+          // })()
         })
-        
+
+                
         return config
       },
       (error) => {
@@ -63,6 +70,8 @@ export class ApiClient {
       (error) => {
         const errorMessage = this.handleError(error)
         console.error('❌ API Error:', errorMessage)
+
+        
         return Promise.reject(new ApiError(errorMessage, error.response?.status))
       }
     )

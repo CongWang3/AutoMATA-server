@@ -502,7 +502,17 @@ import { useUserStore } from '@/stores/user'
 interface Job {
     id: string
     name: string
-    status: string
+    status:
+        | 'Submitted'
+        | 'Processing'
+        | 'Completed'
+        | 'Failed'
+        | 'Cancelled'
+        | 'PENDING'
+        | 'RUNNING'
+        | 'COMPLETED'
+        | 'FAILED'
+        | 'CANCELLED'
     progress: number
     currentStep?: string   // 当前执行步骤
     createdAt: string
@@ -542,8 +552,17 @@ const uploadedFiles = reactive<Record<string, string>>({
     kfoldTest: ''
 })
 
-// 文件上传进度
-const uploadProgress = reactive<Record<string, number>>({
+// 文件上传进度（使用固定字段，避免 ts 推断为 possibly undefined）
+interface UploadProgress {
+    dataset: number
+    train: number
+    validation: number
+    test: number
+    kfoldDataset: number
+    kfoldTest: number
+}
+
+const uploadProgress = reactive<UploadProgress>({
     dataset: 0,
     train: 0,
     validation: 0,
@@ -718,7 +737,7 @@ const isFormValid = computed(() => {
 })
 
 // 方法
-const handleFileUpload = async (event: Event, fileType: string) => {
+const handleFileUpload = async (event: Event, fileType: keyof UploadProgress) => {
     const input = event.target as HTMLInputElement
     const file = input.files?.[0]
     if (file) {
@@ -770,8 +789,9 @@ const handleFileUpload = async (event: Event, fileType: string) => {
 const handleStrategyChange = () => {
     // 清空之前上传的文件
     Object.keys(uploadedFiles).forEach(key => {
+        const k = key as keyof UploadProgress
         uploadedFiles[key] = ''
-        uploadProgress[key] = 0
+        uploadProgress[k] = 0
         uploadedFileInfo[key] = null
     })
 }
@@ -874,7 +894,7 @@ const handleSubmit = async () => {
         currentJob.value = {
             id: response.job_id,
             name: response.task_name,
-            status: response.status,  // 直接使用后端返回的状态（如 Submitted）
+            status: response.status as Job['status'],  // 直接使用后端返回的状态（如 Submitted）
             progress: response.progress || 0,
             currentStep: response.current_step || '已提交，等待执行',
             createdAt: response.created_at,
@@ -922,7 +942,8 @@ const resetForm = () => {
     // 重置文件上传状态
     Object.keys(uploadedFiles).forEach(key => {
         uploadedFiles[key] = ''
-        uploadProgress[key] = 0
+        const k = key as keyof UploadProgress
+        uploadProgress[k] = 0
         uploadedFileInfo[key] = null
     })
 
@@ -1139,22 +1160,25 @@ const downloadExample = (filePath: string) => {
 }
 
 // 任务取消
-const handleCancel = (jobId: string) => {
-    console.log('取消任务:', jobId)
+const handleCancel = (jobId: string | number) => {
+    const id = String(jobId)
+    console.log('取消任务:', id)
     ElMessage.info('任务取消功能暂未实现')
 }
 
 // 任务重试
-const handleRetry = (jobId: string) => {
-    console.log('重试任务:', jobId)
+const handleRetry = (jobId: string | number) => {
+    const id = String(jobId)
+    console.log('重试任务:', id)
     // 重新提交表单
     handleSubmit()
 }
 
 // 查看结果
-const viewResult = (jobId: string) => {
+const viewResult = (jobId: string | number) => {
+    const id = String(jobId)
     // 不再跳转到路由页面，因为结果已经在弹窗中显示
-    console.log('查看结果:', jobId)
+    console.log('查看结果:', id)
     ElMessage.info('请在弹窗中点击下载结果按钮')
 }
 

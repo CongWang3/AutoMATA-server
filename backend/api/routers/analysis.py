@@ -3,7 +3,7 @@
 """
 import re
 import os
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Path
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Path, Body
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -18,6 +18,7 @@ from api.models.user import User
 from api.schemas.analysis import (
     AnalysisResponse,
     AnalysisResultResponse,
+    ComprehensiveEnrichmentRequest,
     VALID_ORGANISMS,
     VALID_KEGG_ORGANISMS,
     VALID_CORRECTION_METHODS,
@@ -659,6 +660,60 @@ async def analyze_comprehensive(
         raise HTTPException(status_code=500, detail="数据库操作失败")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+
+
+# ==================== 综合分析：继续 GO/KEGG 富集 ====================
+
+@router.post("/comprehensive/{job_id}/enrichment", response_model=AnalysisResponse)
+async def analyze_comprehensive_enrichment(
+    job_id: str = Path(..., description="综合分析任务ID"),
+    req: ComprehensiveEnrichmentRequest = Body(...),  # JSON body
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    在综合分析结果基础上继续进行 GO + KEGG 富集分析（沿用同一 job_id）。
+    后端串行执行：GO -> KEGG，避免并发读取 select_*.txt 引发的问题。
+    """
+    try:
+        validate_job_id(job_id)
+
+        if req.type_analysis not in ["up", "down", "all"]:
+            raise HTTPException(status_code=400, detail="type_analysis必须是: up, down, all")
+
+        if req.go_organism not in VALID_ORGANISMS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"GO物种必须是: {', '.join(VALID_ORGANISMS)}"
+            )
+
+        if req.kegg_organism not in VALID_KEGG_ORGANISMS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"KEGG物种必须是: {', '.join(VALID_KEGG_ORGANISMS)}"
+            )
+
+        if req.go_correction not in VALID_CORRECTION_METHODS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"GO校正方法必须是: {', '.join(VALID_CORRECTION_METHODS)}"
+            )
+
+        if req.kegg_correction not in VALID_CORRECTION_METHODS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"KEGG校正方法必须是: {', '.join(VALID_CORRECTION_METHODS)}"
+            )
+
+        service = AnalysisService(db, current_user)
+        result = await service.analyze_comprehensive_enrichment(job_id, req)
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"综合分析继续富集失败：{str(e)}")
         raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
 
 

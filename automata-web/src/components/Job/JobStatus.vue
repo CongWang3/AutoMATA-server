@@ -143,9 +143,9 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  (e: 'cancel', jobId: number): void
-  (e: 'retry', jobId: number): void
-  (e: 'view-result', jobId: number): void
+  (e: 'cancel', jobId: number | string): void
+  (e: 'retry', jobId: number | string): void
+  (e: 'view-result', jobId: number | string): void
 }>()
 
 // 状态映射（支持后端新格式和旧版本大写格式）

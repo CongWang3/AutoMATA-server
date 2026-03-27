@@ -1,12 +1,13 @@
 <template>
   <AnalysisForm
     title="GO Enrichment Analysis"
-    subtitle="GO 富集分析"
+    subtitle="GO Enrichment Analysis"
     :fields="analysisFields"
     :on-submit="handleSubmit"
     example-data-url="/example/draw_example/go_enrichment_example.txt"
     example-file-name="go_enrichment_example.txt"
     example-image-url="/images/go_example.png"
+    example-note="Chord, Cluster, Circle plots need input with 'logFC' column"
   />
 </template>
 
@@ -23,20 +24,20 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'select',
     name: 'organism',
-    label: 'The organism of the input data',
-    defaultValue: '0',
+    label: 'Organism',
+    defaultValue: 'Homo_sapiens',
     options: [
-      { label: 'Homo sapiens', value: '0' },
-      { label: 'Bovine', value: '1' },
-      { label: 'Mus musculus', value: '2' },
-      { label: 'Drosophila melanogaster', value: '3' }
+      { label: 'Homo sapiens', value: 'Homo_sapiens' },
+      { label: 'Bos taurus', value: 'Bovine' },
+      { label: 'Mus musculus', value: 'Mus_musculus' },
+      { label: 'Drosophila melanogaster', value: 'Drosophila_melanogaster' }
     ],
     required: true
   },
   {
     type: 'number',
     name: 'pvalue',
-    label: 'pvalue threshold (range [0, 1])',
+    label: 'pvalue threshold',
     defaultValue: 0.05,
     min: 0,
     max: 1,
@@ -47,7 +48,7 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'number',
     name: 'qvalue',
-    label: 'qvalue threshold (range [0, 1])',
+    label: 'qvalue threshold',
     defaultValue: 0.05,
     min: 0,
     max: 1,
@@ -59,22 +60,22 @@ const analysisFields: AnalysisField[] = [
     type: 'select',
     name: 'correction',
     label: 'Correction Method',
-    defaultValue: '0',
+    defaultValue: 'BH',
     options: [
-      { label: 'BH (Benjamini-Hochberg)', value: '0' },
-      { label: 'BY (Benjamini-Yekutieli)', value: '1' },
-      { label: 'holm (Holm\'s step-down procedure)', value: '2' },
-      { label: 'hochberg (Hochberg\'s step-up procedure)', value: '3' },
-      { label: 'hommel (Hommel\'s procedure)', value: '5' },
-      { label: 'bonferroni (Bonferroni correction)', value: '6' },
-      { label: 'fdr (False Discovery Rate)', value: '7' },
-      { label: 'none', value: '8' }
+      { label: 'BH (Benjamini-Hochberg)', value: 'BH' },
+      { label: 'BY (Benjamini-Yekutieli)', value: 'BY' },
+      { label: 'holm (Holm\'s step-down procedure)', value: 'holm' },
+      { label: 'hochberg (Hochberg\'s step-up procedure)', value: 'hochberg' },
+      { label: 'hommel (Hommel\'s procedure)', value: 'hommel' },
+      { label: 'bonferroni (Bonferroni correction)', value: 'bonferroni' },
+      { label: 'fdr (False Discovery Rate)', value: 'fdr' },
+      { label: 'none', value: 'none' }
     ],
     required: true
   },
   {
     type: 'radio',
-    name: 'type',
+    name: 'plot_type',
     label: 'Plot type',
     defaultValue: 'bubble',
     options: [
@@ -88,8 +89,8 @@ const analysisFields: AnalysisField[] = [
   },
   {
     type: 'number',
-    name: 'termNum',
-    label: 'Number of terms to display for each ontology',
+    name: 'term_num',
+    label: 'Terms per ontology',
     defaultValue: 5,
     min: 1,
     max: 50,

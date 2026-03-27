@@ -61,92 +61,6 @@ from DataProcess import load_data
 
 
 
-# class SOM(object):
-#     def __init__(self, X, output, iteration, batch_size):
-#         """
-#         :param X:  形状是N*D， 输入样本有N个,每个D维
-#         :param output: (n,m)一个元组，为输出层的形状是一个n*m的二维矩阵
-#         :param iteration:迭代次数
-#         :param batch_size:每次迭代时的样本数量
-#         初始化一个权值矩阵，形状为D*(n*m)，即有n*m权值向量，每个D维
-#         """
-#         self.X = X
-#         self.output = output
-#         self.iteration = iteration
-#         self.batch_size = batch_size
-#         self.W = np.random.rand(X.shape[1], output[0] * output[1])
-#         print(self.W.shape)
-
-#     def GetN(self, t):
-#         """
-#         :param t:时间t, 这里用迭代次数来表示时间
-#         :return: 返回一个整数，表示拓扑距离，时间越大，拓扑邻域越小
-#         """
-#         a = min(self.output)
-#         return int(a - float(a) * t / self.iteration)
-
-#     def Geteta(self, t, n):
-#         """
-#         :param t: 时间t, 这里用迭代次数来表示时间
-#         :param n: 拓扑距离
-#         :return: 返回学习率，
-#         """
-#         return np.power(np.e, -n) / (t + 2)
-
-#     def updata_W(self, X, t, winner):
-#         N = self.GetN(t)
-#         for x, i in enumerate(winner):
-#             to_update = self.getneighbor(i[0], N)
-#             for j in range(N + 1):
-#                 e = self.Geteta(t, j)
-#                 for w in to_update[j]:
-#                     self.W[:, w] = np.add(self.W[:, w], e * (X[x, :] - self.W[:, w]))
-
-#     def getneighbor(self, index, N):
-#         """
-#         :param index:获胜神经元的下标
-#         :param N: 邻域半径
-#         :return ans: 返回一个集合列表，分别是不同邻域半径内需要更新的神经元坐标
-#         """
-#         a, b = self.output
-#         length = a * b
-
-#         def distence(index1, index2):
-#             i1_a, i1_b = index1 // a, index1 % b
-#             i2_a, i2_b = index2 // a, index2 % b
-#             return np.abs(i1_a - i2_a), np.abs(i1_b - i2_b)
-
-#         ans = [set() for i in range(N + 1)]
-#         for i in range(length):
-#             dist_a, dist_b = distence(i, index)
-#             if dist_a <= N and dist_b <= N: ans[max(dist_a, dist_b)].add(i)
-#         return ans
-
-#     def train(self):
-#         """
-#         train_Y:训练样本与形状为batch_size*(n*m)
-#         winner:一个一维向量，batch_size个获胜神经元的下标
-#         :return:返回值是调整后的W
-#         """
-#         count = 0
-#         while self.iteration > count:
-#             train_X = self.X[np.random.choice(self.X.shape[0], self.batch_size)]
-#             normal_W(self.W)
-#             normal_X(train_X)
-#             train_Y = train_X.dot(self.W)
-#             winner = np.argmax(train_Y, axis=1).tolist()
-#             self.updata_W(train_X, count, winner)
-#             count += 1
-#         return self.W
-
-#     def train_result(self):
-#         normal_X(self.X)
-#         train_Y = self.X.dot(self.W)
-#         winner = np.argmax(train_Y, axis=1).tolist()
-#         print(winner)
-#         return winner
-
-
 def normal_X(X):
     """
     :param X:二维矩阵，N*D，N个D维的数据
@@ -211,21 +125,25 @@ if __name__ == '__main__':
 
     print('jobID =',jobID)
     print('model_type = SOM')
+    savename = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/model.pth'
 
     # 保存模型
-    savename = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/model.pth'
-    savename_2 = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/winmap.pkl'
+    # savename = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/model.pth'
+    # savename_2 = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/winmap.pkl'
     
     # 加载模型
-    with open(savename, 'rb') as infile:
-        som = pickle.load(infile)
-    with open(savename_2, 'rb') as infile:
-        winmap = pickle.load(infile)
-        
+    # with open(savename, 'rb') as infile:
+    #     som = pickle.load(infile)
+    # with open(savename_2, 'rb') as infile:
+    #     winmap = pickle.load(infile)
+    checkpoint = torch.load(savename, map_location="cpu")
+    som = checkpoint['som']
+    winmap = checkpoint['winmap']
+    feature_indices = checkpoint.get('feature_indices', None)
 
-
-    # 加载测试数据集
-    X_test, Y_test, name = load_data("test", jobID=jobID)
+    # load data（若 feature_indices 不为 None，则对测试样本做相同的特征子集选择）
+    X_test, Y_test, name = load_data("test", jobID=jobID, feature_indices=feature_indices)
+    # X_test, Y_test, name = load_data("test", jobID=jobID)
     
     # 进行分类预测
     y_pred = classify(som, X_test, winmap)

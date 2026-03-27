@@ -19,7 +19,8 @@ library(optparse)  # 命令行
 # 还未实现：把图片下面的GO Term标签改为KEGG Pathway
 # KEGG annotation包每半年更新一次。就用在线读取KEGG annotaion包吧。以防万一我下载了2024.10.8最新版KEGG annotaion包, 在f盘的chromeDownload文件夹下：KEGG.db_2.4.5.zip（win）,KEGG.db_2.4.5.tar.gz(package source)。
 
-# NOTE: bubble图, 按照Count排列表格,按照GeneRatio排序呈现图片. 如果要使用chord或cluster，请确保上传的文件有列名为logFC的数值型数据，用来根据数值大小进行排序。同时保证第一列为gene name（symbol）
+# NOTE: bubble图, 按照Count排列表格,按照GeneRatio排序呈现图片
+# NOTE: 如果要使用chord或cluster，请确保上传的文件有列名为logFC的数值型数据，用来根据数值大小进行排序。同时保证第一列为gene name（symbol）
 
 option_list <- list(
   make_option(c("-i", "--input"), type="character", default="", action="store", help="This argument is input path"),
@@ -136,6 +137,13 @@ KEGG$geneID <- as.character(sapply(KEGG$geneID, function(x) {
 # 写入文件
 filename <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/result/KEGG_enrichment_result.txt", sep="")
 write.table(KEGG, file = filename, sep = "\t", row.names = FALSE, quote = FALSE)
+
+# 若没有任何富集结果，后续绘图/表格构建会报错（长度不一致）。
+# 此时保留空表输出并正常退出，避免任务失败。
+if (is.null(KEGG) || nrow(KEGG) == 0) {
+    message("No KEGG enrichment result. KEGG_enrichment_result.txt has been written (empty). Skip plotting.")
+    quit(save = "no", status = 0)
+}
 
 
 # if (length(interesting) != 0){

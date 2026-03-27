@@ -160,6 +160,31 @@ class ComprehensiveAnalysisRequest(BaseModel):
     email: Optional[str] = None
 
 
+# ==================== 综合分析：继续 GO/KEGG 富集 ====================
+
+class ComprehensiveEnrichmentRequest(BaseModel):
+    """综合分析结果：继续进行 GO + KEGG 富集分析（沿用同一 job_id）"""
+
+    # up/down/all 对应 result/select_{type_analysis}.txt
+    type_analysis: str = Field(default="all", description="差异分析类型 (up/down/all)")
+
+    # GO 参数
+    go_organism: str = Field(default="Homo_sapiens", description="GO 物种")
+    go_pvalue: float = Field(default=0.05, description="GO p值阈值")
+    go_qvalue: float = Field(default=0.1, description="GO q值阈值")
+    go_plot_type: str = Field(default="bubble", description="GO 图类型 (bubble/barplot/circle/chord/cluster)")
+    go_term_num: int = Field(default=10, description="GO 显示term数量")
+    go_correction: str = Field(default="BH", description="GO 多重检验校正方法")
+
+    # KEGG 参数
+    kegg_organism: str = Field(default="hsa", description="KEGG 物种代码 (hsa/mmu/bos/dme)")
+    kegg_pvalue: float = Field(default=0.05, description="KEGG p值阈值")
+    kegg_qvalue: float = Field(default=0.1, description="KEGG q值阈值")
+    kegg_plot_type: str = Field(default="bubble", description="KEGG 图类型 (bubble/chord/cluster)")
+    kegg_term_num: int = Field(default=10, description="KEGG 显示term数量")
+    kegg_correction: str = Field(default="BH", description="KEGG 多重检验校正方法")
+
+
 # ==================== 分析类型枚举定义(供参考) ====================
 
 VALID_ORGANISMS = [

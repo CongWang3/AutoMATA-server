@@ -76,7 +76,11 @@ class FileUploadService:
             return False, "文件必须有扩展名"
             
         extension = filename.split('.')[-1].lower()
-        if extension not in settings.ALLOWED_FILE_TYPES:
+        # 模型应用需要上传 pth/pt/pkl 等权重文件；
+        # 为避免运行环境/配置覆盖导致校验不一致，这里对模型权重扩展做强制放行兜底。
+        forced_model_weight_ext = {"pth", "pt", "pkl"}
+        allowed_ext = set(settings.ALLOWED_FILE_TYPES) | forced_model_weight_ext
+        if extension not in allowed_ext:
             return False, f"不支持的文件扩展名: {extension}"
         
         # 2. MIME类型检查

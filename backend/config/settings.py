@@ -75,7 +75,9 @@ class Settings(BaseSettings):
     # 文件上传配置
     MAX_UPLOAD_SIZE: int = 500 * 1024 * 1024  # 500MB，增加上传限制
     UPLOAD_DIR: str = "./uploaded_files"
-    ALLOWED_FILE_TYPES: list = ["txt", "csv", "xlsx", "xls"]
+    # 通用文件上传允许的扩展名
+    # 注意：模型应用需要上传模型权重（pth/pt/pkl），因此在该白名单中补齐。
+    ALLOWED_FILE_TYPES: list = ["txt", "csv", "tsv", "xlsx", "xls", "pth", "pkl"]
     
     # Redis 配置（Celery 使用）
     REDIS_URL: str = "redis://localhost:6379/0"

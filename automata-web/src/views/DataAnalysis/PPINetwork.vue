@@ -23,32 +23,32 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'select',
     name: 'organism',
-    label: 'The organism of the input data',
-    defaultValue: '0',
+    label: 'Organism',
+    defaultValue: 'Mus_musculus',
     options: [
-      { label: 'Mus musculus', value: '0' },
-      { label: 'Bos taurus', value: '1' },
-      { label: 'Homo sapiens', value: '2' },
-      { label: 'Drosophila melanogaster', value: '3' }
+      { label: 'Mus musculus', value: 'Mus_musculus' },
+      { label: 'Bos taurus', value: 'Bos_taurus' },
+      { label: 'Homo sapiens', value: 'Homo_sapiens' },
+      { label: 'Drosophila melanogaster', value: 'Drosophila_melanogaster' }
     ],
     required: true
   },
   {
     type: 'select',
     name: 'nomenclature',
-    label: 'The nomenclature used in the data set',
-    defaultValue: '0',
+    label: 'Nomenclature',
+    defaultValue: 'SYMBOL',
     options: [
-      { label: 'Gene Symbol', value: '0' },
-      { label: 'Ensembl ID', value: '1' },
-      { label: 'ENTREZID', value: '2' }
+      { label: 'Gene Symbol', value: 'SYMBOL' },
+      { label: 'Ensembl ID', value: 'ENSEMBL' },
+      { label: 'ENTREZID', value: 'ENTREZID' }
     ],
     required: true
   },
   {
     type: 'number',
     name: 'thres',
-    label: 'Filtered threshold of score for PPI analysis',
+    label: 'Score threshold',
     defaultValue: 400,
     min: 0,
     max: 1000,
@@ -59,7 +59,7 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'number',
     name: 'show',
-    label: 'Minimum number of nodes to display gene names',
+    label: 'Min nodes',
     defaultValue: 5,
     min: 1,
     max: 100,

@@ -10,7 +10,10 @@ library(igraph)
 library(ggraph)
 
 getOption('timeout')  # 解决超时
-options(timeout=100000)
+
+## 解决外网下载（STRINGdb）超时问题：
+## R 的 download.file 默认 timeout 较短，在弱网/慢速环境可能直接超时终止。
+options(timeout=300000) # 300000s (~83.3h)
 library(optparse)
 
 

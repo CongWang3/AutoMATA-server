@@ -18,7 +18,8 @@ library(optparse)  # 命令行
 # 还未实现：用过滤后的GO_filtered数据绘制barplot和bubbleplot
 
 
-# NOTE: 按照GeneRatio排序呈现图片. 如果要使用chord/cluster/circle，请确保上传的文件有列名为logFC的数值型数据，用来根据数值大小进行排序。同时保证第一列为gene name（symbol）,否则仅需要gene name（symbol）数据
+# NOTE: 按照GeneRatio排序呈现图片
+# NOTE: 如果要使用chord/cluster/circle，请确保上传的文件有列名为logFC的数值型数据，用来根据数值大小进行排序。同时保证第一列为gene name（symbol）,否则仅需要gene name（symbol）数据
 
 option_list <- list(
   make_option(c("-i", "--input"), type="character", default="", action="store", help="This argument is input path"),
@@ -202,8 +203,10 @@ if (type == "chord" || type == "cluster" || type == "circle"){
     )
     # 从原始数据中提取geneID和logFC，创建数据框genelist
     genelist <- data.frame(
-        ID = table_data$gene,
-        logFC = table_data$logFC
+        # ID = table_data$gene,
+        # logFC = table_data$logFC
+        ID = table_data[[1]],  # 第一列为基因名
+        logFC = table_data[[2]]  # 第二列为logFC 按列取值
     )
 
     # 将genelist的行名设置为geneID，以便后续引用
@@ -240,7 +243,7 @@ if (type == "chord"){
     }else{
         print("No created chord object")
     }
-    for(dev in c("png")){  # "pdf", "jpeg", "tiff", "png", "bmp", "svg"
+    for(dev in c("png", "jpeg", "tiff", "png", "bmp", "svg")){  # "pdf", "jpeg", "tiff", "png", "bmp", "svg"
         ggsave(paste(result_path, dev, sep = "."), gochord, device = dev, width = 15, height = 15)
     }
     # ggsave(paste("GO_chord", dev, sep="."), gochord, width = 15, height = 15, device = dev)

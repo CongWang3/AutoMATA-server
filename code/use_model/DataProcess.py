@@ -16,7 +16,11 @@ warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
 
-def load_data(state="train", jobID="20240808232043_OtJF37SH"):  # train, val, test
+def load_data(
+    state="train",
+    jobID="20240808232043_OtJF37SH",
+    feature_indices=None,
+):  # train, val, test
 
     if state == "train":
         data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")
@@ -31,7 +35,13 @@ def load_data(state="train", jobID="20240808232043_OtJF37SH"):  # train, val, te
     # 获取每条数据的名称 GeneID
     name = data.iloc[:, 0].values.astype(str) 
     # 获取数据
-    feature = data.iloc[:, 1:-1].values.astype(float) 
+    feature = data.iloc[:, 1:-1].values.astype(float)
+    # 如果模型训练时做过特征选择，需要在推理阶段对测试集做同样的子集裁剪
+    if feature_indices is not None:
+        # feature_indices 可能来自 checkpoint（list/ndarray/torch tensor）
+        import numpy as _np
+        idx = _np.array(feature_indices, dtype=int).ravel()
+        feature = feature[:, idx]
     label = data.iloc[:,-1].values
 
 

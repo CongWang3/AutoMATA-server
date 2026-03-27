@@ -1,35 +1,22 @@
 <template>
   <div class="file-uploader">
-    <div class="upload-area" @dragover="handleDragOver" @dragleave="handleDragLeave" @drop="handleDrop">
-      <div class="upload-content" :class="{ 'drag-over': isDragging }">
-        <iconify-icon 
-          class="upload-icon fs-1 text-primary mb-3" 
-          icon="mdi:cloud-upload-outline"
-        ></iconify-icon>
-        <p class="upload-text mb-2">拖拽文件到此处或点击选择文件</p>
-        <p class="upload-hint text-muted small">
-          支持 {{ allowedTypes.join(', ') }} 格式，最大 {{ formatFileSize(maxSize) }}
-        </p>
-        <input
-          ref="fileInput"
-          type="file"
-          :accept="allowedTypes.map(type => `.${type}`).join(',')"
-          :multiple="multiple"
-          class="d-none"
-          @change="handleFileSelect"
-        >
-        <button 
-          type="button" 
-          class="btn btn-primary mt-3"
-          @click="triggerFileSelect"
-        >
-          选择文件
-        </button>
-      </div>
+    <!-- 使用浏览器原生样式，保持与 ModelTrain 页面一致 -->
+    <input
+      ref="fileInput"
+      type="file"
+      :accept="allowedTypes.map(type => `.${type}`).join(',')"
+      :multiple="multiple"
+      class="form-control"
+      @change="handleFileSelect"
+    >
+
+    <!-- 提示信息（不影响“原生文件输入”外观） -->
+    <div class="upload-hint text-muted small mt-2">
+      支持 {{ allowedTypes.join(', ') }} 格式，最大 {{ formatFileSize(maxSize) }}
     </div>
 
-    <!-- 上传进度 -->
-    <div v-if="uploadProgress > 0 && uploadProgress < 100" class="upload-progress mt-3">
+    <!-- 仅当 autoUpload=true 时才展示“内部上传进度/列表”，避免干扰训练页/ModelUse 的选择交互 -->
+    <div v-if="autoUpload && uploadProgress > 0 && uploadProgress < 100" class="upload-progress mt-3">
       <div class="progress-header d-flex justify-content-between align-items-center mb-2">
         <span>上传进度: {{ uploadProgress }}%</span>
         <span v-if="uploadSpeed > 0" class="speed-indicator">
@@ -37,8 +24,8 @@
         </span>
       </div>
       <div class="progress">
-        <div 
-          class="progress-bar" 
+        <div
+          class="progress-bar"
           role="progressbar"
           :style="{ width: uploadProgress + '%' }"
         >
@@ -47,17 +34,16 @@
       </div>
     </div>
 
-    <!-- 已选择文件列表 -->
-    <div v-if="selectedFiles.length > 0" class="selected-files mt-3">
+    <div v-if="autoUpload && selectedFiles.length > 0" class="selected-files mt-3">
       <h6 class="mb-2">已选择文件：</h6>
-      <div 
-        v-for="(file, index) in selectedFiles" 
+      <div
+        v-for="(file, index) in selectedFiles"
         :key="index"
         class="file-item d-flex align-items-center justify-content-between p-2 mb-2 border rounded"
       >
         <div class="file-info d-flex align-items-center">
-          <iconify-icon 
-            class="file-icon me-2" 
+          <iconify-icon
+            class="file-icon me-2"
             :icon="getFileIcon(file.type)"
           ></iconify-icon>
           <div>
@@ -66,9 +52,9 @@
           </div>
         </div>
         <div class="file-actions d-flex gap-2">
-          <button 
+          <button
             v-if="!isUploading"
-            type="button" 
+            type="button"
             class="btn btn-sm btn-outline-danger"
             @click="removeFile(index)"
           >
@@ -82,24 +68,17 @@
       </div>
     </div>
 
-    <!-- 控制按钮 -->
-    <div v-if="selectedFiles.length > 0 && !autoUpload" class="upload-controls mt-3">
-      <button 
-        type="button" 
+    <div v-if="autoUpload && selectedFiles.length > 0 && !isUploading" class="upload-controls mt-3">
+      <button
+        type="button"
         class="btn btn-success"
         :disabled="!canUpload"
         @click="uploadFiles"
       >
-        <iconify-icon 
-          v-if="isUploading" 
-          icon="mdi:loading" 
-          class="spin me-1"
-        ></iconify-icon>
-        {{ isUploading ? '上传中...' : '开始上传' }}
+        开始上传
       </button>
-      <button 
-        v-if="!isUploading"
-        type="button" 
+      <button
+        type="button"
         class="btn btn-secondary ms-2"
         @click="selectedFiles = []"
       >
@@ -375,10 +354,11 @@ defineExpose({
 
 <style scoped>
 .file-uploader {
-  padding: 20px;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  background-color: #fafafa;
+  /* 只保留虚线上传框的边框，避免外层边框在顶部/底部生成“莫名横线” */
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
 }
 
 .upload-area {

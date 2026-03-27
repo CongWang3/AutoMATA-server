@@ -18,19 +18,21 @@ export interface ModelPredictResponse extends BaseApiResponse {
 
 // 模型文件上传响应
 export interface ModelFileUploadResponse {
-  file_id: string
+  id: string
   file_path: string
 }
 
 export class ModelUseAPI extends JobApiBase<ModelFileUploadResponse, any> {
   constructor() {
-    super('/v1/model-use')
+    // 上传使用通用文件上传接口：/api/v1/files/upload
+    // 预测接口仍使用 /api/v1/model-use/predict
+    super('/v1')
   }
 
   /**
    * 模型预测任务提交
    */
-  static async predict(payload: {
+  async predict(payload: {
     model_type: string
     test_data_path: string
     email?: string

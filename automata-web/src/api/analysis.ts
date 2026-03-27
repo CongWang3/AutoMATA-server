@@ -37,6 +37,27 @@ export interface AnalysisResultResponse extends BaseApiResponse {
 }
 
 /**
+ * 综合分析：继续 GO + KEGG 富集（沿用同一 job_id）
+ */
+export interface ComprehensiveEnrichmentPayload {
+  type_analysis: 'all' | 'up' | 'down'
+
+  go_organism: string
+  go_pvalue: number
+  go_qvalue: number
+  go_plot_type: string
+  go_term_num: number
+  go_correction: string
+
+  kegg_organism: string
+  kegg_pvalue: number
+  kegg_qvalue: number
+  kegg_plot_type: string
+  kegg_term_num: number
+  kegg_correction: string
+}
+
+/**
  * 分析表单字段选项
  */
 export interface AnalysisFieldOption {
@@ -304,6 +325,24 @@ export class AnalysisAPI {
       )
     } catch (error) {
       console.error('综合分析失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 综合分析结果：继续 GO + KEGG 富集
+   */
+  static async runComprehensiveEnrichment(
+    jobId: string,
+    payload: ComprehensiveEnrichmentPayload
+  ): Promise<AnalysisResponse> {
+    try {
+      return await apiClient.post<AnalysisResponse>(
+        `/v1/analysis/comprehensive/${encodeURIComponent(jobId)}/enrichment`,
+        payload
+      )
+    } catch (error) {
+      console.error('综合分析继续富集失败:', error)
       throw error
     }
   }

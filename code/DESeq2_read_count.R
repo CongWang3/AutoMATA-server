@@ -28,24 +28,38 @@ padj_thr <- opt$padj_thr
 # group_info <- read.csv("../example/group_info.csv")
 # counts <- read.table("../example/read_count.txt", row.names = 1, header = TRUE, sep = "\t", check.names = FALSE)
 # group_info <- read.table("../example/group_info.txt", header = TRUE, sep = "\t", check.names = FALSE)
-counts <- read.table(paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = ""), row.names = 1, header = TRUE, sep = "\t", check.names = FALSE, stringsAsFactors = FALSE, fill = TRUE, comment.char = "", quote = "")
+counts <- read.table(
+  paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = ""),
+  header = TRUE,
+  sep = "\t",
+  check.names = FALSE,
+  stringsAsFactors = FALSE,
+  fill = TRUE,
+  comment.char = "",
+  quote = ""
+)
 group_info <- read.table(paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_info.txt", sep = ""), header = TRUE, sep = "\t", check.names = FALSE, fill = TRUE, comment.char = "")
 groups <- factor(group_info$Group, levels = c("Control", "Treatment"))
 
-# 行名为空 删除此行 一审增加
-if(any(is.na(counts[,1]))) {
-  # 方案1：删除基因名为NA的行
-  counts <- counts[!is.na(counts[,1]), ]
-  # cat("已删除基因名为NA的行\n")
-  cat("The row with the gene name NA has been deleted\n")
-
+# 先读取首列为普通列，再进行基因名清洗与去重（避免 read.table(row.names=1) 因重复行名直接报错）
+gene_names <- trimws(as.character(counts[[1]]))
+valid_gene <- !(is.na(gene_names) | gene_names == "")
+if (any(!valid_gene)) {
+  counts <- counts[valid_gene, , drop = FALSE]
+  gene_names <- gene_names[valid_gene]
+  cat("Rows with empty gene names have been removed\n")
 }
-
-# 如果有重复的行名，使用 make.unique 一审增加
-if(any(duplicated(counts[,1]))) {
-  rownames(counts) <- make.unique(as.character(counts[,1]))  # 重复值加后缀gene.1
-  counts <- counts[, -1]  # 删除原始第一列
+if (any(duplicated(gene_names))) {
+  cat("Duplicate gene names detected; keeping first occurrence only\n")
+  keep_idx <- !duplicated(gene_names)
+  counts <- counts[keep_idx, , drop = FALSE]
+  gene_names <- gene_names[keep_idx]
 }
+rownames(counts) <- gene_names
+counts <- counts[, -1, drop = FALSE]
+
+# 确保表达矩阵为数值型
+counts[] <- lapply(counts, function(x) as.numeric(as.character(x)))
 
 counts <- counts[which(rowSums(counts)!=0),] #删除表达量为0的基因  一审 新增
 

@@ -252,6 +252,8 @@ interface Props {
   fields: AnalysisField[]
   /** 提交处理函数 */
   onSubmit: (formData: FormData) => Promise<any>
+  /** 提交到后端的主文件字段名 */
+  fileFieldName?: string
   /** 示例数据下载地址 */
   exampleDataUrl?: string
   /** 示例文件名 */
@@ -289,6 +291,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  fileFieldName: 'file',
   multipleFiles: false,
   acceptTypes: '.txt,.csv,.tsv',
   secondFileFieldName: 'file2'
@@ -342,6 +345,7 @@ const jobParams = reactive({
 // WebSocket 管理
 const taskWsService = ref<any>(null)
 const wsConnected = ref(false)
+const statusPollTimer = ref<number | null>(null)
 
 // ==================== 计算属性 ====================
 
@@ -426,6 +430,15 @@ function buildSubmittedAnalysisParams(): AnalysisParamRow[] {
 async function hydrateAnalysisResults(jobId: string) {
   try {
     const r = await AnalysisAPI.getResult(jobId)
+    if (r?.status) {
+      jobStatus.value = String(r.status)
+      if (String(r.status).toUpperCase() === 'COMPLETED') {
+        jobProgress.value = 100
+      }
+    }
+    if (r?.error_message) {
+      analysisLastError.value = String(r.error_message)
+    }
     if (r.result_files?.length) {
       analysisResults.value = r.result_files.map((f) => ({
         filename: f.filename,
@@ -436,6 +449,27 @@ async function hydrateAnalysisResults(jobId: string) {
   } catch (e) {
     console.error('拉取分析结果文件列表失败:', e)
   }
+}
+
+const stopStatusPolling = () => {
+  if (statusPollTimer.value !== null) {
+    window.clearInterval(statusPollTimer.value)
+    statusPollTimer.value = null
+  }
+}
+
+const startStatusPolling = (jobId: string) => {
+  stopStatusPolling()
+  statusPollTimer.value = window.setInterval(async () => {
+    if (!showResultDialog.value || !currentJobId.value) return
+    if (currentJobId.value !== jobId) return
+    await hydrateAnalysisResults(jobId)
+
+    const s = String(jobStatus.value || '').toUpperCase()
+    if (s === 'COMPLETED' || s === 'FAILED') {
+      stopStatusPolling()
+    }
+  }, 3000)
 }
 
 const getFieldRules = (field: AnalysisField) => {
@@ -647,7 +681,7 @@ const submitForm = async () => {
     
     // 构造 FormData
     const requestData = new FormData()
-    requestData.append('file', formValues.file)
+    requestData.append(props.fileFieldName || 'file', formValues.file)
     
     if (showSecondFile.value && formValues.secondFile) {
       requestData.append(props.secondFileFieldName || 'file2', formValues.secondFile)
@@ -686,6 +720,7 @@ const submitForm = async () => {
     analysisLastError.value = ''
     showResultDialog.value = true
     void hydrateAnalysisResults(result.job_id)
+    startStatusPolling(result.job_id)
     
     emit('submit-success', result)
     
@@ -709,6 +744,7 @@ const resetForm = () => {
 
 // 关闭对话框
 const handleDialogClose = () => {
+  stopStatusPolling()
   showResultDialog.value = false
   currentJobId.value = ''
   jobStatus.value = 'WAITING'
@@ -721,6 +757,7 @@ const handleDialogClose = () => {
 
 // 组件卸载时断开 WebSocket
 onUnmounted(() => {
+  stopStatusPolling()
   disconnectWebSocket()
 })
 
@@ -843,6 +880,7 @@ defineExpose({
 
 :deep(.el-form-item__label) {
   font-weight: 500;
+  /* width: 250px; */
 }
 
 /* 无 label 的表单项在全局 label-width 下仍会占标签列宽，导致内容偏右；此处占满整行并居中 */
