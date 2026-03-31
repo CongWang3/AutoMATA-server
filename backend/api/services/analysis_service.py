@@ -25,13 +25,17 @@ from api.schemas.analysis import (
 from api.utils.file_utils import save_uploaded_file
 from api.websocket.task_manager import task_status_manager
 from api.services.email_service import email_service
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 
 class AnalysisService:
     """数据分析服务类"""
-    
+
+    # 与 training / analysis_train 一致的 Jobs 根目录
+    _JOBS_ROOT = Path("/xp/www/AutoMATA/download_data/Jobs")
+
     # 路径配置
     RSCRIPT_PATH = "/opt/anaconda/envs/R_442/bin/Rscript"
     RSCRIPT_OPTIONS = "--no-save"
@@ -55,6 +59,18 @@ class AnalysisService:
         job_dir.mkdir(parents=True, exist_ok=True)
         result_dir.mkdir(parents=True, exist_ok=True)
         return job_dir, result_dir
+
+    def _is_comprehensive_result_ready(self, result_dir: Path) -> bool:
+        """综合分析结果是否就绪：result目录存在且至少有一个volcano图。"""
+        if not result_dir.exists() or not result_dir.is_dir():
+            return False
+        volcano_exts = {".png", ".pdf", ".svg", ".tiff", ".jpeg", ".bmp"}
+        for file_path in result_dir.iterdir():
+            if not file_path.is_file():
+                continue
+            if file_path.stem.lower() == "volcano" and file_path.suffix.lower() in volcano_exts:
+                return True
+        return False
     
     async def _save_file_to_job_dir(
         self, 
@@ -305,7 +321,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"PCA分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_pca_analysis(
         self,
@@ -375,7 +391,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"相关性热图分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_correlation_heatmap(
         self,
@@ -453,7 +469,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"火山图分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_volcano_analysis(
         self, job_id: str, data_file: Path, gmt_path: str, job_dir: Path,
@@ -523,7 +539,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"韦恩图分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_venn_analysis(
         self, job_id: str, data_file: Path, job_dir: Path, plot_type: str,
@@ -608,7 +624,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"差异基因聚类热图分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_gene_cluster_heatmap(
         self, job_id: str, data_file: Path, job_dir: Path,
@@ -685,7 +701,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"哑铃图分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_dumbbell_analysis(
         self, job_id: str, data_file: Path, job_dir: Path,
@@ -754,7 +770,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"哑铃条形图分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_dumbbell_bar_analysis(
         self, job_id: str, data_file: Path, job_dir: Path,
@@ -827,7 +843,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"GO富集分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_go_enrichment(
         self, job_id: str, data_file: Path, job_dir: Path,
@@ -907,7 +923,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"KEGG富集分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_kegg_enrichment(
         self, job_id: str, data_file: Path, job_dir: Path,
@@ -927,7 +943,10 @@ class AnalysisService:
         ]
         if plot_type in ["chord", "cluster", "bubble"]:
             cmd_args.append(f"-e {term_num}")
-        
+
+        if settings.KEGG_USE_INTERNAL_DATA:
+            cmd_args.append("--use_local_kegg")
+
         await self._execute_r_script(job_id, "kegg_enrichment.R", cmd_args, job_dir, "KEGG富集分析", email)
     
     # ==================== PPI分析 ====================
@@ -985,7 +1004,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"PPI分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_ppi_analysis(
         self, job_id: str, data_file: Path, job_dir: Path,
@@ -1065,7 +1084,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"综合分析服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     async def _execute_comprehensive_analysis(
         self, job_id: str, expr_file: Path, info_file: Path, job_dir: Path,
@@ -1136,6 +1155,14 @@ class AnalysisService:
                 if process.returncode == 0:
                     job.status = JobStatus.COMPLETED
                     job.result_file = str(result_dir)
+                    existing_output = {}
+                    if job.output_params:
+                        try:
+                            existing_output = json.loads(job.output_params) if isinstance(job.output_params, str) else dict(job.output_params)
+                        except Exception:
+                            existing_output = {}
+                    existing_output["result_dir"] = str(result_dir)
+                    existing_output["terminal_log"] = str(terminal_log)
 
                     # 推送 completed 状态（前端轮询兜底，这里用于保持一致体验）
                     try:
@@ -1151,18 +1178,36 @@ class AnalysisService:
                         )
                     except Exception as e:
                         logger.debug(f"WebSocket状态推送失败（综合分析 Completed）: {e}")
-                    
-                    # 发送邮件通知
+
+                    # 发送邮件通知（best-effort，不影响任务结果）
                     if email:
-                        try:
-                            await email_service.send_result_email(
-                                to_email=email,
-                                job_id=job_id,
-                                analysis_type="综合分析",
-                                result_dir=str(result_dir)
-                            )
-                        except Exception as e:
-                            logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
+                        already_sent = bool(existing_output.get("email_sent_at"))
+                        if already_sent:
+                            logger.info(f"综合分析邮件已发送，跳过重复发送: job_id={job_id}")
+                        else:
+                            is_ready = self._is_comprehensive_result_ready(result_dir)
+                            if not is_ready:
+                                logger.warning(
+                                    f"综合分析结果未就绪，跳过邮件发送: job_id={job_id}, result_dir={result_dir}"
+                                )
+                            else:
+                                try:
+                                    send_ok = await email_service.send_result_email(
+                                        to_email=email,
+                                        job_id=job_id,
+                                        analysis_type="综合分析",
+                                        result_dir=str(result_dir)
+                                    )
+                                    if send_ok:
+                                        existing_output["email_sent_at"] = datetime.now().isoformat()
+                                        existing_output["email_sent_to"] = email
+                                    else:
+                                        logger.warning(
+                                            f"综合分析邮件发送未成功（返回False），不写入已发送标记: job_id={job_id}"
+                                        )
+                                except Exception as e:
+                                    logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
+                    job.output_params = json.dumps(existing_output, ensure_ascii=False)
                 else:
                     error_msg = ""
                     if terminal_log.exists():
@@ -1214,17 +1259,17 @@ class AnalysisService:
                 Job.user_id == self.user.id
             ).first()
             if not job:
-                raise HTTPException(status_code=404, detail="任务不存在")
+                raise HTTPException(status_code=404, detail="Task does not exist")
 
             base_dir = Path("/xp/www/AutoMATA/download_data/Jobs")
             job_dir = base_dir / job_id
             result_dir = job_dir / "result"
             if not result_dir.exists():
-                raise HTTPException(status_code=400, detail="该任务尚未生成 result 目录，无法继续富集分析")
+                raise HTTPException(status_code=400, detail="The task has not generated the result directory, so enrichment analysis cannot be continued")
 
             select_file = result_dir / f"select_{req.type_analysis}.txt"
             if not select_file.exists():
-                raise HTTPException(status_code=400, detail=f"缺少差异筛选文件: {select_file.name}")
+                raise HTTPException(status_code=400, detail=f"The differential selection file is missing: {select_file.name}")
 
             # 记录追加参数（不影响主流程）
             try:
@@ -1269,7 +1314,7 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"综合分析继续富集服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
     async def _execute_comprehensive_enrichment(
         self,
@@ -1289,9 +1334,11 @@ class AnalysisService:
             return
 
         # 标记处理中（一次提交只在最终完成时推 Completed，避免前端误提示“已完成”）
+        # analysis_train 主流程完成后 result_file 指向 model_result.zip；富集只写 result/ 目录，不能覆盖为目录否则整包下载失效
         try:
             job.status = JobStatus.PROCESSING
-            job.result_file = str(result_dir)
+            if job.job_type != JobType.ANALYSIS_TRAIN:
+                job.result_file = str(result_dir)
             job.updated_at = datetime.now()
             self.db.commit()
         except Exception as e:
@@ -1372,6 +1419,9 @@ class AnalysisService:
             if req.kegg_plot_type in ["chord", "cluster", "bubble"]:
                 kegg_args.append(f"-e {req.kegg_term_num}")
 
+            if settings.KEGG_USE_INTERNAL_DATA:
+                kegg_args.append("--use_local_kegg")
+
             kegg_log = job_dir / "terminal_kegg_msg.txt"
             kegg_cfg = job_dir / "config_kegg.txt"
             rc_kegg = await self._run_r_script_to_log("kegg_enrichment.R", kegg_args, kegg_log, kegg_cfg)
@@ -1411,15 +1461,19 @@ class AnalysisService:
             self.db.commit()
 
             try:
+                ws_payload: dict = {
+                    "job_id": job_id,
+                    "status": "Completed",
+                    "progress": 100,
+                    "message": "GO + KEGG 富集分析完成",
+                }
+                if job.job_type == JobType.ANALYSIS_TRAIN and job.result_file:
+                    ws_payload["result_file"] = job.result_file
+                else:
+                    ws_payload["result_file"] = str(result_dir)
                 await task_status_manager.send_task_status(
                     str(self.user.id),
-                    {
-                        "job_id": job_id,
-                        "status": "Completed",
-                        "progress": 100,
-                        "result_file": str(result_dir),
-                        "message": "GO + KEGG 富集分析完成"
-                    }
+                    ws_payload,
                 )
             except Exception as e:
                 logger.debug(f"WebSocket状态推送失败（综合富集 Completed）: {e}")
@@ -1449,29 +1503,41 @@ class AnalysisService:
     
     # ==================== 获取分析结果 ====================
     
+    def _analysis_train_result_dir(self, job_id: str) -> Path:
+        return (self._JOBS_ROOT / job_id / "result").resolve()
+
     def get_analysis_result(self, job_id: str) -> AnalysisResultResponse:
-        """获取分析结果"""
+        """获取分析结果（含 data_analysis 与 analysis_train）"""
         job = self.db.query(Job).filter(
             Job.job_id == job_id,
             Job.user_id == self.user.id
         ).first()
         
         if not job:
-            raise HTTPException(status_code=404, detail="任务不存在")
+            raise HTTPException(status_code=404, detail="Task does not exist")
         
-        result_files = []
-        if job.result_file and Path(job.result_file).exists():
-            result_dir = Path(job.result_file)
-            if result_dir.is_dir():
-                for f in result_dir.iterdir():
-                    if f.is_file():
-                        result_files.append(AnalysisResultFile(
+        result_files: List[AnalysisResultFile] = []
+        result_dir: Optional[Path] = None
+
+        if job.job_type == JobType.ANALYSIS_TRAIN:
+            result_dir = self._analysis_train_result_dir(job_id)
+        elif job.result_file and Path(job.result_file).exists():
+            candidate = Path(job.result_file)
+            if candidate.is_dir():
+                result_dir = candidate
+
+        if result_dir and result_dir.is_dir():
+            for f in sorted(result_dir.iterdir()):
+                if f.is_file() and not f.name.startswith("."):
+                    result_files.append(
+                        AnalysisResultFile(
                             filename=f.name,
-                            format=f.suffix.lstrip('.'),
+                            format=f.suffix.lstrip(".") or "unknown",
                             size=f.stat().st_size,
-                            path=str(f)
-                        ))
-        
+                            path=str(f),
+                        )
+                    )
+
         return AnalysisResultResponse(
             job_id=job_id,
             status=job.status.value if job.status else "Unknown",
@@ -1480,22 +1546,33 @@ class AnalysisService:
         )
     
     def get_result_file_path(self, job_id: str, filename: str) -> Path:
-        """获取结果文件路径"""
+        """获取结果文件路径（data_analysis：result_file 为目录；analysis_train：固定 Jobs/<id>/result）"""
         job = self.db.query(Job).filter(
             Job.job_id == job_id,
             Job.user_id == self.user.id
         ).first()
         
         if not job:
-            raise HTTPException(status_code=404, detail="任务不存在")
-        
-        if not job.result_file:
-            raise HTTPException(status_code=404, detail="结果文件不存在")
-        
-        result_dir = Path(job.result_file)
-        file_path = result_dir / filename
-        
+            raise HTTPException(status_code=404, detail="Task does not exist")
+
+        safe_name = Path(filename).name
+        if not safe_name or safe_name != filename:
+            raise HTTPException(status_code=400, detail="Invalid file name")
+
+        if job.job_type == JobType.ANALYSIS_TRAIN:
+            result_dir = self._analysis_train_result_dir(job_id)
+        else:
+            if not job.result_file:
+                raise HTTPException(status_code=404, detail="Result file does not exist")
+            result_dir = Path(job.result_file)
+            if not result_dir.is_dir():
+                raise HTTPException(status_code=404, detail="Invalid result directory")
+
+        file_path = (result_dir / safe_name).resolve()
+        if file_path.parent != result_dir.resolve():
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
         if not file_path.exists():
-            raise HTTPException(status_code=404, detail=f"文件 {filename} 不存在")
-        
+            raise HTTPException(status_code=404, detail=f"File {filename} does not exist")
+
         return file_path

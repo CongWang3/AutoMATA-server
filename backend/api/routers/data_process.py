@@ -82,7 +82,7 @@ async def process_genome_data(
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
             raise HTTPException(
                 status_code=400, 
-                detail="只支持 txt、csv、tsv 格式的文件"
+                detail="Only txt format files are supported"
             )
         
         # 验证参数
@@ -96,19 +96,19 @@ async def process_genome_data(
         if gene_nomenclature not in valid_nomenclatures:
             raise HTTPException(
                 status_code=400, 
-                detail=f"基因命名方式必须是: {', '.join(valid_nomenclatures)}"
+                detail=f"Gene nomenclature must be: {', '.join(valid_nomenclatures)}"
             )
             
         if data_type not in valid_data_types:
             raise HTTPException(
                 status_code=400, 
-                detail=f"数据类型必须是: {', '.join(valid_data_types)}"
+                detail=f"Data type must be: {', '.join(valid_data_types)}"
             )
             
         if organism not in valid_organisms:
             raise HTTPException(
                 status_code=400, 
-                detail=f"支持的物种: {', '.join(valid_organisms)}"
+                detail=f"Supported species: {', '.join(valid_organisms)}"
             )
         
         # 调用服务层处理 执行脚本
@@ -128,10 +128,10 @@ async def process_genome_data(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 @router.post("/transcriptome", response_model=TranscriptomeProcessResponse)
 async def process_transcriptome_data(
@@ -165,7 +165,7 @@ async def process_transcriptome_data(
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
             raise HTTPException(
                 status_code=400, 
-                detail="只支持 txt、csv、tsv 格式的文件"
+                detail="Only txt format files are supported"
             )
         
         # 验证参数
@@ -178,19 +178,19 @@ async def process_transcriptome_data(
         if mrna_nomenclature not in valid_nomenclatures:
             raise HTTPException(
                 status_code=400, 
-                detail=f"mRNA命名方式必须是: {', '.join(valid_nomenclatures)}"
+                detail=f"mRNA nomenclature must be: {', '.join(valid_nomenclatures)}"
             )
             
         if data_type not in valid_data_types:
             raise HTTPException(
                 status_code=400, 
-                detail=f"数据类型必须是: {', '.join(valid_data_types)}"
+                detail=f"Data type must be: {', '.join(valid_data_types)}"
             )
             
         if organism not in valid_organisms:
             raise HTTPException(
                 status_code=400, 
-                detail=f"支持的物种: {', '.join(valid_organisms)}"
+                detail=f"Supported species: {', '.join(valid_organisms)}"
             )
         
         # 调用服务层处理
@@ -210,10 +210,10 @@ async def process_transcriptome_data(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"转录组数据处理失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 @router.post("/protein", response_model=ProteinProcessResponse)
@@ -246,7 +246,7 @@ async def process_protein_data(
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
             raise HTTPException(
                 status_code=400, 
-                detail="只支持 txt、csv、tsv 格式的文件"
+                detail="Only txt format files are supported"
             )
         
         # 验证参数
@@ -258,13 +258,13 @@ async def process_protein_data(
         if protein_nomenclature not in valid_nomenclatures:
             raise HTTPException(
                 status_code=400, 
-                detail=f"蛋白质命名方式必须是: {', '.join(valid_nomenclatures)}"
+                detail=f"Protein nomenclature must be: {', '.join(valid_nomenclatures)}"
             )
             
         if organism not in valid_organisms:
             raise HTTPException(
                 status_code=400, 
-                detail=f"支持的物种: {', '.join(valid_organisms)}"
+                detail=f"Supported species: {', '.join(valid_organisms)}"
             )
         
         # 调用服务层处理
@@ -283,10 +283,10 @@ async def process_protein_data(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"蛋白质数据处理失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 @router.post("/integration", response_model=IntegrationProcessResponse)
@@ -323,7 +323,7 @@ async def process_integration_data(
             if not f.filename or not f.filename.endswith(('.txt', '.csv', '.tsv')):
                 raise HTTPException(
                     status_code=400,
-                    detail="所有文件仅支持 txt、csv、tsv 格式",
+                    detail="All files must support txt format",
                 )
         
         service = DataProcessService(db, current_user)
@@ -343,10 +343,10 @@ async def process_integration_data(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"多组学数据整合失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 @router.post("/pvalue-integration", response_model=PvalueIntegrationProcessResponse)
@@ -371,7 +371,7 @@ async def process_pvalue_integration_data(
             if not f.filename or not f.filename.endswith(('.txt', '.csv', '.tsv')):
                 raise HTTPException(
                     status_code=400,
-                    detail="所有文件仅支持 txt、csv、tsv 格式",
+                    detail="All files must support txt format",
                 )
 
         # 方法校验（与 R 脚本中说明保持一致）
@@ -389,7 +389,7 @@ async def process_pvalue_integration_data(
         if method not in valid_methods:
             raise HTTPException(
                 status_code=400,
-                detail=f"method 必须为: {', '.join(valid_methods)}",
+                detail=f"method must be: {', '.join(valid_methods)}",
             )
 
         service = DataProcessService(db, current_user)
@@ -409,10 +409,10 @@ async def process_pvalue_integration_data(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"pvalue 多组学整合失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 @router.get("/status/{job_id}", response_model=DataProcessStatusResponse)
 async def get_process_status(
@@ -438,7 +438,7 @@ async def get_process_status(
         ).first()
         
         if not job:
-            raise HTTPException(status_code=404, detail="任务不存在")
+            raise HTTPException(status_code=404, detail="The task does not exist")
         
         return DataProcessStatusResponse(
             job_id=job.job_id,
@@ -454,10 +454,10 @@ async def get_process_status(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库查询失败")
+        raise HTTPException(status_code=500, detail="Database query failed")
     except Exception as e:
         logger.error(f"查询任务状态失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"查询失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to query the task status: {str(e)}")
 
 @router.get("/jobs", response_model=JobListResponse)
 async def get_user_jobs(
@@ -507,7 +507,7 @@ async def get_user_jobs(
         
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库查询失败")
+        raise HTTPException(status_code=500, detail="Database query failed")
 
 @router.get("/download/{job_id}")
 async def download_result(
@@ -534,18 +534,31 @@ async def download_result(
         ).first()
         
         if not job:
-            raise HTTPException(status_code=404, detail="任务不存在")
+            raise HTTPException(status_code=404, detail="The task does not exist")
         
-        if job.status.value != 'COMPLETED' and job.status != 'Completed':
-            raise HTTPException(status_code=400, detail="任务尚未完成")
-        
-        if not job.result_file:
-            raise HTTPException(status_code=404, detail="结果文件不存在")
+        status_text = job.status.value if hasattr(job.status, "value") else str(job.status)
+        # 放宽条件：
+        # 1) 若状态已 Completed → 正常放行
+        # 2) 若状态尚未标记为 Completed，但 Jobs/<id>/ 下已存在 processed.txt 或其它可下载结果 → 也允许下载
+        jobs_root = Path("/xp/www/AutoMATA/download_data/Jobs")
+        job_dir = jobs_root / job_id
+        processed_txt = job_dir / "processed.txt"
+        has_db_result = bool(job.result_file and str(job.result_file).strip())
+        db_result_path = Path(str(job.result_file)).expanduser() if has_db_result else None
+
+        is_completed = str(status_text).strip().lower() == 'completed'
+        has_physical_result = (
+            processed_txt.is_file()
+            or (db_result_path is not None and db_result_path.is_file())
+        )
+
+        if not (is_completed or has_physical_result):
+            raise HTTPException(status_code=400, detail="The task is not completed")
         
         # 检查文件是否存在
         result_path = FilePath(job.result_file)
         if not result_path.exists():
-            raise HTTPException(status_code=404, detail="结果文件不存在")
+            raise HTTPException(status_code=404, detail="The result file does not exist")
         
         # 返回文件
         return FileResponse(
@@ -558,7 +571,7 @@ async def download_result(
         raise
     except Exception as e:
         logger.error(f"下载结果失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"下载失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to download the result: {str(e)}")
 
 
 import hmac
@@ -596,13 +609,38 @@ async def get_download_url(
         ).first()
         
         if not job:
-            raise HTTPException(status_code=404, detail="任务不存在")
-        
-        if job.status.value != 'COMPLETED' and job.status != 'Completed':
-            raise HTTPException(status_code=400, detail="任务尚未完成")
-        
-        if not job.result_file:
-            raise HTTPException(status_code=404, detail="结果文件不存在")
+            raise HTTPException(status_code=404, detail="The task does not exist")
+
+        status_text = job.status.value if hasattr(job.status, "value") else str(job.status)
+        jobs_root = FilePath("/xp/www/AutoMATA/download_data/Jobs")
+        job_dir = jobs_root / job_id
+        processed_txt = job_dir / "processed.txt"
+        # Integration 任务的默认输出位置：Jobs/<id>/result/<id>_result.txt
+        integration_result_txt = job_dir / "result" / f"{job_id}_result.txt"
+        has_db_result = bool(job.result_file and str(job.result_file).strip())
+        db_result_path = FilePath(str(job.result_file)).expanduser() if has_db_result else None
+        is_completed = str(status_text).strip().lower() == "completed"
+        has_physical_result = (
+            processed_txt.is_file()
+            or integration_result_txt.is_file()
+            or (db_result_path is not None and db_result_path.is_file())
+        )
+
+        # 放宽条件与 /download/{job_id} 对齐：Completed 或物理结果存在即可生成下载链接
+        if not (is_completed or has_physical_result):
+            raise HTTPException(status_code=400, detail="The task is not completed")
+
+        # 若 DB 未写 result_file，但磁盘已有结果文件，则补写 result_file（不影响本次返回；写回失败也不阻断）
+        if not has_db_result:
+            if processed_txt.is_file():
+                job.result_file = str(processed_txt)
+            elif integration_result_txt.is_file():
+                job.result_file = str(integration_result_txt)
+            try:
+                db.add(job)
+                db.commit()
+            except Exception:
+                db.rollback()
         
         # 生成签名
         from config.settings import settings
@@ -624,7 +662,7 @@ async def get_download_url(
         raise
     except Exception as e:
         logger.error(f"生成下载链接失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"生成下载链接失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate the download link: {str(e)}")
 
 
 # ---------------- 示例数据下载（多组学整合） ----------------
@@ -701,7 +739,7 @@ async def download_draw_example(analysis_type: str):
     if analysis_type not in example_files:
         raise HTTPException(
             status_code=400, 
-            detail=f"不支持的示例类型：{analysis_type}。支持的类型：{', '.join(example_files.keys())}"
+            detail=f"Unsupported example type: {analysis_type}. Supported types: {', '.join(example_files.keys())}"
         )
     
     file_name = example_files[analysis_type]
@@ -709,7 +747,7 @@ async def download_draw_example(analysis_type: str):
     
     if not file_path.exists():
         logger.error(f"示例文件不存在：{file_path}")
-        raise HTTPException(status_code=404, detail=f"示例文件不存在：{file_name}")
+        raise HTTPException(status_code=404, detail=f"The example file does not exist: {file_name}")
     
     return FileResponse(
         path=str(file_path),

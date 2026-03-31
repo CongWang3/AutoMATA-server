@@ -105,7 +105,7 @@
                   @click="downloadResult"
                   class="download-btn"
                 >
-                  download
+                  Download
                 </el-button>
               </td>
             </tr>
@@ -319,7 +319,7 @@ const downloadResult = async () => {
     
   } catch (error: any) {
     console.error('下载失败:', error)
-    ElMessage.error('下载失败: ' + (error.message || '未知错误'))
+    ElMessage.error('Download failed: ' + (error.message || 'Unknown error'))
   }
 }
 

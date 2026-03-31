@@ -7,7 +7,7 @@
     @click="handleDownload"
   >
     <el-icon v-if="!downloading"><Download /></el-icon>
-    {{ downloading ? '下载中...' : text }}
+    {{ downloading ? 'Downloading…' : text }}
   </el-button>
 </template>
 
@@ -35,7 +35,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   type: 'primary',
   size: 'small',
-  text: '下载',
+  text: 'Download',
   disabled: false
 })
 
@@ -70,7 +70,7 @@ async function handleDownload() {
     console.log(`📦 下载文件 (${formatFileSize(props.fileSize)})，使用独立下载服务器`)
     await downloadViaServer()
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : '下载失败'
+    const errorMsg = error instanceof Error ? error.message : 'Download failed'
     console.error('❌ 下载失败:', errorMsg)
     ElMessage.error(errorMsg)
     emit('download-error', errorMsg)
@@ -101,7 +101,7 @@ async function downloadViaServer() {
     document.body.removeChild(link)
     
     // 显示提示
-    ElMessage.success('下载已开始')
+    ElMessage.success('Download started')
     
     emit('download-complete')
   } catch (error) {

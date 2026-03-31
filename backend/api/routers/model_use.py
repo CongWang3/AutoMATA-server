@@ -59,11 +59,11 @@ def _generate_job_id() -> str:
 
 def _validate_path_required(path: Optional[str], *, allowed_extensions: list[str], field_name: str) -> Path:
     if not path:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{field_name} 是必填项")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{field_name} is a required field")
     try:
         return security_validator.validate_file_path(path, allowed_extensions=[e.lower() for e in allowed_extensions])
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{field_name} 校验失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{field_name} verification failed: {str(e)}")
 
 
 async def _run_command_async(
@@ -86,10 +86,10 @@ async def _run_command_async(
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            raise RuntimeError(f"命令超时（{timeout_sec}s）: {' '.join(cmd)}")
+            raise RuntimeError(f"Command timeout ({timeout_sec}s): {' '.join(cmd)}")
 
     if proc.returncode != 0:  # type: ignore[name-defined]
-        raise RuntimeError(f"命令执行失败（code={proc.returncode}）: {' '.join(cmd)}")  # type: ignore[union-attr]
+        raise RuntimeError(f"Command execution failed (code={proc.returncode}): {' '.join(cmd)}")  # type: ignore[union-attr]
 
 
 @router.post("/predict", response_model=ModelUsePredictResponse)
@@ -100,7 +100,7 @@ async def predict(
 ):
     model_type_norm = (payload.model_type or "").strip().lower()
     if not model_type_norm:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="model_type 不能为空")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="model_type can not be empty")
 
     # 统一 Jobs 目录（与训练/数据处理 PHP 版保持一致）
     jobs_root = Path("/xp/www/AutoMATA/download_data/Jobs")
@@ -150,7 +150,7 @@ async def predict(
             field_name="un_semi_model_path",
         )
     else:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"不支持的 model_type: {payload.model_type}")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Unsupported model_type: {payload.model_type}")
 
     job_id = _generate_job_id()
     job = Job(
@@ -213,7 +213,7 @@ async def _execute_model_use_background(
     try:
         bg_user = bg_db.query(User).filter(User.id == user_id).first()
         if not bg_user:
-            raise RuntimeError(f"后台模型应用未找到用户: {user_id}")
+            raise RuntimeError(f"Background model application not found user: {user_id}")
 
         jobs_root = Path("/xp/www/AutoMATA/download_data/Jobs")
         jobs_dir = jobs_root / job_id
@@ -223,7 +223,7 @@ async def _execute_model_use_background(
 
         job = bg_db.query(Job).filter(Job.job_id == job_id).first()
         if not job:
-            raise RuntimeError(f"后台未找到 Job: {job_id}")
+            raise RuntimeError(f"Background not found Job: {job_id}")
 
         # 标记开始执行
         job.status = JobStatus.PROCESSING
@@ -308,7 +308,7 @@ async def _execute_model_use_background(
                 "pseudo": "/xp/www/AutoMATA/code/use_model/predict_pseudo.py",
             }
             if model_type not in script_map:
-                raise RuntimeError(f"不支持的推理 model_type: {model_type}")
+                raise RuntimeError(f"Unsupported model_type: {model_type}")
             script_path = script_map[model_type]
             cmd = [
                 python_exec,
@@ -380,16 +380,16 @@ async def _execute_model_use_background(
 
             # 2) 基础可交付校验：存在且非空
             if not tmp_path.exists() or tmp_path.stat().st_size <= 0:
-                raise RuntimeError("临时 zip 不可交付：文件不存在或为空")
+                raise RuntimeError("Temporary zip cannot be delivered: file does not exist or is empty")
 
             # 3) 进一步校验 zip 是否可读（防止写入中途损坏）
             try:
                 with zipfile.ZipFile(str(tmp_path), "r") as zf_check:
                     bad = zf_check.testzip()
                     if bad is not None:
-                        raise RuntimeError(f"zip 校验失败，坏文件: {bad}")
+                        raise RuntimeError(f"zip verification failed, bad file: {bad}")
             except zipfile.BadZipFile as e:
-                raise RuntimeError(f"zip 校验失败：坏 zip: {e}") from e
+                raise RuntimeError(f"zip verification failed: bad zip: {e}") from e
 
             # 4) 原子 rename：tmp -> final
             # 同一文件系统内 rename 是原子的，能最大程度避免下载服务读到半成品
@@ -397,10 +397,10 @@ async def _execute_model_use_background(
 
             # 5) 最终校验
             if not final_path.exists() or final_path.stat().st_size <= 0:
-                raise RuntimeError("最终 zip 不可交付：文件不存在或为空")
+                raise RuntimeError("Final zip cannot be delivered: file does not exist or is empty")
         except Exception as e:
             # 确保不把“不可交付 zip”写入 DB
-            raise RuntimeError(f"结果压缩失败/校验失败: {e}") from e
+            raise RuntimeError(f"Result compression failed/verification failed: {e}") from e
 
         job = bg_db.query(Job).filter(Job.job_id == job_id).first()
         job.status = JobStatus.COMPLETED

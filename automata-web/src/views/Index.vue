@@ -92,9 +92,11 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 const goToAnalysis = () => {
-    // 这里可以导航到分析页面，暂时使用 window.open 模拟原来的行为
-    window.open('/analysis_train.php', '_blank')
+    router.push({ name: 'train-analyze-train' })
 }
 
 const handleImageError = (event: Event) => {

@@ -18,44 +18,45 @@
       >
         <el-menu-item index="/">
           <el-icon><House /></el-icon>
-          <template #title>首页</template>
+          <template #title>Home</template>
         </el-menu-item>
         
         <el-sub-menu index="data-process">
           <template #title>
             <el-icon><DataAnalysis /></el-icon>
-            <span>数据处理</span>
+            <span>Data processing</span>
           </template>
-          <el-menu-item index="/data-process/genome">基因组</el-menu-item>
-          <el-menu-item index="/data-process/transcriptome">转录组</el-menu-item>
-          <el-menu-item index="/data-process/protein">蛋白质组</el-menu-item>
-          <el-menu-item index="/data-process/integration">数据整合</el-menu-item>
+          <el-menu-item index="/data-process/genome">Genome</el-menu-item>
+          <el-menu-item index="/data-process/transcriptome">Transcriptome</el-menu-item>
+          <el-menu-item index="/data-process/protein">Proteome</el-menu-item>
+          <el-menu-item index="/data-process/integration">Integration</el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu index="model">
           <template #title>
             <el-icon><SetUp /></el-icon>
-            <span>模型训练</span>
+            <span>Model training</span>
           </template>
-          <el-menu-item index="/model/train/supervised">监督学习</el-menu-item>
-          <el-menu-item index="/model/train/unsupervised">无监督学习</el-menu-item>
-          <el-menu-item index="/model/train/semi-supervised">半监督学习</el-menu-item>
-          <el-menu-item index="/model/use">模型使用</el-menu-item>
+          <el-menu-item index="/model/train/supervised">Supervised</el-menu-item>
+          <el-menu-item index="/model/train/unsupervised">Unsupervised</el-menu-item>
+          <el-menu-item index="/model/train/semi-supervised">Semi-supervised</el-menu-item>
+          <el-menu-item index="/model/train/analyze-train">Analyze &amp; train</el-menu-item>
+          <el-menu-item index="/model/use">Model use</el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu index="analysis">
           <template #title>
             <el-icon><PieChart /></el-icon>
-            <span>数据分析</span>
+            <span>Data analysis</span>
           </template>
-          <el-menu-item index="/data-analysis">差异表达</el-menu-item>
-          <el-menu-item index="/data-analysis/go">富集分析</el-menu-item>
-          <el-menu-item index="/data-analysis/pca">可视化</el-menu-item>
+          <el-menu-item index="/data-analysis">Differential expression</el-menu-item>
+          <el-menu-item index="/data-analysis/go">Enrichment</el-menu-item>
+          <el-menu-item index="/data-analysis/pca">Visualization</el-menu-item>
         </el-sub-menu>
         
         <el-menu-item index="/help">
           <el-icon><QuestionFilled /></el-icon>
-          <template #title>帮助</template>
+          <template #title>Help</template>
         </el-menu-item>
       </el-menu>
     </div>

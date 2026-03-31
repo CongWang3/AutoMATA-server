@@ -32,7 +32,7 @@
             >
               <el-icon class="el-icon--upload"><upload-filled /></el-icon>
               <div class="el-upload__text">
-                将文件拖到此处，或<em>点击上传</em>
+                Drag and drop the file here, or <em>click to upload</em>
               </div>
               <template #tip>
                 <div class="upload-tip-container">
@@ -45,7 +45,7 @@
                       @click="downloadExampleData"
                       class="example-btn"
                     >
-                      下载示例数据
+                      Download Example Data
                     </el-button>
                   </div>
                   <div class="tip-notes">
@@ -76,10 +76,10 @@
         </el-form-item>
         
         <!-- 数据类型选择（部分功能如蛋白质处理无需此项，可通过 props 控制显示） -->
-        <el-form-item v-if="props.showDataType" label="数据类型" prop="dataType">
+        <el-form-item v-if="props.showDataType" label="Data Type" prop="dataType">
           <el-select 
             v-model="formData.dataType" 
-            placeholder="请选择数据类型"
+            placeholder="Select data type"
             style="width: 100%"
           >
             <el-option label="FPKM" value="FPKM" />
@@ -91,10 +91,10 @@
         </el-form-item>
         
         <!-- 物种选择 -->
-        <el-form-item label="物种" prop="organism">
+        <el-form-item label="Organism" prop="organism">
           <el-select 
             v-model="formData.organism" 
-            placeholder="请选择物种"
+            placeholder="Select organism"
             style="width: 100%"
           >
             <el-option 
@@ -107,10 +107,10 @@
         </el-form-item>
         
         <!-- 邮箱 -->
-        <el-form-item label="您的邮箱" prop="email">
+        <el-form-item label="Email" prop="email">
           <el-input 
             v-model="formData.email" 
-            placeholder="请输入邮箱地址（可选）"
+            placeholder="Enter your email address (optional)"
             type="email"
           />
         </el-form-item>
@@ -124,9 +124,9 @@
             size="large"
             class="submit-btn"
           >
-            {{ submitting ? '处理中...' : '提交处理' }}
+            {{ submitting ? 'Processing...' : 'Submit' }}
           </el-button>
-          <el-button @click="resetForm">重置</el-button>
+          <el-button @click="resetForm">Reset</el-button>
         </el-form-item>
         
         <!-- 进度显示 -->
@@ -184,7 +184,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   tagType: 'success',
-  acceptTypes: '.txt,.csv,.tsv',
+  // acceptTypes: '.txt,.csv,.tsv',
+  acceptTypes: '.txt',
   showDataType: true
 })
 
@@ -209,17 +210,17 @@ const formData = reactive<FormData>({
 
 const formRules = computed<FormRules>(() => {
   const rules: FormRules = {
-    file: [{ required: true, message: '请上传文件', trigger: 'change' }],
+    file: [{ required: true, message: 'Upload file', trigger: 'change' }],
     nomenclature: [
       { required: true, message: props.nomenclaturePlaceholder, trigger: 'change' }
     ],
-    organism: [{ required: true, message: '请选择物种', trigger: 'change' }],
-    email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }]
+    organism: [{ required: true, message: 'Select organism', trigger: 'change' }],
+    email: [{ type: 'email', message: 'Enter a valid email address', trigger: 'blur' }]
   }
 
   // 仅在需要时添加“数据类型”校验规则（蛋白质处理不需要）
   if (props.showDataType) {
-    rules.dataType = [{ required: true, message: '请选择数据类型', trigger: 'change' }]
+    rules.dataType = [{ required: true, message: 'Select data type', trigger: 'change' }]
   }
 
   return rules
@@ -232,7 +233,7 @@ const handleFileChange = (uploadFile: UploadFile) => {
 }
 
 const handleExceed = () => {
-  ElMessage.warning('只能上传一个文件')
+  ElMessage.warning('Only one file can be uploaded')
 }
 
 const beforeUpload = (file: File): boolean => {
@@ -244,8 +245,10 @@ const beforeUpload = (file: File): boolean => {
   // - 测试重点：请验证各种文件格式的拒绝和接受逻辑
   // -->
   
-  const allowedTypes = ['text/plain', 'text/csv', 'application/csv']
-  const allowedExtensions = ['.txt', '.csv', '.tsv']
+  // const allowedTypes = ['text/plain', 'text/csv', 'application/csv']
+  // const allowedExtensions = ['.txt', '.csv', '.tsv']
+  const allowedTypes = ['text/plain']
+  const allowedExtensions = ['.txt']
   
   // 检查MIME类型
   const isValidType = allowedTypes.includes(file.type)
@@ -255,14 +258,14 @@ const beforeUpload = (file: File): boolean => {
   const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
   
   if (!isValidType && !hasValidExtension) {
-    ElMessage.error('只支持 txt、csv、tsv 格式的文件！')
+    ElMessage.error('Only support txt files with tab delimiter.')
     return false
   }
   
   // 检查文件大小（限制为10MB）
-  const maxSize = 10 * 1024 * 1024 // 10MB
+  const maxSize = 50 * 1024 * 1024 // 50MB
   if (file.size > maxSize) {
-    ElMessage.error('文件大小不能超过10MB')
+    ElMessage.error('File size cannot exceed 50MB')
     return false
   }
   
@@ -279,7 +282,7 @@ const downloadExampleData = () => {
   // -->
   
   if (!props.exampleDataUrl) {
-    ElMessage.warning('暂无示例数据')
+    ElMessage.warning('No example data available')
     return
   }
   
@@ -297,7 +300,7 @@ const downloadExampleData = () => {
   link.click()
   document.body.removeChild(link)
   
-  ElMessage.success(`示例数据已开始下载: ${fileName}`)
+  ElMessage.success(`Example data has started downloading: ${fileName}`)
   
   // 方案2：如果需要通过下载服务，可以这样实现：
   // const downloadUrl = `http://localhost:8001/example${props.exampleDataUrl}`
@@ -311,7 +314,7 @@ const submitForm = async () => {
     await formRef.value.validate()
     
     if (!formData.file) {
-      ElMessage.error('请先上传文件')
+      ElMessage.error('Please upload the file first')
       return
     }
     
@@ -328,7 +331,7 @@ const submitForm = async () => {
     
   } catch (error: any) {
     console.error('提交失败:', error)
-    ElMessage.error(error.response?.data?.detail || '提交失败，请重试')
+    ElMessage.error(error.response?.data?.detail || 'Submission failed. Please try again')
   } finally {
     submitting.value = false
     disconnectProgressWebSocket()
@@ -361,7 +364,7 @@ const disconnectProgressWebSocket = () => {
 // 处理进度消息
 const handleProgressMessage = (message: WebSocketProgressMessage) => {
   progressPercentage.value = message.progress_percent || 0
-  progressMessage.value = message.message || '处理中...'
+  progressMessage.value = message.message || 'Processing...'
   
   // 如果进度达到100%，可以做一些清理工作
   if (progressPercentage.value >= 100) {

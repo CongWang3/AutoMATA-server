@@ -7,38 +7,46 @@
             <template #header>
               <div class="card-header">
                 <span class="title">Unsupervised learning model training</span>
-                <el-tag type="info">Unsupervised Learning</el-tag>
+                <el-tag type="primary">Unsupervised Learning</el-tag>
               </div>
             </template>
             <div class="card-body p-4">
               <form @submit.prevent="handleSubmit" class="train_form" enctype="multipart/form-data">
                 <div class="step-section mb-4">
-                  <div class="step-header d-flex justify-content-between align-items-center">
+                  <div class="step-header d-flex justify-content-between align-items-center"  style="border-bottom: none; padding-bottom: 0;">
                     <h5 class="section-title">
                       1. Select Strategy and Upload Data
                       <span class="section-subtitle">Required</span>
                     </h5>
-                    <button type="button" class="btn btn-outline-primary btn-sm" @click="downloadStrategyExample">
+                    <!-- <button type="button" class="btn btn-outline-primary btn-sm" @click="downloadStrategyExample">
                       <i class="fas fa-download me-1"></i>
                       Download Example Data
-                    </button>
+                    </button> -->
+                    <el-button 
+                        type="primary" 
+                        size="small" 
+                        @click="downloadStrategyExample"
+                        class="example-btn"
+                        >
+                        Download Example Data
+                    </el-button>
                   </div>
                   <div class="strategy-options mb-4 mt-3">
                     <div class="form-check mb-3">
                       <input class="form-check-input" type="radio" id="splitStrategy" value="split" v-model="strategy" @change="handleStrategyChange">
-                      <label class="form-check-label" for="splitStrategy">
-                        Upload a dataset to conduct train/validation/testing split
+                      <label class="form-check-label" for="splitStrategy" style="color: #606266; font-size: 14px;">
+                        Upload a dataset to conduct training/validation/testing split
                       </label>
                     </div>
                     <div class="form-check mb-3">
                       <input class="form-check-input" type="radio" id="uploadStrategy" value="upload" v-model="strategy" @change="handleStrategyChange">
-                      <label class="form-check-label" for="uploadStrategy">
+                      <label class="form-check-label" for="uploadStrategy" style="color: #606266; font-size: 14px;">
                         Upload train/validation/testing datasets respectively
                       </label>
                     </div>
                     <div class="form-check">
                       <input class="form-check-input" type="radio" id="kfoldStrategy" value="kfold" v-model="strategy" @change="handleStrategyChange">
-                      <label class="form-check-label" for="kfoldStrategy">
+                      <label class="form-check-label" for="kfoldStrategy" style="color: #606266; font-size: 14px;">
                         Upload a dataset to conduct K-Fold cross-validation
                       </label>
                     </div>
@@ -157,7 +165,7 @@
                 </div>
 
                 <div class="step-section mb-4">
-                  <div class="step-header d-flex justify-content-between align-items-center">
+                  <div class="step-header d-flex justify-content-between align-items-center"  style="border-bottom: none; padding-bottom: 0;">
                     <h5 class="section-title">
                       2. Choose Model
                       <span class="section-subtitle">Required</span>
@@ -243,9 +251,9 @@
                   <div class="d-grid gap-2">
                     <button type="submit" class="btn btn-primary btn-lg" :disabled="isSubmitting || !isFormValid">
                       <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2" role="status"></span>
-                      {{ isSubmitting ? '提交中...' : '开始训练' }}
+                      {{ isSubmitting ? 'Submitting...' : 'Submit' }}
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" @click="resetForm">重置表单</button>
+                    <button type="button" class="btn btn-outline-secondary" @click="resetForm">Reset</button>
                   </div>
                 </div>
               </form>
@@ -260,35 +268,19 @@
         :close-on-click-modal="false"
         @close="handleClose"
       >
-        <template #header>
-          <div class="d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">无监督学习训练任务</h5>
-            <div>
-              <el-tag type="info" class="me-2">{{ currentJob?.status || '等待中' }}</el-tag>
-              <el-button
-                v-if="currentJob?.resultFile"
-                type="success"
-                size="small"
-                @click="downloadResult"
-              >
-                <i class="fas fa-download me-1"></i>
-                下载结果
-              </el-button>
-            </div>
-          </div>
-        </template>
-
-        <JobStatus
+        <TrainingResultPanel
           v-if="currentJob"
-          :job="currentJob"
-          @cancel="handleCancel"
-          @retry="handleRetry"
-          @view-result="viewResult"
+          :job-id="currentJob.id"
+          :status="currentJob.status"
+          :input-params="unifiedJob?.input_params || submittedInputParams || {}"
+          :error-message="unifiedJob?.error_message || currentJob.errorMessage"
+          :download-ready="downloadReady"
+          :on-download="handleDownloadFromPanel"
         />
 
         <template #footer>
           <div class="dialog-footer">
-            <el-button @click="handleClose">关闭并提交新任务</el-button>
+            <el-button @click="handleClose">Close and submit a new task</el-button>
           </div>
         </template>
       </el-dialog>
@@ -300,9 +292,10 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import JobStatus from '@/components/Job/JobStatus.vue'
+import TrainingResultPanel from '@/components/Training/TrainingResultPanel.vue'
 import { trainingApi } from '@/api/training'
 import { webSocketService } from '@/api/websocket'
+import { jobsApi, type UnifiedJob } from '@/api/jobs'
 
 interface UploadedFileInfo {
   id: string
@@ -346,6 +339,11 @@ const kfoldValue = ref(3)
 const isSubmitting = ref(false)
 const showResultDialog = ref(false)
 const currentJob = ref<any>(null)
+const unifiedJob = ref<UnifiedJob | null>(null)
+const submittedInputParams = ref<Record<string, any> | null>(null)
+const terminalDetailFetched = ref(false)
+const downloadReady = ref(false)
+const preparedDownloadUrl = ref<string | null>(null)
 
 const availableModels = ref<Array<{ id: string; name: string; description: string }>>([
   { id: 'vae', name: 'VAE', description: 'Variational autoencoder for representation learning and reconstruction.' },
@@ -485,10 +483,10 @@ const handleFileUpload = async (event: Event, fileType: UploadKey) => {
   const file = input.files?.[0]
   if (!file) return
 
-  const allowedExtensions = ['txt', 'csv', 'xlsx', 'xls', 'tsv']
+  const allowedExtensions = ['txt']
   const fileExtension = file.name.split('.').pop()?.toLowerCase() || ''
   if (!allowedExtensions.includes(fileExtension)) {
-    ElMessage.error('Please upload a txt, csv or excel file!')
+    ElMessage.error('Please upload a txt file with tab delimiter.')
     input.value = ''
     return
   }
@@ -512,9 +510,9 @@ const handleFileUpload = async (event: Event, fileType: UploadKey) => {
       id: fileInfo.file_id
     }
     uploadedFiles[fileType] = file.name
-    ElMessage.success(`文件 ${file.name} 上传成功`)
+    ElMessage.success(`File "${file.name}" uploaded successfully`)
   } catch (error: any) {
-    ElMessage.error('文件上传失败: ' + (error.response?.data?.detail || error.message || '未知错误'))
+    ElMessage.error('File upload failed: ' + (error.response?.data?.detail || error.message || 'Unknown error'))
     input.value = ''
   }
 }
@@ -537,7 +535,7 @@ const getDatasetPathWithFileIds = () => {
 const checkInput = () => {
   const emailRegex = /^[\w\-\.]+@[a-z0-9]+(\-[a-z0-9]+)?(\.[a-z0-9]+(\-[a-z0-9]+)?)*\.[a-z]{2,4}$/i
   if (notification.email && !emailRegex.test(notification.email)) {
-    ElMessage.error('Please submit the correct email address（或留空）')
+    ElMessage.error('Please enter a valid email address or leave it empty')
     return false
   }
   const allowed = currentLossFunctions.value.map((i) => i.value)
@@ -554,6 +552,26 @@ const stopPolling = () => {
   }
 }
 
+function isTerminalJobStatus(status: string) {
+  const s = String(status || '').toUpperCase()
+  return s === 'COMPLETED' || s === 'FAILED' || s === 'CANCELLED'
+}
+
+async function refreshUnifiedJobDetail(id: string) {
+  try {
+    unifiedJob.value = await jobsApi.getJobDetail(id)
+  } catch (error) {
+    console.warn('获取任务详情失败:', error)
+  }
+}
+
+async function refreshUnifiedJobDetailIfTerminal(id: string, status: string) {
+  if (!isTerminalJobStatus(status)) return
+  if (terminalDetailFetched.value) return
+  terminalDetailFetched.value = true
+  await refreshUnifiedJobDetail(id)
+}
+
 const pollTaskStatus = async (taskId: string) => {
   stopPolling()
   const poll = async () => {
@@ -567,6 +585,10 @@ const pollTaskStatus = async (taskId: string) => {
         currentJob.value.errorMessage = task.error_message || currentJob.value.errorMessage
       }
       if (task.status === 'Completed' || task.status === 'Failed' || task.status === 'Cancelled') {
+        refreshUnifiedJobDetailIfTerminal(String(taskId), task.status)
+        if (task.status === 'Completed') {
+          await ensureDownloadReady(String(taskId))
+        }
         stopPolling()
         return
       }
@@ -617,24 +639,35 @@ const handleSubmit = async () => {
       dataset_path: getDatasetPathWithFileIds(),
       email: notification.email.trim() || undefined
     })
+    submittedInputParams.value = {
+      training_type: 'unsupervised',
+      model_type: selectedModel.value,
+      parameters,
+      email: notification.email.trim() || undefined
+    }
 
     currentJob.value = {
       id: response.job_id,
       name: response.task_name,
       status: response.status,
       progress: response.progress || 0,
-      currentStep: response.current_step || '已提交，等待执行',
+      currentStep: response.current_step || 'Submitted, waiting to run',
       createdAt: response.created_at,
       updatedAt: response.created_at,
       duration: 0,
       resultFile: response.result_file || undefined,
       errorMessage: response.error_message || undefined
     }
+    unifiedJob.value = null
+    terminalDetailFetched.value = false
+    downloadReady.value = false
+    preparedDownloadUrl.value = null
     showResultDialog.value = true
-    ElMessage.success('训练任务已提交')
+    refreshUnifiedJobDetail(String(response.job_id))
+    ElMessage.success('Training task submitted')
     await pollTaskStatus(response.job_id)
   } catch (error: any) {
-    ElMessage.error('提交失败: ' + (error.response?.data?.detail || error.message || '未知错误'))
+    ElMessage.error('Submission failed: ' + (error.response?.data?.detail || error.message || 'Unknown error'))
   } finally {
     isSubmitting.value = false
   }
@@ -669,7 +702,8 @@ const downloadStrategyExample = () => {
   try {
         const fileName = 'train_unsupervised_example.zip'
         // 直接从后端暴露的 example 目录下载（避免 Vite public/example 缺失导致返回 html）
-        const downloadUrl = `http://localhost:8005/example/${fileName}`
+        // const downloadUrl = `http://localhost:8005/example/${fileName}`
+        const downloadUrl = '/example/train_unsupervised_example.zip'
 
         const link = document.createElement('a')
         link.href = downloadUrl
@@ -682,13 +716,13 @@ const downloadStrategyExample = () => {
         document.body.removeChild(link)
     } catch (error: any) {
         console.error('❓️ 示例文件下载失败:', error)
-        ElMessage.error(`下载失败: ${error.message || '未知错误'}`)
+        ElMessage.error(`Download failed: ${error.message || 'Unknown error'}`)
     }
 }
 
 const handleCancel = (jobId: number) => {
   console.log('取消任务:', jobId)
-  ElMessage.info('任务取消功能暂未实现')
+  ElMessage.info('Job cancellation is not implemented yet')
 }
 
 const handleRetry = (jobId: number) => {
@@ -698,27 +732,65 @@ const handleRetry = (jobId: number) => {
 
 const viewResult = (jobId: number) => {
   console.log('查看结果:', jobId)
-  ElMessage.info('请在弹窗中点击下载结果按钮')
+  ElMessage.info('Use the download button in the result dialog')
 }
 
-const downloadResult = async () => {
-  if (!currentJob.value?.resultFile) {
-    ElMessage.warning('暂无结果文件')
+async function ensureDownloadReady(id: string) {
+  downloadReady.value = false
+  preparedDownloadUrl.value = null
+
+  const maxAttempts = 6
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const url = await jobsApi.getDownloadUrl(String(id))
+      preparedDownloadUrl.value = url
+      downloadReady.value = true
+      return
+    } catch (error: any) {
+      const detail: string = error?.response?.data?.detail || ''
+      const canRetry = /任务尚未完成|结果文件不存在/.test(detail) || !detail
+      if (!canRetry && i === 0) {
+        console.warn('准备下载链接失败，将不再自动重试:', error)
+        break
+      }
+      if (i === maxAttempts - 1) {
+        console.warn('多次重试后仍未准备好下载链接:', error)
+        break
+      }
+      await delay(2000)
+    }
+  }
+}
+
+async function handleDownloadFromPanel() {
+  const id = currentJob.value?.id
+  if (!id) {
+    ElMessage.warning('No job ID')
     return
   }
-
   try {
-    const result = await trainingApi.getDownloadUrl(currentJob.value.id)
-    window.open(result.download_url, '_blank')
-    ElMessage.success('开始下载...')
+    if (!downloadReady.value || !preparedDownloadUrl.value) {
+      ElMessage.info('Result file is still being prepared, please wait a moment…')
+      await ensureDownloadReady(String(id))
+    }
+    if (!downloadReady.value || !preparedDownloadUrl.value) {
+      ElMessage.error('Result file is not ready yet, please try again later')
+      return
+    }
+    window.open(preparedDownloadUrl.value, '_blank')
   } catch (error: any) {
-    ElMessage.error('下载失败：' + (error.response?.data?.detail || error.message || '未知错误'))
+    console.error('获取下载链接失败:', error)
+    ElMessage.error('Failed to get download URL: ' + (error?.response?.data?.detail || error?.message || 'Unknown error'))
   }
 }
 
 const handleClose = () => {
   showResultDialog.value = false
   currentJob.value = null
+  unifiedJob.value = null
+  submittedInputParams.value = null
   stopPolling()
 }
 
@@ -731,6 +803,10 @@ const handleTaskStatusUpdate = (data: any) => {
   if (data.result_file) currentJob.value.resultFile = data.result_file
   if (data.error_message) currentJob.value.errorMessage = data.error_message
   if (data.updated_at) currentJob.value.updatedAt = data.updated_at
+
+  if (data.status) {
+    refreshUnifiedJobDetailIfTerminal(String(currentJob.value.id), String(data.status))
+  }
 }
 
 const connectWebSocket = async () => {
@@ -750,6 +826,17 @@ onUnmounted(() => {
   stopPolling()
   webSocketService.setOnTaskStatus(() => {})
 })
+
+watch(
+  () => showResultDialog.value,
+  (open) => {
+    if (!open) return
+    const id = currentJob.value?.id
+    if (!id) return
+    if (unifiedJob.value) return
+    refreshUnifiedJobDetail(String(id))
+  }
+)
 </script>
 
 <style scoped>
@@ -758,7 +845,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   background-color: white;
-  border-bottom: 1px solid #e4e7ed;
+  /* border-bottom: 1px solid #e4e7ed; */
 }
 
 .title {
@@ -796,12 +883,12 @@ onUnmounted(() => {
 }
 
 .model-card:hover {
-  border-color: #0d6efd;
+  border-color: #409eff;
   box-shadow: 0 2px 8px rgba(13, 110, 253, 0.2);
 }
 
 .model-card.selected {
-  border-color: #0d6efd;
+  border-color: #409eff;
   background-color: rgba(13, 110, 253, 0.1);
 }
 
@@ -817,17 +904,19 @@ onUnmounted(() => {
 
 .form-label {
   font-weight: 500;
-  color: #444444;
+  /* color: #444444; */
+  color: #606266;
+  font-size: 14px;
 }
 
 .btn-primary {
-  border-color: #0d6efd;
+  border-color: #409eff;
   color: white;
 }
 
 .btn-primary:hover {
-  background-color: #0b5ed7;
-  border-color: #0b5ed7;
+  background-color: #409eff;
+  border-color: #409eff;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
 }
@@ -844,7 +933,7 @@ onUnmounted(() => {
 }
 
 .badge.bg-success {
-  background-color: #0d6efd;
+  background-color: #409eff;
   font-size: 0.875rem;
 }
 
@@ -869,6 +958,7 @@ onUnmounted(() => {
 
 .ratio-label {
   font-weight: 500;
+  font-size: 14px;
   color: #495057;
   white-space: nowrap;
   margin-bottom: 0;
@@ -882,7 +972,7 @@ onUnmounted(() => {
 }
 
 .ratio-input:focus {
-  border-color: #0d6efd;
+  border-color: #409eff;
   box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
@@ -898,17 +988,19 @@ onUnmounted(() => {
 .form-select {
   border: 1px solid #cccccc;
   background-color: white;
+  color: #606266;
+  font-size: 14px;
 }
 
 .form-control:focus,
 .form-select:focus {
-  border-color: #0d6efd;
-  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  border-color: #409eff;
+  box-shadow: 0 0 0 0.1rem rgba(13, 110, 253, 0.25);
 }
 
 .form-check-input:checked {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
+  background-color: #409eff;
+  border-color: #409eff;
 }
 
 .form-control:hover,
@@ -922,8 +1014,8 @@ onUnmounted(() => {
 }
 
 .strategy-options .form-check-input:checked {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
+  background-color: #409eff;
+  border-color: #409eff;
 }
 
 @media (max-width: 768px) {

@@ -112,7 +112,7 @@ class DataProcessService:
         except Exception as e:
             logger.error(f"基因组数据处理服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Service processing failure: {str(e)}")
     
     async def process_transcriptome_data(
         self,
@@ -178,7 +178,7 @@ class DataProcessService:
         except Exception as e:
             logger.error(f"转录组数据处理服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Service processing failure: {str(e)}")
 
     async def process_protein_data(
         self,
@@ -241,7 +241,7 @@ class DataProcessService:
         except Exception as e:
             logger.error(f"蛋白质数据处理服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Service processing failure: {str(e)}")
 
     async def process_integration_data(
         self,
@@ -316,7 +316,7 @@ class DataProcessService:
         except Exception as e:
             logger.error(f"多组学数据整合服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Service processing failure: {str(e)}")
 
     async def process_pvalue_integration(
         self,
@@ -383,7 +383,7 @@ class DataProcessService:
         except Exception as e:
             logger.error(f"pvalue 多组学整合服务失败: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"服务处理失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Service processing failure: {str(e)}")
     
     async def _execute_genome_processing(
         self,
@@ -399,7 +399,7 @@ class DataProcessService:
             # 更新任务状态
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
-                job.status = "Processing"
+                job.status = JobStatus.PROCESSING
                 job.updated_at = datetime.now()
                 self.db.commit()
                 
@@ -432,7 +432,7 @@ class DataProcessService:
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # 使用绝对路径确保 R 脚本能正确访问文件
-            output_file = "/xp/www/AutoMATA/download_data/Config/" + job_id + "/processed.txt"
+            output_file =  "/xp/www/AutoMATA/download_data/Jobs/" + job_id + "/processed.txt"
                 
             # 参数映射
             nomenclature_map = {"GeneID": "GeneID", "EnsemblID": "EnsemblID", "Symbol": "Symbol"}
@@ -452,6 +452,7 @@ class DataProcessService:
                 "-r", organism_map[organism],
                 "-i", str(jobs_input_file),
                 "-o", output_file,  # 使用绝对路径
+                "-h", "none",
                 "-a", job_id  # 关键：传递 jobID 参数
             ]
             
@@ -465,7 +466,7 @@ class DataProcessService:
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
                 if result.returncode == 0:
-                    job.status = "Completed"
+                    job.status = JobStatus.COMPLETED
                     job.result_file = output_file  # 使用绝对路径
                     job.output_params = json.dumps({"stdout": result.stdout}, ensure_ascii=False)
                                 
@@ -485,7 +486,7 @@ class DataProcessService:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
                                     
                 else:
-                    job.status = "Failed"
+                    job.status = JobStatus.FAILED
                     job.error_message = result.stderr or "R 脚本执行失败"
                                 
                     # 推送失败状态
@@ -576,7 +577,7 @@ class DataProcessService:
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # 使用绝对路径确保 R 脚本能正确访问文件
-            output_file = "/xp/www/AutoMATA/download_data/Config/" + job_id + "/processed.txt"
+            output_file =  "/xp/www/AutoMATA/download_data/Jobs/" + job_id + "/processed.txt"
                 
             # 参数映射
             nomenclature_map = {"Refseq": "Refseq", "EnsemblID": "EnsemblID", "Transcript_name": "Transcript_name"}

@@ -4,7 +4,7 @@
     <el-card class="pvalue-card">
       <template #header>
         <div class="card-header">
-          <span class="title">pvalue 多组学整合</span>
+          <span class="title">Pvalue Multi-omics Integration</span>
           <el-tag type="success">Pvalue Multi-omics Integration</el-tag>
         </div>
       </template>
@@ -17,7 +17,7 @@
         class="pvalue-form"
       >
         <!-- 1. 组学文件 1 -->
-        <el-form-item label="上传组学文件 1" prop="file1">
+        <el-form-item label="Upload omics file 1" prop="file1">
           <el-upload
             class="upload-block"
             drag
@@ -32,18 +32,18 @@
               <upload-filled />
             </el-icon>
             <div class="el-upload__text">
-              将组学文件 1 拖到此处，或<em>点击上传</em>
+              Drag and drop the omics file 1 here, or <em>click to upload</em>
             </div>
             <template #tip>
               <div class="upload-tip-container">
-                <span class="file-types">仅支持 txt、csv、tsv 格式的文件（需包含 pvalue 列）</span>
+                <span class="file-types">Only support txt file with tab delimiter (contains pvalue)</span>
                 <el-button
                   type="primary"
                   size="small"
                   @click="downloadExample(1)"
                   class="example-btn"
                 >
-                  下载示例数据 1
+                  Download Example Data
                 </el-button>
               </div>
             </template>
@@ -51,7 +51,7 @@
         </el-form-item>
 
         <!-- 2. 组学文件 2 -->
-        <el-form-item label="上传组学文件 2" prop="file2">
+        <el-form-item label="Upload omics file 2" prop="file2">
           <el-upload
             class="upload-block"
             drag
@@ -66,18 +66,18 @@
               <upload-filled />
             </el-icon>
             <div class="el-upload__text">
-              将组学文件 2 拖到此处，或<em>点击上传</em>
+              Drag and drop the omics file 2 here, or <em>click to upload</em>
             </div>
             <template #tip>
               <div class="upload-tip-container">
-                <span class="file-types">仅支持 txt、csv、tsv 格式的文件（需包含 pvalue 列）</span>
+                <span class="file-types">Only support txt file with tab delimiter (contains pvalue)</span>
                 <el-button
                   type="primary"
                   size="small"
                   @click="downloadExample(2)"
                   class="example-btn"
                 >
-                  下载示例数据 2
+                  Download Example Data
                 </el-button>
               </div>
             </template>
@@ -85,7 +85,7 @@
         </el-form-item>
 
         <!-- 3. 组学文件 3 -->
-        <el-form-item label="上传组学文件 3" prop="file3">
+        <el-form-item label="Upload omics file 3" prop="file3">
           <el-upload
             class="upload-block"
             drag
@@ -100,18 +100,18 @@
               <upload-filled />
             </el-icon>
             <div class="el-upload__text">
-              将组学文件 3 拖到此处，或<em>点击上传</em>
+              Drag and drop the omics file 3 here, or <em>click to upload</em>
             </div>
             <template #tip>
               <div class="upload-tip-container">
-                <span class="file-types">仅支持 txt、csv、tsv 格式的文件（需包含 pvalue 列）</span>
+                <span class="file-types">Only support txt file with tab delimiter (contains pvalue)</span>
                 <el-button
                   type="primary"
                   size="small"
                   @click="downloadExample(3)"
                   class="example-btn"
                 >
-                  下载示例数据 3
+                  Download Example Data
                 </el-button>
               </div>
             </template>
@@ -119,10 +119,10 @@
         </el-form-item>
 
         <!-- 4. 方法选择 -->
-        <el-form-item label="选择 pvalue 整合方法" prop="method">
+        <el-form-item label="Select pvalue method" prop="method">
           <el-select
             v-model="formData.method"
-            placeholder="请选择 pvalue 整合方法"
+            placeholder="Select pvalue integration method"
             style="width: 100%"
           >
             <el-option label="Fisher" value="Fisher" />
@@ -138,10 +138,10 @@
         </el-form-item>
 
         <!-- 邮箱 -->
-        <el-form-item label="您的邮箱" prop="email">
+        <el-form-item label="Email" prop="email">
           <el-input
             v-model="formData.email"
-            placeholder="请输入邮箱地址（可选）"
+            placeholder="Enter your email address (optional)"
             type="email"
           />
         </el-form-item>
@@ -155,9 +155,9 @@
             size="large"
             class="submit-btn"
           >
-            {{ submitting ? '处理中...' : '提交 pvalue 整合' }}
+            {{ submitting ? 'Processing...' : 'Submit' }}
           </el-button>
-          <el-button @click="resetForm">重置</el-button>
+          <el-button @click="resetForm">Reset</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -184,7 +184,7 @@
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="handleClose">关闭并提交新任务</el-button>
+          <el-button @click="handleClose">Close and Submit New Task</el-button>
         </div>
       </template>
     </el-dialog>
@@ -218,11 +218,11 @@ const formData = reactive<PvalueFormData>({
 })
 
 const formRules: FormRules = {
-  file1: [{ required: true, message: '请上传组学文件 1', trigger: 'change' }],
-  file2: [{ required: true, message: '请上传组学文件 2', trigger: 'change' }],
-  file3: [{ required: true, message: '请上传组学文件 3', trigger: 'change' }],
-  method: [{ required: true, message: '请选择 pvalue 整合方法', trigger: 'change' }],
-  email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }]
+  file1: [{ required: true, message: 'Upload omics file 1', trigger: 'change' }],
+  file2: [{ required: true, message: 'Upload omics file 2', trigger: 'change' }],
+  file3: [{ required: true, message: 'Upload omics file 3', trigger: 'change' }],
+  method: [{ required: true, message: 'Select pvalue integration method', trigger: 'change' }],
+  email: [{ type: 'email', message: 'Enter a valid email address', trigger: 'blur' }]
 }
 
 const submitting = ref(false)
@@ -257,7 +257,7 @@ const handleFileChange = (uploadFile: UploadFile, key: keyof PvalueFormData) => 
 }
 
 const handleExceed = () => {
-  ElMessage.warning('每个位置只能上传一个文件')
+  ElMessage.warning('Only one file can be uploaded at each location')
 }
 
 const downloadExample = (index: 1 | 2 | 3) => {
@@ -292,12 +292,12 @@ const connectWebSocket = async () => {
         jobProgress.value = taskProgress || 0
 
         if (taskStatus === 'COMPLETED' || taskStatus === 'Completed') {
-          ElMessage.success(`任务 ${job_id} 已完成！`)
+          ElMessage.success(`Task ${job_id} has been completed!`)
           if (result_file) {
-            ElMessage.info(`结果文件已生成: ${result_file}`)
+            ElMessage.info(`Result file has been generated: ${result_file}`)
           }
         } else if (taskStatus === 'FAILED' || taskStatus === 'Failed') {
-          ElMessage.error(`任务 ${job_id} 失败: ${error_message || '未知错误'}`)
+          ElMessage.error(`Task ${job_id} failed: ${error_message || 'Unknown error'}`)
         }
       }
     })
@@ -306,7 +306,7 @@ const connectWebSocket = async () => {
     wsConnected.value = true
   } catch (error: any) {
     console.error('WebSocket 连接失败:', error)
-    ElMessage.error('任务监控连接失败: ' + (error.message || '未知错误'))
+    ElMessage.error('Task monitoring connection failed: ' + (error.message || 'Unknown error'))
   }
 }
 
@@ -325,7 +325,7 @@ const submitForm = async () => {
     await formRef.value.validate()
 
     if (!formData.file1 || !formData.file2 || !formData.file3) {
-      ElMessage.error('请上传所有必需的文件')
+      ElMessage.error('Please upload all required files')
       return
     }
 
@@ -356,10 +356,10 @@ const submitForm = async () => {
     jobProgress.value = 0
     showResultDialog.value = true
 
-    ElMessage.success('pvalue 多组学整合任务已提交')
+    ElMessage.success('P-value multi-omics integration task submitted')
   } catch (error: any) {
     console.error('提交失败:', error)
-    ElMessage.error(error.response?.data?.detail || '提交失败，请重试')
+    ElMessage.error(error.response?.data?.detail || 'Submission failed. Please try again.')
   } finally {
     submitting.value = false
   }
@@ -382,7 +382,7 @@ const handleStatusChange = (status: string) => {
     status === 'Failed'
   ) {
     setTimeout(() => {
-      ElMessage.info('任务已完成')
+      ElMessage.info('Task finished')
     }, 2000)
   }
 }

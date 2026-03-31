@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import time
 import logging
+import pathlib
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
@@ -29,6 +30,53 @@ from api.schemas.jobs import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 与 download_server 中任务产物目录一致（须用 pathlib.Path，勿与 fastapi.Path 混淆）
+_JOBS_DOWNLOAD_ROOT = pathlib.Path("/xp/www/AutoMATA/download_data/Jobs")
+
+
+def _has_result_zip_or_folder(job_id: str) -> bool:
+    """磁盘上是否存在可打包下载的产物：model_result.zip、result.zip 或 result/ 目录"""
+    jd = _JOBS_DOWNLOAD_ROOT / job_id
+    return (
+        (jd / "model_result.zip").is_file()
+        or (jd / "result.zip").is_file()
+        or (jd / "result").is_dir()
+    )
+
+
+def _result_file_points_to_downloadable(job: Job) -> bool:
+    """数据库中的 result_file 是否指向存在的文件或目录"""
+    if not job.result_file or not str(job.result_file).strip():
+        return False
+    p = pathlib.Path(job.result_file)
+    return p.is_file() or p.is_dir()
+
+
+def _user_job_has_downloadable_result(job_id: str, result_file: Optional[str]) -> bool:
+    """
+    是否具备可下载结果：DB 中 result_file 指向存在的文件/目录，
+    或磁盘上已有 Jobs/{job_id}/model_result.zip、result.zip 或 result/（与 download_server 一致）。
+    """
+    if result_file and str(result_file).strip():
+        p = pathlib.Path(result_file)
+        if p.is_file() or p.is_dir():
+            return True
+    jd = _JOBS_DOWNLOAD_ROOT / job_id
+    return (
+        (jd / "model_result.zip").is_file()
+        or (jd / "result.zip").is_file()
+        or (jd / "result").is_dir()
+    )
+
+
+def _escape_sql_like(text: str) -> str:
+    """转义 LIKE 通配符，避免用户输入的 %、_ 被当作模式字符。"""
+    return (
+        text.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
 
 
 def _job_to_response(job: Job) -> UnifiedJobResponse:
@@ -79,7 +127,7 @@ def _job_to_response(job: Job) -> UnifiedJobResponse:
 async def get_user_jobs(
     job_type: Optional[str] = Query(None, description="任务类型过滤"),
     status: Optional[str] = Query(None, description="任务状态过滤"),
-    keyword: Optional[str] = Query(None, description="关键词搜索（搜索 input_params）"),
+    keyword: Optional[str] = Query(None, description="关键词：按 job_id 模糊匹配（不区分大小写）"),
     limit: int = Query(20, ge=1, le=100, description="返回数量限制"),
     offset: int = Query(0, ge=0, description="偏移量"),
     sort_by: str = Query("created_at", description="排序字段"),
@@ -90,7 +138,7 @@ async def get_user_jobs(
     """
     获取当前用户所有任务列表
     
-    支持按任务类型、状态过滤，支持关键词搜索和分页
+    支持按任务类型、状态过滤；关键词仅匹配任务 ID（job_id），支持分页
     """
     try:
         # 基础查询：当前用户的任务
@@ -112,9 +160,10 @@ async def get_user_jobs(
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"无效的任务状态: {status}")
         
-        # 关键词搜索（搜索 input_params）
-        if keyword:
-            query = query.filter(Job.input_params.like(f"%{keyword}%"))
+        # 关键词：仅按 job_id 模糊搜索（不区分大小写，转义 LIKE 特殊字符）
+        if keyword and keyword.strip():
+            pat = f"%{_escape_sql_like(keyword.strip().lower())}%"
+            query = query.filter(func.lower(Job.job_id).like(pat, escape="\\"))
         
         # 查询总数
         total = query.count()
@@ -291,11 +340,17 @@ async def get_job_download_url(
         
         # 检查任务状态
         current_status = job.status.value if hasattr(job.status, 'value') else str(job.status)
-        if current_status != JobStatus.COMPLETED.value:
+        zip_ready = (
+            job.job_type == JobType.ANALYSIS_TRAIN
+            and job.result_file
+            and str(job.result_file).lower().endswith('.zip')
+            and pathlib.Path(job.result_file).is_file()
+        )
+        if current_status != JobStatus.COMPLETED.value and not zip_ready:
             raise HTTPException(status_code=400, detail="任务尚未完成，无法下载结果")
         
-        # 检查结果文件
-        if not job.result_file:
+        # 检查结果文件（允许仅有 result 目录或 result.zip 而无 DB 字段）
+        if not _user_job_has_downloadable_result(job_id, job.result_file):
             raise HTTPException(status_code=404, detail="结果文件不存在")
         
         # 生成 HMAC 签名

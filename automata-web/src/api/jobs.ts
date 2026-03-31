@@ -50,6 +50,7 @@ export interface JobTypeInfo {
 export interface JobFilter {
   job_type?: string
   status?: string
+  /** 按任务 job_id 模糊匹配（后端实现，不区分大小写） */
   keyword?: string
   limit?: number
   offset?: number

@@ -252,7 +252,7 @@ class TrainingService:
             from api.models.file import File
             file_record = self.db.query(File).filter(File.id == file_id).first()
             if not file_record:
-                raise ValueError(f"文件不存在: {file_id}")
+                raise ValueError(f"File not found: {file_id}")
             
             # 使用实际文件路径进行验证
             actual_path = file_record.file_path
@@ -415,7 +415,7 @@ class TrainingService:
         except Exception as e:
             logger.exception(f"创建训练任务失败: {e}")
             self.db.rollback()
-            raise HTTPException(status_code=500, detail=f"创建训练任务失败: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to create the training task: {e}")
 
     async def _execute_training_background(
         self,
@@ -512,7 +512,7 @@ class TrainingService:
                     shutil.copy2(str(src), str(jobs_dir / f"{job_id}_data.txt"))
                 else:
                     raise ValueError(
-                        "upload 策略需要分别上传训练集、验证集、测试集，或提供有效的 dataset_path"
+                        "upload strategy requires uploading training set, validation set, and test set"
                     )
             elif training_type in ("supervised", "unsupervised", "semi_supervised") and strategy == "kfold":
                 # 与 PHP modelTrain.php KFold 分支一致：训练集 -> _data.txt，测试集 -> _test.txt
@@ -528,7 +528,7 @@ class TrainingService:
                     shutil.copy2(str(src), str(jobs_dir / f"{job_id}_data.txt"))
                 else:
                     raise ValueError(
-                        "kfold 策略需要上传训练集与测试集（及 K 值），或提供有效的 dataset_path"
+                        "kfold strategy requires uploading training set and test set (and K value)"
                     )
             elif dataset_path:
                 src = self._validate_dataset_path(dataset_path)
@@ -604,7 +604,7 @@ class TrainingService:
                     result_dir=result_dir
                 )
             else:
-                raise ValueError(f"不支持的训练类型: {training_type}")
+                raise ValueError(f"Unsupported training type: {training_type}")
 
             # 更新进度：压缩结果
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
@@ -637,11 +637,11 @@ class TrainingService:
                         if path.is_file():
                             zf.write(path, path.relative_to(result_dir))
             except Exception as e:
-                raise RuntimeError(f"结果压缩失败: {e}") from e
+                raise RuntimeError(f"Result compression failed: {e}") from e
 
             # 压缩后校验 zip 是否可交付
             if not _is_zip_deliverable(zip_file):
-                raise RuntimeError("zip 不可交付（文件不存在或为空）")
+                raise RuntimeError("zip cannot be delivered (file does not exist or is empty)")
 
             # 更新任务状态为完成
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
@@ -855,11 +855,11 @@ class TrainingService:
                     )
                     stdout_all.append(result.stdout or "")
                 if result.returncode != 0:
-                    raise RuntimeError(f"{m_type} 训练失败: {result.stderr}")
+                    raise RuntimeError(f"{m_type} training failed: {result.stderr}")
         else:
             code_type = base_code_map.get(normalized_model_type)
             if not code_type:
-                raise RuntimeError(f"不支持的监督学习模型类型: {normalized_model_type}")
+                raise RuntimeError(f"Unsupported supervised learning model type: {normalized_model_type}")
 
             script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
             
@@ -878,7 +878,7 @@ class TrainingService:
                 )
                 stdout_all.append(result.stdout or "")
             if result.returncode != 0:
-                raise RuntimeError(result.stderr or "监督学习训练脚本执行失败")
+                raise RuntimeError(result.stderr or "Supervised learning training execution failed")
                 # raise RuntimeError(
                 #     f"监督学习训练脚本执行失败（详情见日志: {terminal_log}）"
                 # )
@@ -953,10 +953,10 @@ class TrainingService:
 
         code_type = unsupervised_code_map.get(model_lower)
         if not code_type:
-            raise RuntimeError(f"不支持的无监督学习模型类型: {model_type}")
+            raise RuntimeError(f"Unsupported unsupervised learning model type: {model_type}")
 
         # 准备输出路径
-        model_path = str(result_dir / f"{job_id}_{code_type}_model.pt")
+        model_path = str(result_dir / f"{job_id}_{code_type}_model.pth")
         scaler_path = str(result_dir / f"{job_id}_{code_type}_scaler.pkl")
         # 训练脚本会先将 evaluation_path 作为图像路径传给 plt.savefig，
         # 再在脚本内部将 .png 派生为 .json 结果文件路径。
@@ -1001,7 +1001,7 @@ class TrainingService:
                 log_fp.write(result.stderr)
         
         if result.returncode != 0:
-            raise RuntimeError(result.stderr or "无监督学习训练脚本执行失败")
+            raise RuntimeError(result.stderr or "Unsupervised learning training execution failed")
 
     async def _execute_semi_supervised_training_core(
         self,
@@ -1076,10 +1076,10 @@ class TrainingService:
 
         code_type = semi_supervised_code_map.get(model_lower)
         if not code_type:
-            raise RuntimeError(f"不支持的半监督学习模型类型: {model_type}")
+            raise RuntimeError(f"Unsupported semi-supervised learning model type: {model_type}")
 
         # 准备输出路径
-        model_path = str(result_dir / f"{job_id}_{code_type}_model.pt")
+        model_path = str(result_dir / f"{job_id}_{code_type}_model.pth")
         scaler_path = str(result_dir / f"{job_id}_{code_type}_scaler.pkl")
         evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.png")
 
@@ -1140,7 +1140,7 @@ class TrainingService:
                 log_fp.write(result.stderr)
         
         if result.returncode != 0:
-            raise RuntimeError(result.stderr or "半监督学习训练脚本执行失败")
+            raise RuntimeError(result.stderr or "Semi-supervised learning training execution failed")
 
     async def _handle_training_failure(
         self,

@@ -1,21 +1,21 @@
 <template>
   <AnalysisForm
     title="Volcano Plot"
-    subtitle="火山图"
+    subtitle="Volcano Plot"
     :fields="analysisFields"
     :on-submit="handleSubmit"
     second-file-label="2. Upload GMT file for GSEA analysis"
     accept-types=".txt,.csv,.tsv"
-    file-tip="仅支持 txt、csv、tsv格式的文件"
+    file-tip="Only support txt file with tab delimiter"
     :second-file-visible="(values: Record<string, any>) => values.gsea_analysis === 'yes'"
     second-file-field-name="gmt_file"
     second-accept-types=".gmt"
-    second-file-tip="仅支持gmt格式的文件"
+    second-file-tip="Only support gmt file"
     :second-example-url="'/example/draw_example/volcano_gsea_example.gmt'"
     second-example-file-name="volcano_gsea_example.gmt"
     example-data-url="/example/draw_example/volcano_example.txt"
     example-file-name="volcano_example.txt"
-    example-note="请确保数据集的列名为 gene, logFC, padj，分隔符为 Tab (\t)"
+    example-note="Please ensure the column names of the dataset are gene, logFC, padj, and the separator is Tab (\t)"
     example-image-url="/images/volcano_example.png"
   />
 </template>

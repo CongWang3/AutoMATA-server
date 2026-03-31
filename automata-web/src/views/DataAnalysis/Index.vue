@@ -4,36 +4,20 @@
       <h1>Data Analysis</h1>
       <p>Select an analysis tool to start your data analysis journey</p>
     </div>
-    
-    <!-- 可视化分析 -->
-    <h2 class="section-title">Visualization Analysis</h2>
+
     <el-row :gutter="20">
-      <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="item in visualizationTools" :key="item.path">
+      <el-col
+        :xs="24"
+        :sm="12"
+        :md="8"
+        :lg="8"
+        :xl="8"
+        v-for="item in allAnalysisTools"
+        :key="item.path"
+      >
         <el-card shadow="hover" class="tool-card" @click="$router.push(item.path)">
           <h3>{{ item.title }}</h3>
           <p>{{ item.description }}</p>
-        </el-card>
-      </el-col>
-    </el-row>
-    
-    <!-- 富集与网络分析 -->
-    <h2 class="section-title">Enrichment and Network Analysis</h2>
-    <el-row :gutter="20">
-      <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="item in enrichmentTools" :key="item.path">
-        <el-card shadow="hover" class="tool-card" @click="$router.push(item.path)">
-          <h3>{{ item.title }}</h3>
-          <p>{{ item.description }}</p>
-        </el-card>
-      </el-col>
-    </el-row>
-    
-    <!-- 综合分析 -->
-    <h2 class="section-title">Comprehensive Analysis</h2>
-    <el-row :gutter="20">
-      <el-col :xs="24" :sm="12" :md="8" :lg="6">
-        <el-card shadow="hover" class="tool-card" @click="$router.push('/data-analysis/comprehensive')">
-          <h3>Comprehensive Differential Expression Analysis</h3>
-          <p>One-click workflow for differential expression, volcano plot, cluster heatmap, and GO/KEGG enrichment</p>
         </el-card>
       </el-col>
     </el-row>
@@ -66,13 +50,14 @@ const visualizationTools = [
     path: '/data-analysis/cluster',
     title: 'Differential Gene Cluster Heatmap',
     description: 'Expression of differential genes in different samples'
-  },
-  {
-    path: '/data-analysis/dumbbell-bar',
-    title: 'Dumbbell with Bar Plot',
-    description: 'Dumbbell with Bar Plot can clearly see the differences between data'
   }
 ]
+
+const dumbbellTool = {
+  path: '/data-analysis/dumbbell-bar',
+  title: 'Dumbbell with Bar Plot',
+  description: 'Dumbbell with Bar Plot can clearly see the differences between data'
+}
 
 const enrichmentTools = [
   {
@@ -90,6 +75,21 @@ const enrichmentTools = [
     title: 'PPI Network',
     description: 'Protein-Protein Interaction Network is used to visualize functional relationships and interactions between proteins in a cellular context'
   }
+]
+
+const comprehensiveTool = {
+  path: '/data-analysis/comprehensive',
+  title: 'Comprehensive Differential Expression Analysis',
+  description:
+    'One-click workflow for differential expression, volcano plot, cluster heatmap, and GO/KEGG enrichment'
+}
+
+/** 顺序：左上 Comprehensive；其余按原可视化→富集顺延；左下角（末格）Dumbbell */
+const allAnalysisTools = [
+  comprehensiveTool,
+  ...visualizationTools,
+  ...enrichmentTools,
+  dumbbellTool
 ]
 </script>
 
@@ -114,14 +114,6 @@ const enrichmentTools = [
 .page-header p {
   font-size: 16px;
   color: #909399;
-}
-
-.section-title {
-  font-size: 20px;
-  color: #303133;
-  margin: 32px 0 16px;
-  padding-left: 12px;
-  border-left: 4px solid #409eff;
 }
 
 .tool-card {

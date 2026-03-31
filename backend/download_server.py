@@ -9,11 +9,14 @@
 import asyncio
 import hmac
 import hashlib
+import os
+import tempfile
 import time
 import urllib.parse
 import json
 import logging
 import sys
+import zipfile
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -31,6 +34,21 @@ logger = logging.getLogger(__name__)
 # 配置
 CORS_ORIGINS = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
 MAX_SKEW = 60  # 允许的时间偏差，单位秒
+
+# 下载限速（字节/秒）：0 表示不限速。默认不限速，避免大 zip 传输过久触发浏览器「无法完成下载」。
+# 需要模拟弱网时可设置环境变量，例如：export DOWNLOAD_THROTTLE_BPS=5242880  （约 5MB/s）
+DOWNLOAD_THROTTLE_BPS = int(os.environ.get("DOWNLOAD_THROTTLE_BPS", "0"))
+
+
+
+# #endregion
+
+
+async def _throttle_after_chunk(chunk_len: int) -> None:
+    """按 DOWNLOAD_THROTTLE_BPS 在每次写出后休眠；chunk_len 为本次写入字节数。"""
+    if DOWNLOAD_THROTTLE_BPS <= 0 or chunk_len <= 0:
+        return
+    await asyncio.sleep(chunk_len / DOWNLOAD_THROTTLE_BPS)
 
 # --- Debug logging (NDJSON) ---
 DEBUG_LOG_PATH = "/xp/www/.cursor/debug-d7d881.log"
@@ -182,6 +200,122 @@ def verify_signature(file_id: str, uid: int, timestamp: int, token: str) -> bool
     return hmac.compare_digest(token, expected)
 
 
+# ----- 以下为任务结果下载扩展：result.zip / result 目录（仅新增，不改动上方原有函数） -----
+
+JOBS_DOWNLOAD_ROOT = Path("/xp/www/AutoMATA/download_data/Jobs")
+
+
+def fetch_job_result_file_field_for_user(job_id: str, uid: int) -> Tuple[bool, Optional[str]]:
+    """
+    查询任务是否属于该用户，并返回 result_file 列（可为 NULL）。
+
+    Returns:
+        (row_found, result_file)
+    """
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT result_file FROM jobs WHERE job_id = :job_id AND user_id = :uid"),
+                {"job_id": job_id, "uid": uid},
+            )
+            row = result.fetchone()
+            if not row:
+                return False, None
+            return True, row[0]
+    except Exception as e:
+        logger.exception(f"数据库查询错误（fetch_job_result_file_field_for_user）：{e}")
+        return False, None
+
+
+def _path_under_jobs_download_root(path: Path, root: Path = JOBS_DOWNLOAD_ROOT) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+# result 目录打包进 result.zip 时允许的后缀（仅打包实际存在的文件；无 pkl 则 zip 中也不会有）
+_RESULT_ZIP_SUFFIXES = frozenset({".png", ".txt", ".log", ".pth", ".pkl"})
+
+
+def zip_result_directory_for_export(result_dir: Path, zip_path: Path) -> None:
+    """
+    将目录下指定类型文件（递归，大小写不敏感）打入 zip_path。
+    类型：png、txt、log、pth、pkl；目录中不存在的扩展名自然不会出现。
+    """
+    result_dir = result_dir.resolve()
+    zip_path = zip_path.resolve()
+    parent = zip_path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp_name = tempfile.mkstemp(suffix=".zip", dir=str(parent))
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file in result_dir.rglob("*"):
+                if not file.is_file():
+                    continue
+                if file.suffix.lower() not in _RESULT_ZIP_SUFFIXES:
+                    continue
+                arcname = file.relative_to(result_dir)
+                zf.write(file, arcname=str(arcname).replace("\\", "/"))
+        os.replace(tmp_path, zip_path)
+        logger.info(f"[JOB-RESULT] 已生成 result.zip（含 png/txt/log/pth/pkl）: {zip_path}")
+    except Exception:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+        raise
+
+
+def resolve_job_result_download_file(job_id: str, result_file_db: Optional[str]) -> Tuple[Optional[Path], str]:
+    """
+    解析实际要下载的文件：
+    1) DB result_file 指向 Jobs 下已存在文件 → 直接使用（分析并训练通常为 model_result.zip）
+    2) Jobs/{job_id}/model_result.zip 存在 → 整包优先（Full result package）
+    3) Jobs/{job_id}/result.zip 已存在则直接使用
+    4) Jobs/{job_id}/result 为目录 → 按 png/txt/log/pth/pkl 规则生成 result.zip 再下载
+    5) result_file 指向与 result 相同的目录则同 (4)
+    """
+    jobs_root = JOBS_DOWNLOAD_ROOT.resolve()
+    job_dir = (jobs_root / job_id).resolve()
+    if not _path_under_jobs_download_root(job_dir, jobs_root):
+        return None, ""
+
+    model_zip = job_dir / "model_result.zip"
+    zip_path = job_dir / "result.zip"
+    result_dir = job_dir / "result"
+
+    if result_file_db:
+        p = Path(str(result_file_db)).expanduser().resolve()
+        if _path_under_jobs_download_root(p, jobs_root) and p.is_file():
+            return p, p.name
+
+    if model_zip.is_file():
+        return model_zip, "model_result.zip"
+
+    if zip_path.is_file():
+        return zip_path, "result.zip"
+
+    if result_dir.is_dir():
+        zip_result_directory_for_export(result_dir, zip_path)
+        if zip_path.is_file():
+            return zip_path, "result.zip"
+
+    if result_file_db:
+        p = Path(str(result_file_db)).expanduser().resolve()
+        if not _path_under_jobs_download_root(p, jobs_root):
+            logger.warning(f"[JOB-RESULT] 拒绝 result_file（不在 Jobs 目录下）: {p}")
+            return None, ""
+        if p.is_dir() and p.resolve() == result_dir.resolve():
+            zip_result_directory_for_export(result_dir, zip_path)
+            if zip_path.is_file():
+                return zip_path, "result.zip"
+
+    return None, ""
+
+
 async def handle_download(request: web.Request) -> web.StreamResponse:
     """
     处理下载请求
@@ -213,20 +347,7 @@ async def handle_download(request: web.Request) -> web.StreamResponse:
         
         logger.info(f"[DOWNLOAD] 请求: file_id={file_id}, uid={uid}")
         
-        #region agent log
-        _debug_append_ndjson(
-            hypothesis_id="H6_route_or_param_issue_download",
-            location="download_server.py:handle_download:entry",
-            message="job download handler entered",
-            data={
-                "has_file_id": bool(file_id),
-                "token_present": bool(token),
-                "uid": uid,
-                "timestamp": timestamp,
-            },
-        )
-        #endregion
-        
+                
         # 验证时间戳（5分钟有效期，同时限制未来时间偏差）
         current_time = int(time.time())
         time_diff = current_time - timestamp
@@ -243,28 +364,12 @@ async def handle_download(request: web.Request) -> web.StreamResponse:
         file_path_str, original_name = get_file_path_from_db(file_id)
         
         if not file_path_str:
-            #region agent log
-            _debug_append_ndjson(
-                hypothesis_id="H1_uid_or_fileid_db_mismatch",
-                location="download_server.py:handle_download:db_not_found",
-                message="file record not found in DB",
-                data={"file_id": file_id, "uid": uid, "has_result": False},
-            )
-            #endregion
             logger.info(f"[DOWNLOAD] 文件记录不存在: {file_id}")
             return web.Response(text="文件不存在", status=404)
         
         file_path = Path(file_path_str)
         file_exists = file_path.exists()
         if not file_exists:
-            #region agent log
-            _debug_append_ndjson(
-                hypothesis_id="H2_missing_file_on_disk",
-                location="download_server.py:handle_download:file_missing_on_disk",
-                message="file path does not exist on disk",
-                data={"file_id": file_id, "uid": uid, "path_name": file_path.name, "exists": False},
-            )
-            #endregion
             logger.error(f"[DOWNLOAD] 文件路径不存在: {file_path}")
             return web.Response(text="文件不存在", status=404)
         
@@ -294,13 +399,7 @@ async def handle_download(request: web.Request) -> web.StreamResponse:
         
         await response.prepare(request)
         
-        # 异步流式传输（带限速，避免占满 SSH 隧道带宽）
         chunk_size = 64 * 1024  # 64KB
-        # 限速：5MB/s（防止占满 SSH 端口转发带宽）
-        rate_limit = 5 * 1024 * 1024  # 5MB/s
-        chunks_per_second = rate_limit // chunk_size  # 每秒发送的块数
-        delay_per_chunk = 1.0 / chunks_per_second if chunks_per_second > 0 else 0.01
-        
         try:
             with open(file_path, 'rb') as f:
                 while True:
@@ -308,8 +407,7 @@ async def handle_download(request: web.Request) -> web.StreamResponse:
                     if not chunk:
                         break
                     await response.write(chunk)
-                    # 限速延迟
-                    await asyncio.sleep(delay_per_chunk)
+                    await _throttle_after_chunk(len(chunk))
             
             logger.info(f"[DOWNLOAD] 传输完成: {file_path.name}")
         except Exception as e:
@@ -342,23 +440,7 @@ async def handle_job_result_download(request: web.Request) -> web.StreamResponse
             logger.warning(f"[JOB-RESULT] 非法参数: uid={request.query.get('uid')}, t={request.query.get('t')}")
             return web.Response(text="请求参数错误", status=400)
 
-        #region agent log
-        _debug_append_ndjson(
-            hypothesis_id="H5_db_mismatch",
-            location="download_server.py:handle_job_result_download:entry",
-            message="job-result handler entered",
-            data={
-                "job_id": job_id,
-                "uid": uid,
-                "timestamp": timestamp,
-                "token_present": bool(token),
-                # Avoid logging full DATABASE_URL (may contain secrets); only host/dbname.
-                "db_host": getattr(settings, "DB_HOST", None),
-                "db_name": getattr(settings, "DB_NAME", None),
-            },
-        )
-        #endregion
-
+        
         # 验证时间戳有效期（10分钟）
         current_time = int(time.time())
         time_diff = current_time - timestamp
@@ -368,43 +450,20 @@ async def handle_job_result_download(request: web.Request) -> web.StreamResponse
 
         # 验证签名：file_id 复用 job_id（与后端生成逻辑一致）
         sig_ok = verify_signature(job_id, uid, timestamp, token)
-        #region agent log
-        _debug_append_ndjson(
-            hypothesis_id="H4_signature_validation",
-            location="download_server.py:handle_job_result_download:signature_check",
-            message="signature verification result",
-            data={"job_id": job_id, "uid": uid, "timestamp": timestamp, "sig_ok": sig_ok},
-        )
-        #endregion
+        
         if not sig_ok:
             logger.warning(f"[JOB-RESULT] 签名验证失败")
             return web.Response(text="无效的下载链接", status=403)
 
-        result_file_path_str, default_filename = get_job_result_path_from_db(job_id, uid)
-        #region agent log
-        _debug_append_ndjson(
-            hypothesis_id="H1_uid_or_jobid_db_mismatch",
-            location="download_server.py:handle_job_result_download:db_lookup",
-            message="DB lookup for result file",
-            data={"job_id": job_id, "uid": uid, "has_result_file_path": bool(result_file_path_str), "default_filename": default_filename},
-        )
-        #endregion
-        if not result_file_path_str:
+        row_ok, result_file_field = fetch_job_result_file_field_for_user(job_id, uid)
+        
+        if not row_ok:
             logger.info(f"[JOB-RESULT] 结果记录不存在: job_id={job_id}, uid={uid}")
             return web.Response(text="结果文件不存在", status=404)
 
-        result_file_path = Path(result_file_path_str)
-        file_exists = result_file_path.exists()
-        if not file_exists:
-            #region agent log
-            _debug_append_ndjson(
-                hypothesis_id="H2_missing_file_on_disk",
-                location="download_server.py:handle_job_result_download:file_missing_on_disk",
-                message="result file path missing on disk",
-                data={"job_id": job_id, "uid": uid, "path_name": result_file_path.name, "exists": False},
-            )
-            #endregion
-            logger.error(f"[JOB-RESULT] 文件路径不存在: {result_file_path}")
+        result_file_path, default_filename = resolve_job_result_download_file(job_id, result_file_field)
+        if not result_file_path or not result_file_path.is_file():
+            logger.error(f"[JOB-RESULT] 无法解析可下载文件: job_id={job_id}")
             return web.Response(text="结果文件不存在", status=404)
 
         final_filename = filename or default_filename or result_file_path.name
@@ -427,19 +486,14 @@ async def handle_job_result_download(request: web.Request) -> web.StreamResponse
         )
         await response.prepare(request)
 
-        # 64KB chunk + 5MB/s 限速
         chunk_size = 64 * 1024
-        rate_limit = 5 * 1024 * 1024
-        chunks_per_second = rate_limit // chunk_size
-        delay_per_chunk = 1.0 / chunks_per_second if chunks_per_second > 0 else 0.01
-
         with open(result_file_path, "rb") as f:
             while True:
                 chunk = f.read(chunk_size)
                 if not chunk:
                     break
                 await response.write(chunk)
-                await asyncio.sleep(delay_per_chunk)
+                await _throttle_after_chunk(len(chunk))
 
         logger.info(f"[JOB-RESULT] 传输完成: {result_file_path}")
         return response
@@ -449,11 +503,40 @@ async def handle_job_result_download(request: web.Request) -> web.StreamResponse
         return web.Response(text="下载服务内部错误", status=500)
 
 
-def _resolve_data_analysis_result_file(job_id: str, filename: str) -> Tuple[Optional[Path], Optional[str]]:
+def _normalize_db_job_type(raw) -> str:
+    """MySQL ENUM / 驱动可能返回 str、bytes 或与 Python 枚举不完全一致的值。"""
+    if raw is None:
+        return ""
+    if isinstance(raw, (bytes, bytearray)):
+        try:
+            raw = raw.decode("utf-8", errors="replace")
+        except Exception:
+            return ""
+    return str(raw).strip().lower()
+
+
+def _try_result_dir_file(result_dir: Path, safe_name: str) -> Tuple[Optional[Path], Optional[str]]:
+    """在已解析的 result 目录下取单个文件（防路径穿越）。"""
+    try:
+        result_dir = result_dir.resolve()
+    except Exception:
+        return None, None
+    if not result_dir.is_dir():
+        return None, None
+    target = (result_dir / safe_name).resolve()
+    if target.parent != result_dir:
+        return None, None
+    if not target.is_file():
+        return None, None
+    return target, safe_name
+
+
+def _resolve_analysis_result_file(job_id: str, filename: str) -> Tuple[Optional[Path], Optional[str]]:
     """
-    解析数据分析任务结果目录下的单个文件路径.
-    - 仅允许 job_type = data_analysis
-    - filename 必须为安全文件名（无路径分隔符）
+    解析结果目录下的单个文件路径，供 GET /analysis-result 使用。
+    - data_analysis：result_file 为目录（或单文件，与旧逻辑一致）
+    - analysis_train：Jobs/<job_id>/result/（与 AnalysisService / analysis_train 流水线一致）
+    - 兜底：若 DB 中 job_type 与约定不一致（例如 ENUM 未迁移），仍尝试标准 result 目录或 zip 同级的 result/
     """
     if not job_id or not filename:
         return None, None
@@ -467,29 +550,69 @@ def _resolve_data_analysis_result_file(job_id: str, filename: str) -> Tuple[Opti
         with engine.connect() as conn:
             row = conn.execute(
                 text(
-                    "SELECT result_file FROM jobs WHERE job_id = :job_id "
-                    "AND job_type = 'data_analysis'"
+                    "SELECT job_type, result_file FROM jobs WHERE job_id = :job_id"
                 ),
                 {"job_id": job_id},
             ).fetchone()
-        if not row or not row[0]:
+        if not row:
+            logger.info(f"[ANALYSIS-RESULT] 无此 job_id: {job_id}")
+            
             return None, None
-        base = Path(row[0])
-        if base.is_dir():
-            result_dir = base.resolve()
-            target = (result_dir / safe_name).resolve()
-            if target.parent != result_dir:
+        job_type, result_file = row[0], row[1]
+        jt = _normalize_db_job_type(job_type)
+
+        if jt == "analysis_train":
+            hit = _try_result_dir_file(JOBS_DOWNLOAD_ROOT / job_id / "result", safe_name)
+            if hit[0]:
+                return hit
+            logger.debug(
+                "[ANALYSIS-RESULT] analysis_train 标准目录未命中: job_id=%s file=%s",
+                job_id,
+                safe_name,
+            )
+
+        if jt == "data_analysis":
+            if not result_file:
+                logger.info(f"[ANALYSIS-RESULT] 结果文件不存在: job_id={job_id}")
                 return None, None
-            if not target.is_file():
-                return None, None
-            return target, safe_name
-        if base.is_file():
-            if safe_name != base.name:
-                return None, None
-            return base.resolve(), safe_name
+            base = Path(str(result_file)).expanduser()
+            if base.is_dir():
+                hit = _try_result_dir_file(base, safe_name)
+                if hit[0]:
+                    return hit
+            elif base.is_file():
+                if safe_name != base.name:
+                    return None, None
+                return base.resolve(), safe_name
+
+        # analysis_train 但 zip 路径在库中：.../Jobs/<id>/model_result.zip → 同级 result/
+        if result_file:
+            zip_or_path = Path(str(result_file)).expanduser()
+            try:
+                zip_or_path = zip_or_path.resolve()
+            except Exception:
+                zip_or_path = zip_or_path
+            if zip_or_path.is_file() and zip_or_path.suffix.lower() == ".zip":
+                hit = _try_result_dir_file(zip_or_path.parent / "result", safe_name)
+                if hit[0]:
+                    return hit
+
+        # 最后兜底：标准 Jobs/<job_id>/result/（避免 job_type ENUM 未含 analysis_train 时整类 404）
+        hit = _try_result_dir_file(JOBS_DOWNLOAD_ROOT / job_id / "result", safe_name)
+        if hit[0]:
+            return hit
+
+        logger.info(
+            "[ANALYSIS-RESULT] 未解析到文件 job_id=%s file=%s db_job_type=%r",
+            job_id,
+            safe_name,
+            job_type,
+        )
+        
         return None, None
     except Exception as e:
         logger.exception(f"[ANALYSIS-RESULT] 解析路径失败: {e}")
+        
         return None, None
 
 
@@ -503,7 +626,8 @@ async def handle_analysis_result_download(request: web.Request) -> web.StreamRes
     try:
         job_id = request.match_info.get("job_id", "")
         filename = request.match_info.get("filename", "")
-        file_path, out_name = _resolve_data_analysis_result_file(job_id, filename)
+        
+        file_path, out_name = _resolve_analysis_result_file(job_id, filename)
         if not file_path or not out_name:
             return web.Response(text="文件不存在", status=404)
 
@@ -541,17 +665,13 @@ async def handle_analysis_result_download(request: web.Request) -> web.StreamRes
         await response.prepare(request)
 
         chunk_size = 64 * 1024
-        rate_limit = 5 * 1024 * 1024
-        chunks_per_second = rate_limit // chunk_size
-        delay_per_chunk = 1.0 / chunks_per_second if chunks_per_second > 0 else 0.01
-
         with open(file_path, "rb") as f:
             while True:
                 chunk = f.read(chunk_size)
                 if not chunk:
                     break
                 await response.write(chunk)
-                await asyncio.sleep(delay_per_chunk)
+                await _throttle_after_chunk(len(chunk))
 
         logger.info(f"[ANALYSIS-RESULT] 传输完成: {file_path}")
         return response

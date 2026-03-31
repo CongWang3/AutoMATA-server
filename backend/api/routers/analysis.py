@@ -39,7 +39,7 @@ router = APIRouter(prefix="/api/v1/analysis", tags=["数据分析"])
 def validate_job_id(job_id: str) -> str:
     """验证Job ID格式"""
     if not JOB_ID_PATTERN.match(job_id):
-        raise HTTPException(status_code=400, detail="无效的任务ID格式")
+        raise HTTPException(status_code=400, detail="Invalid task ID format")
     return job_id
 
 
@@ -64,22 +64,22 @@ async def analyze_pca(
     try:
         # 验证文件类型
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         # 验证参数
         if confidence < 0 or confidence > 1:
-            raise HTTPException(status_code=400, detail="置信区间必须在0-1之间")
+            raise HTTPException(status_code=400, detail="Confidence interval must be between 0 and 1")
         
         if boundary not in ["TRUE", "FALSE"]:
-            raise HTTPException(status_code=400, detail="boundary参数必须是TRUE或FALSE")
+            raise HTTPException(status_code=400, detail="boundary parameter must be TRUE or FALSE")
         
         if permanova not in ["TRUE", "FALSE"]:
-            raise HTTPException(status_code=400, detail="permanova参数必须是TRUE或FALSE")
+            raise HTTPException(status_code=400, detail="permanova parameter must be TRUE or FALSE")
         
         if permanova == "TRUE" and method and method not in VALID_PERMANOVA_METHODS:
             raise HTTPException(
                 status_code=400, 
-                detail=f"无效的PERMANOVA方法，支持: {', '.join(VALID_PERMANOVA_METHODS)}"
+                detail=f"Invalid PERMANOVA method, supported: {', '.join(VALID_PERMANOVA_METHODS)}"
             )
         
         service = AnalysisService(db, current_user)
@@ -99,10 +99,10 @@ async def analyze_pca(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 相关性热图 ====================
@@ -121,7 +121,7 @@ async def analyze_correlation_heatmap(
     """
     try:
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         service = AnalysisService(db, current_user)
         result = await service.analyze_correlation_heatmap(file=file, email=email)
@@ -133,10 +133,10 @@ async def analyze_correlation_heatmap(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 火山图 ====================
@@ -162,10 +162,10 @@ async def analyze_volcano(
     """
     try:
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         if gmt_file and not gmt_file.filename.endswith('.gmt'):
-            raise HTTPException(status_code=400, detail="GMT文件必须是.gmt格式")
+            raise HTTPException(status_code=400, detail="Only gmt format files are supported")
         
         service = AnalysisService(db, current_user)
         result = await service.analyze_volcano(
@@ -187,10 +187,10 @@ async def analyze_volcano(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 韦恩图 ====================
@@ -210,13 +210,13 @@ async def analyze_venn(
     """
     try:
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         valid_plot_types = ["venn", "vennpie", "barplot"]
         if plot_type not in valid_plot_types:
             raise HTTPException(
                 status_code=400, 
-                detail=f"图类型必须是: {', '.join(valid_plot_types)}"
+                detail=f"Plot type must be: {', '.join(valid_plot_types)}"
             )
         
         service = AnalysisService(db, current_user)
@@ -229,10 +229,10 @@ async def analyze_venn(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 差异基因聚类热图 ====================
@@ -260,24 +260,24 @@ async def analyze_gene_cluster_heatmap(
     """
     try:
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         if clustering_dis_row not in VALID_CLUSTERING_METHODS:
             raise HTTPException(
                 status_code=400,
-                detail=f"行聚类方法必须是: {', '.join(VALID_CLUSTERING_METHODS)}"
+                detail=f"Row clustering method must be: {', '.join(VALID_CLUSTERING_METHODS)}"
             )
         
         if clustering_dis_col not in VALID_CLUSTERING_METHODS:
             raise HTTPException(
                 status_code=400,
-                detail=f"列聚类方法必须是: {', '.join(VALID_CLUSTERING_METHODS)}"
+                detail=f"Column clustering method must be: {', '.join(VALID_CLUSTERING_METHODS)}"
             )
         
         if annotation_type not in VALID_ANNOTATION_TYPES:
             raise HTTPException(
                 status_code=400,
-                detail=f"注释类型必须是: {', '.join(VALID_ANNOTATION_TYPES)}"
+                detail=f"Annotation type must be: {', '.join(VALID_ANNOTATION_TYPES)}"
             )
         
         service = AnalysisService(db, current_user)
@@ -302,10 +302,10 @@ async def analyze_gene_cluster_heatmap(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 哑铃图 ====================
@@ -326,7 +326,7 @@ async def analyze_dumbbell(
     """
     try:
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         service = AnalysisService(db, current_user)
         result = await service.analyze_dumbbell(
@@ -343,10 +343,10 @@ async def analyze_dumbbell(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 哑铃条形图 ====================
@@ -368,10 +368,10 @@ async def analyze_dumbbell_bar(
     """
     try:
         if not file1.filename or not file1.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="文件1只支持 txt、csv、tsv 格式")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         if not file2.filename or not file2.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="文件2只支持 txt、csv、tsv 格式")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         service = AnalysisService(db, current_user)
         result = await service.analyze_dumbbell_bar(
@@ -389,10 +389,10 @@ async def analyze_dumbbell_bar(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== GO富集分析 ====================
@@ -417,25 +417,25 @@ async def analyze_go_enrichment(
     """
     try:
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         if organism not in VALID_ORGANISMS:
             raise HTTPException(
                 status_code=400,
-                detail=f"支持的物种: {', '.join(VALID_ORGANISMS)}"
+                detail=f"Supported species: {', '.join(VALID_ORGANISMS)}"
             )
         
         if correction not in VALID_CORRECTION_METHODS:
             raise HTTPException(
                 status_code=400,
-                detail=f"校正方法必须是: {', '.join(VALID_CORRECTION_METHODS)}"
+                detail=f"Correction method must be: {', '.join(VALID_CORRECTION_METHODS)}"
             )
         
         valid_plot_types = ["bubble", "barplot", "circle", "chord", "cluster"]
         if plot_type not in valid_plot_types:
             raise HTTPException(
                 status_code=400,
-                detail=f"图类型必须是: {', '.join(valid_plot_types)}"
+                detail=f"Plot type must be: {', '.join(valid_plot_types)}"
             )
         
         service = AnalysisService(db, current_user)
@@ -457,10 +457,10 @@ async def analyze_go_enrichment(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== KEGG富集分析 ====================
@@ -485,25 +485,25 @@ async def analyze_kegg_enrichment(
     """
     try:
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         if organism not in VALID_KEGG_ORGANISMS:
             raise HTTPException(
                 status_code=400,
-                detail=f"支持的物种代码: {', '.join(VALID_KEGG_ORGANISMS)}"
+                detail=f"Supported species code: {', '.join(VALID_KEGG_ORGANISMS)}"
             )
         
         if correction not in VALID_CORRECTION_METHODS:
             raise HTTPException(
                 status_code=400,
-                detail=f"校正方法必须是: {', '.join(VALID_CORRECTION_METHODS)}"
+                detail=f"Correction method must be: {', '.join(VALID_CORRECTION_METHODS)}"
             )
         
         valid_plot_types = ["bubble", "circle", "chord", "cluster"]
         if plot_type not in valid_plot_types:
             raise HTTPException(
                 status_code=400,
-                detail=f"图类型必须是: {', '.join(valid_plot_types)}"
+                detail=f"Plot type must be: {', '.join(valid_plot_types)}"
             )
         
         service = AnalysisService(db, current_user)
@@ -525,10 +525,10 @@ async def analyze_kegg_enrichment(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== PPI分析 ====================
@@ -552,19 +552,19 @@ async def analyze_ppi(
     """
     try:
         if not file.filename or not file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="只支持 txt、csv、tsv 格式的文件")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         ppi_organisms = ["Homo_sapiens", "Mus_musculus", "Bos_taurus", "Drosophila_melanogaster"]
         if organism not in ppi_organisms:
             raise HTTPException(
                 status_code=400,
-                detail=f"支持的物种: {', '.join(ppi_organisms)}"
+                detail=f"Supported species: {', '.join(ppi_organisms)}"
             )
         
         if nomenclature not in VALID_NOMENCLATURE_TYPES:
             raise HTTPException(
                 status_code=400,
-                detail=f"命名方式必须是: {', '.join(VALID_NOMENCLATURE_TYPES)}"
+                detail=f"Naming method must be: {', '.join(VALID_NOMENCLATURE_TYPES)}"
             )
         
         service = AnalysisService(db, current_user)
@@ -585,10 +585,10 @@ async def analyze_ppi(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 综合分析(差异表达分析) ====================
@@ -613,29 +613,29 @@ async def analyze_comprehensive(
     """
     try:
         if not expression_file.filename or not expression_file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="表达矩阵文件只支持 txt、csv、tsv 格式")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         if not group_file.filename or not group_file.filename.endswith(('.txt', '.csv', '.tsv')):
-            raise HTTPException(status_code=400, detail="分组信息文件只支持 txt、csv、tsv 格式")
+            raise HTTPException(status_code=400, detail="Only txt format files are supported")
         
         if organism not in VALID_ORGANISMS:
             raise HTTPException(
                 status_code=400,
-                detail=f"支持的物种: {', '.join(VALID_ORGANISMS)}"
+                detail=f"Supported species: {', '.join(VALID_ORGANISMS)}"
             )
         
         valid_data_types = ["read_counts", "fpkm"]
         if data_type not in valid_data_types:
             raise HTTPException(
                 status_code=400,
-                detail=f"数据类型必须是: {', '.join(valid_data_types)}"
+                detail=f"Data type must be: {', '.join(valid_data_types)}"
             )
         
         valid_corrections = ["BH", "BY", "holm", "hochberg", "hommel", "bonferroni", "none"]
         if correction not in valid_corrections:
             raise HTTPException(
                 status_code=400,
-                detail=f"校正方法必须是: {', '.join(valid_corrections)}"
+                detail=f"Correction method must be: {', '.join(valid_corrections)}"
             )
         
         service = AnalysisService(db, current_user)
@@ -657,10 +657,10 @@ async def analyze_comprehensive(
         raise
     except SQLAlchemyError as e:
         logger.error(f"数据库错误：{str(e)}")
-        raise HTTPException(status_code=500, detail="数据库操作失败")
+        raise HTTPException(status_code=500, detail="Database operation failed")
     except Exception as e:
         logger.error(f"未知错误：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 综合分析：继续 GO/KEGG 富集 ====================
@@ -680,30 +680,30 @@ async def analyze_comprehensive_enrichment(
         validate_job_id(job_id)
 
         if req.type_analysis not in ["up", "down", "all"]:
-            raise HTTPException(status_code=400, detail="type_analysis必须是: up, down, all")
+            raise HTTPException(status_code=400, detail="type_analysis must be up, down, all")
 
         if req.go_organism not in VALID_ORGANISMS:
             raise HTTPException(
                 status_code=400,
-                detail=f"GO物种必须是: {', '.join(VALID_ORGANISMS)}"
+                detail=f"GO species must be: {', '.join(VALID_ORGANISMS)}"
             )
 
         if req.kegg_organism not in VALID_KEGG_ORGANISMS:
             raise HTTPException(
                 status_code=400,
-                detail=f"KEGG物种必须是: {', '.join(VALID_KEGG_ORGANISMS)}"
+                detail=f"KEGG species must be: {', '.join(VALID_KEGG_ORGANISMS)}"
             )
 
         if req.go_correction not in VALID_CORRECTION_METHODS:
             raise HTTPException(
                 status_code=400,
-                detail=f"GO校正方法必须是: {', '.join(VALID_CORRECTION_METHODS)}"
+                detail=f"GO correction method must be: {', '.join(VALID_CORRECTION_METHODS)}"
             )
 
         if req.kegg_correction not in VALID_CORRECTION_METHODS:
             raise HTTPException(
                 status_code=400,
-                detail=f"KEGG校正方法必须是: {', '.join(VALID_CORRECTION_METHODS)}"
+                detail=f"KEGG correction method must be: {', '.join(VALID_CORRECTION_METHODS)}"
             )
 
         service = AnalysisService(db, current_user)
@@ -714,7 +714,7 @@ async def analyze_comprehensive_enrichment(
         raise
     except Exception as e:
         logger.error(f"综合分析继续富集失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ==================== 获取分析结果 ====================
@@ -742,7 +742,7 @@ async def get_analysis_result(
         raise
     except Exception as e:
         logger.error(f"获取分析结果失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取结果失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Getting result failed: {str(e)}")
 
 
 # ==================== 下载结果文件 ====================
@@ -764,7 +764,7 @@ async def download_result_file(
         
         # 安全验证文件名
         if ".." in filename or "/" in filename or "\\" in filename:
-            raise HTTPException(status_code=400, detail="无效的文件名")
+            raise HTTPException(status_code=400, detail="Invalid file name")
         
         service = AnalysisService(db, current_user)
         file_path = service.get_result_file_path(job_id, filename)
@@ -796,4 +796,4 @@ async def download_result_file(
         raise
     except Exception as e:
         logger.error(f"下载结果文件失败：{str(e)}")
-        raise HTTPException(status_code=500, detail=f"下载失败：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"Downloading result file failed: {str(e)}")

@@ -1,5 +1,6 @@
 import asyncio
 import html
+import zipfile
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -268,4 +269,75 @@ def test_send_failure_email_catches_smtp_exception_and_returns_false() -> None:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_send_result_email_retries_until_success() -> None:
+    service = EmailService()
+    service.enabled = True
+    service.smtp_password = "test-password"
+
+    with patch.object(
+        service,
+        "_send_email_sync_with_category",
+        side_effect=[(False, "connection"), (False, "connection"), (True, "none")],
+    ) as mock_send:
+        result = asyncio.run(
+            service.send_result_email(
+                to_email="user@example.com",
+                job_id="job-retry",
+                analysis_type="综合分析",
+                result_dir="/tmp/result",
+            )
+        )
+
+    assert result is True
+    assert mock_send.call_count == 3
+
+
+def test_send_result_email_auth_failure_no_retry() -> None:
+    service = EmailService()
+    service.enabled = True
+    service.smtp_password = "test-password"
+
+    with patch.object(
+        service,
+        "_send_email_sync_with_category",
+        return_value=(False, "auth"),
+    ) as mock_send:
+        result = asyncio.run(
+            service.send_result_email(
+                to_email="user@example.com",
+                job_id="job-auth-fail",
+                analysis_type="综合分析",
+                result_dir="/tmp/result",
+            )
+        )
+
+    assert result is False
+    assert mock_send.call_count == 1
+
+
+def test_comprehensive_attachment_filter_only_png_and_txt(tmp_path) -> None:
+    service = EmailService()
+
+    # 模拟综合分析结果目录
+    result_dir = tmp_path / "result"
+    result_dir.mkdir(parents=True, exist_ok=True)
+    (result_dir / "volcano.png").write_text("png", encoding="utf-8")
+    (result_dir / "select_all.txt").write_text("txt", encoding="utf-8")
+    (result_dir / "volcano.pdf").write_text("pdf", encoding="utf-8")
+    (result_dir / "volcano.svg").write_text("svg", encoding="utf-8")
+    (result_dir / "volcano.tiff").write_text("tiff", encoding="utf-8")
+
+    out_zip = tmp_path / "filtered.zip"
+    service._create_zip(
+        str(result_dir),
+        str(out_zip),
+        filter_func=lambda p: service._should_include_attachment_file("综合分析", p),
+    )
+
+    with zipfile.ZipFile(out_zip, "r") as zf:
+        names = sorted(zf.namelist())
+
+    assert names == ["select_all.txt", "volcano.png"]
 

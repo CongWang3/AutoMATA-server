@@ -83,28 +83,28 @@ export class ApiClient {
       const { status, data } = error.response
       switch (status) {
         case 400:
-          return data?.detail || data?.message || '请求参数错误'
+          return data?.detail || data?.message || 'Invalid request parameters'
         case 401:
           // 处理未授权，可能需要跳转登录
           localStorage.removeItem('access_token')
           localStorage.removeItem('user_info')
           localStorage.removeItem('token_expiry')
-          return '未授权访问'
+          return 'Unauthorized'
         case 403:
-          return '权限不足'
+          return 'Forbidden'
         case 404:
-          return '请求的资源不存在'
+          return 'Resource not found'
         case 500:
-          return '服务器内部错误'
+          return 'Internal server error'
         default:
-          return data?.detail || data?.message || `HTTP ${status} 错误`
+          return data?.detail || data?.message || `HTTP ${status} error`
       }
     } else if (error.request) {
       // 网络错误
-      return '网络连接失败，请检查网络设置'
+      return 'Network error. Please check your connection.'
     } else {
       // 其他错误
-      return error.message || '未知错误'
+      return error.message || 'Unknown error'
     }
   }
 

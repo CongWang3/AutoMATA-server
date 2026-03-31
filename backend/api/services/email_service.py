@@ -4,15 +4,17 @@
 import os
 import logging
 import smtplib
+import tempfile
 import zipfile
 import html as html_module
 import re
+import socket
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -75,11 +77,28 @@ class EmailService:
             return False
             
         try:
-            # 在线程池中执行同步SMTP操作避免阻塞
             loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(
-                None, self._send_email_sync, to_email, job_id, analysis_type, result_dir
-            )
+            # SMTP 重试（指数退避）：应对偶发网络抖动/服务端瞬时断连
+            max_attempts = 3
+            base_delay_seconds = 1
+            for attempt in range(1, max_attempts + 1):
+                ok, category = await loop.run_in_executor(
+                    None, self._send_email_sync_with_category, to_email, job_id, analysis_type, result_dir
+                )
+                if ok:
+                    return True
+
+                logger.warning(
+                    f"结果邮件发送失败（第{attempt}/{max_attempts}次，分类={category}），job_id={job_id}, to={to_email}"
+                )
+
+                # 认证失败通常不是瞬时问题，避免无意义重试
+                if category == "auth":
+                    break
+
+                if attempt < max_attempts:
+                    await asyncio.sleep(base_delay_seconds * (2 ** (attempt - 1)))
+            return False
         except Exception as e:
             logger.error(f"发送邮件失败: {e}")
             return False
@@ -139,6 +158,43 @@ class EmailService:
             s = s[:max_len]
         return s
 
+    # 成功/失败邮件主题与 HTML 正文中任务类型的英文展示
+    _EMAIL_ANALYSIS_TYPE_EN = {
+        "分析并训练": "Analyze and Train",
+        "supervised模型训练": "Supervised model training",
+        "unsupervised模型训练": "Unsupervised model training",
+        "semi_supervised模型训练": "Semi-supervised model training",
+        "模型训练": "Model training",
+        "综合分析": "Comprehensive analysis",
+        "基因组数据处理": "Genomic data processing",
+        "转录组数据处理": "Transcriptomic data processing",
+        "蛋白质数据处理": "Proteomic data processing",
+        "多组学数据整合": "Multi-omics integration",
+        "pvalue多组学整合": "P-value multi-omics integration",
+    }
+    _EMAIL_UNKNOWN_ANALYSIS_TYPE_EN = "Task"
+
+    @staticmethod
+    def _email_analysis_type_display_en(analysis_type: str) -> str:
+        """
+        将邮件中的任务类型转为英文展示：精确映射；`模型应用(x)` → Model use (x)；
+        含中文但未映射则用固定英文；不含中日韩统一表意文字则保留原字符串。
+        """
+        raw = (analysis_type or "").strip()
+        if not raw:
+            return EmailService._EMAIL_UNKNOWN_ANALYSIS_TYPE_EN
+        mapped = EmailService._EMAIL_ANALYSIS_TYPE_EN.get(raw)
+        if mapped is not None:
+            return mapped
+        m = re.fullmatch(r"模型应用\((.*)\)\s*", raw)
+        if m:
+            inner = (m.group(1) or "").strip()
+            return f"Model use ({inner})" if inner else "Model use"
+        for ch in raw:
+            if "\u4e00" <= ch <= "\u9fff":
+                return EmailService._EMAIL_UNKNOWN_ANALYSIS_TYPE_EN
+        return raw
+
     def _send_failure_email_sync(
         self,
         to_email: str,
@@ -154,11 +210,12 @@ class EmailService:
             safe_to_email = self._sanitize_header_value(to_email)
             msg["From"] = f"{safe_from_name} <{safe_smtp_user}>"
             msg["To"] = safe_to_email
-            safe_analysis_type_header = self._sanitize_header_value(analysis_type)
+            display_type_en = self._email_analysis_type_display_en(analysis_type)
+            safe_analysis_type_header = self._sanitize_header_value(display_type_en)
             msg["Subject"] = f"AutoMATA Failure - {safe_analysis_type_header}"
 
             safe_job_id = html_module.escape(str(job_id))
-            safe_analysis_type = html_module.escape(str(analysis_type))
+            safe_analysis_type = html_module.escape(display_type_en)
             formatted_error = self._format_failure_error_html(error_message, max_chars=2000)
 
             # 仅发送失败摘要 HTML；不附带任何 zip/result 附件
@@ -240,14 +297,14 @@ class EmailService:
             logger.error(f"发送失败邮件失败: {e}")
             return False
     
-    def _send_email_sync(
+    def _send_email_sync_with_category(
         self,
         to_email: str,
         job_id: str,
         analysis_type: str,
         result_dir: Optional[str]
-    ) -> bool:
-        """同步发送邮件"""
+    ) -> Tuple[bool, str]:
+        """同步发送邮件，并返回失败分类"""
         try:
             msg = MIMEMultipart()
             safe_from_name = self._sanitize_header_value(self.from_name)
@@ -255,9 +312,10 @@ class EmailService:
             safe_to_email = self._sanitize_header_value(to_email)
             msg['From'] = f"{safe_from_name} <{safe_smtp_user}>"
             msg['To'] = safe_to_email
-            safe_analysis_type_header = self._sanitize_header_value(analysis_type)
+            display_type_en = self._email_analysis_type_display_en(analysis_type)
+            safe_analysis_type_header = self._sanitize_header_value(display_type_en)
             msg['Subject'] = f'AutoMATA Result - {safe_analysis_type_header}'
-            safe_analysis_type_html = html_module.escape(str(analysis_type))
+            safe_analysis_type_html = html_module.escape(display_type_en)
             safe_job_id_html = html_module.escape(str(job_id))
             
             # HTML 邮件正文
@@ -278,69 +336,142 @@ class EmailService:
             </html>
             """
             msg.attach(MIMEText(body, 'html', 'utf-8'))
-            
-            # 如果有结果目录，压缩并添加为附件
-            zip_path = None
+
+            temp_zip_paths: list[Path] = []
+
+            def _mk_temp_zip_path() -> str:
+                fd, zp = tempfile.mkstemp(suffix=".zip")
+                os.close(fd)
+                temp_zip_paths.append(Path(zp))
+                return zp
+
+            zip_path: Optional[str] = None
             if result_dir:
                 result_path = Path(result_dir)
                 if result_path.exists():
-                    # 检查是否已经是 zip 文件
-                    if result_path.suffix == '.zip' and result_path.is_file():
+                    # 分析并训练：不附带完整 model_result.zip；从同级 result/ 打临时包（仅 png/txt/pth/pkl），发完删除
+                    if self._is_analysis_train_mail_type(analysis_type):
+                        result_subdir = (
+                            result_path.parent / "result"
+                            if result_path.suffix.lower() == ".zip"
+                            else result_path
+                        )
+                        if result_subdir.is_dir():
+                            zip_path = _mk_temp_zip_path()
+                            self._create_zip(
+                                str(result_subdir),
+                                zip_path,
+                                filter_func=lambda p: self._should_include_analysis_train_attachment_file(
+                                    p
+                                ),
+                            )
+                        elif result_path.suffix.lower() == ".zip" and result_path.is_file():
+                            logger.warning(
+                                "分析并训练邮件：未找到 result/ 目录，退化为附带传入的 zip: %s",
+                                result_path,
+                            )
+                            zip_path = str(result_path)
+                    elif result_path.suffix == ".zip" and result_path.is_file():
                         zip_path = str(result_path)
                     elif result_path.is_dir():
-                        # 压缩目录
                         zip_path = f"{result_dir}.zip"
-                        self._create_zip(result_dir, zip_path)
+                        self._create_zip(
+                            result_dir,
+                            zip_path,
+                            filter_func=lambda p: self._should_include_attachment_file(
+                                analysis_type, p
+                            ),
+                        )
                     elif result_path.is_file():
-                        # 单个结果文件，也打包成 zip
                         zip_path = f"{result_dir}.zip"
                         self._create_single_file_zip(str(result_path), zip_path)
-            
-            # 添加附件
-            if zip_path and Path(zip_path).exists():
-                with open(zip_path, 'rb') as f:
-                    part = MIMEBase('application', 'zip')
-                    part.set_payload(f.read())
-                    encoders.encode_base64(part)
-                    safe_job_id = self._sanitize_attachment_job_id(job_id)
-                    part.add_header(
-                        'Content-Disposition',
-                        f'attachment; filename="result_{safe_job_id}.zip"'
-                    )
-                    msg.attach(part)
-            
-            # 发送邮件
-            if self.smtp_ssl:
-                with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=30) as server:
-                    server.login(self.smtp_user, self.smtp_password)
-                    server.send_message(msg)
-            else:
-                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as server:
-                    server.starttls()
-                    server.login(self.smtp_user, self.smtp_password)
-                    server.send_message(msg)
 
-            logger.info(f"邮件已发送至 {to_email}, JobID: {job_id}, Type: {analysis_type}")
-            return True
-            
+            try:
+                if zip_path and Path(zip_path).exists():
+                    with open(zip_path, "rb") as f:
+                        part = MIMEBase("application", "zip")
+                        part.set_payload(f.read())
+                        encoders.encode_base64(part)
+                        safe_job_id = self._sanitize_attachment_job_id(job_id)
+                        part.add_header(
+                            "Content-Disposition",
+                            f'attachment; filename="result_{safe_job_id}.zip"',
+                        )
+                        msg.attach(part)
+
+                if self.smtp_ssl:
+                    with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=30) as server:
+                        server.login(self.smtp_user, self.smtp_password)
+                        server.send_message(msg)
+                else:
+                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as server:
+                        server.starttls()
+                        server.login(self.smtp_user, self.smtp_password)
+                        server.send_message(msg)
+
+                logger.info(f"邮件已发送至 {to_email}, JobID: {job_id}, Type: {analysis_type}")
+                return True, "none"
+            finally:
+                for p in temp_zip_paths:
+                    try:
+                        p.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+
         except smtplib.SMTPAuthenticationError as e:
-            logger.error(f"SMTP认证失败: {e}")
-            return False
+            logger.error(f"SMTP认证失败（分类=auth）: {e}")
+            return False, "auth"
+        except smtplib.SMTPServerDisconnected as e:
+            logger.error(f"SMTP连接失败（分类=connection，服务端断开）: {e}")
+            return False, "connection"
+        except smtplib.SMTPConnectError as e:
+            logger.error(f"SMTP连接失败（分类=connection，连接建立失败）: {e}")
+            return False, "connection"
+        except (smtplib.SMTPRecipientsRefused, smtplib.SMTPSenderRefused, smtplib.SMTPDataError, smtplib.SMTPHeloError) as e:
+            logger.error(f"SMTP服务端拒绝（分类=refused）: {e}")
+            return False, "refused"
+        except (socket.timeout, TimeoutError) as e:
+            logger.error(f"SMTP超时（分类=timeout）: {e}")
+            return False, "timeout"
+        except (ConnectionError, OSError) as e:
+            logger.error(f"SMTP连接失败（分类=connection，网络/OSError）: {e}")
+            return False, "connection"
         except smtplib.SMTPException as e:
-            logger.error(f"SMTP发送失败: {e}")
-            return False
+            logger.error(f"SMTP发送失败（分类=smtp）: {e}")
+            return False, "smtp"
         except Exception as e:
-            logger.error(f"邮件发送异常: {e}")
-            return False
+            logger.error(f"邮件发送异常（分类=unknown）: {e}")
+            return False, "unknown"
+
+    def _send_email_sync(
+        self,
+        to_email: str,
+        job_id: str,
+        analysis_type: str,
+        result_dir: Optional[str]
+    ) -> bool:
+        """
+        兼容旧调用：仅返回成功与否。
+        新逻辑请优先使用 _send_email_sync_with_category。
+        """
+        ok, _ = self._send_email_sync_with_category(
+            to_email=to_email,
+            job_id=job_id,
+            analysis_type=analysis_type,
+            result_dir=result_dir
+        )
+        return ok
     
     @staticmethod
-    def _create_zip(source_dir: str, zip_path: str) -> None:
-        """压缩目录为zip文件"""
+    def _create_zip(source_dir: str, zip_path: str, filter_func=None) -> None:
+        """压缩目录为zip文件（支持按文件过滤）"""
         try:
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 source = Path(source_dir)
                 for file in source.rglob('*'):
                     if file.is_file():
+                        if filter_func and not filter_func(file):
+                            continue
                         zipf.write(file, file.relative_to(source))
         except Exception as e:
             logger.error(f"压缩目录失败: {e}")
@@ -353,6 +484,37 @@ class EmailService:
                 zipf.write(file_path, Path(file_path).name)
         except Exception as e:
             logger.error(f"压缩文件失败: {e}")
+
+    @staticmethod
+    def _is_analysis_train_mail_type(analysis_type: Optional[str]) -> bool:
+        """分析并训练完成邮件：走 result/ 筛选附件分支（与 training/data_process/analysis 其它调用隔离）。"""
+        if not analysis_type:
+            return False
+        if "分析并训练" in analysis_type:
+            return True
+        t = analysis_type.lower()
+        if "analyze and train" in t:
+            return True
+        return "analyze" in t and "train" in t
+
+    @staticmethod
+    def _should_include_analysis_train_attachment_file(file_path: Path) -> bool:
+        return file_path.suffix.lower() in {".png", ".txt", ".pth", ".pkl", "log"}
+
+    @staticmethod
+    def _should_include_attachment_file(analysis_type: str, file_path: Path) -> bool:
+        """
+        综合分析附件瘦身策略：
+        - 仅保留 .png 与 .txt
+        其它任务保持原样（全量文件）。
+        """
+        t = (analysis_type or "").lower()
+        is_comprehensive = ("综合分析" in (analysis_type or "")) or ("comprehensive" in t)
+        if not is_comprehensive:
+            return True
+
+        ext = file_path.suffix.lower()
+        return ext in {".png", ".txt", ".log"}
 
 
 # 全局单例

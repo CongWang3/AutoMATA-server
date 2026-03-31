@@ -1,7 +1,7 @@
 <template>
   <AnalysisForm
     title="Venn Diagram"
-    subtitle="韦恩图"
+    subtitle="Venn Diagram"
     :fields="analysisFields"
     :on-submit="handleSubmit"
     example-data-url="/example/draw_example/venn_example.txt"

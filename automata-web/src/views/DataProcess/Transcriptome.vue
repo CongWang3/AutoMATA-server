@@ -3,13 +3,13 @@
     <!-- 数据处理表单 -->
     <DataProcessForm
       ref="formComponent"
-      title="转录组数据处理"
+      title="Transcriptome Data Processing"
       subtitle="Transcriptome Data Processing"
       tag-type="success"
-      file-label="上传 mRNA 表达数据"
-      file-tip="仅支持 txt、csv、tsv 格式的文件"
-      nomenclature-label="mRNA 命名方式"
-      nomenclature-placeholder="请选择 mRNA 命名方式"
+      file-label="Upload mRNA expression data"
+      file-tip="Only support txt file with tab delimiter"
+      nomenclature-label="Nomenclature"
+      nomenclature-placeholder="Select mRNA nomenclature"
       :nomenclature-options="[
         { label: 'Refseq Accession (e.g. NM_001422116)', value: 'Refseq' },
         { label: 'Ensembl ID (e.g. ENST00000641515)', value: 'EnsemblID' },
@@ -24,7 +24,7 @@
       :on-submit="handleSubmit"
       example-data-url="/example/test_refseq_fpkm_mrna.txt" 
       example-file-name="refseq_accession_fpkm2TPM_mrna.txt"
-      example-note="示例数据包含人类物种的Refseq mRNA标识符和FPKM值"
+      example-note="The sample data contains the 'Refseq' identifiers and 'FPKM' values of the Homo sapiens"
       @submit-success="handleSuccess"
     />
     <!-- 示例文件放在这里了 /xp/www/AutoMATA/automata-web/public/example -->
@@ -47,7 +47,7 @@
       
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="handleClose">关闭并提交新任务</el-button>
+          <el-button @click="handleClose">Close and Submit New Task</el-button>
         </div>
       </template>
     </el-dialog>
@@ -101,12 +101,12 @@ const connectWebSocket = async () => {
         jobProgress.value = taskProgress || 0
         
         if (taskStatus === 'COMPLETED' || taskStatus === 'Completed') {
-          ElMessage.success(`任务 ${job_id} 已完成！`)
+          ElMessage.success(`Task ${job_id} has been completed!`)
           if (result_file) {
-            ElMessage.info(`结果文件已生成: ${result_file}`)
+            ElMessage.info(`Result file has been generated: ${result_file}`)
           }
         } else if (taskStatus === 'FAILED' || taskStatus === 'Failed') {
-          ElMessage.error(`任务 ${job_id} 失败: ${error_message || '未知错误'}`)
+          ElMessage.error(`Task ${job_id} failed: ${error_message || 'Unknown error'}`)
         }
       }
     })
@@ -116,7 +116,7 @@ const connectWebSocket = async () => {
     
   } catch (error: any) {
     console.error('WebSocket 连接失败:', error)
-    ElMessage.error('任务监控连接失败: ' + (error.message || '未知错误'))
+    ElMessage.error('Task monitoring connection failed: ' + (error.message || 'Unknown error'))
   }
 }
 
@@ -185,7 +185,7 @@ const handleSubmit = async (formData: FormData) => {
 }
 
 const handleSuccess = (result: any) => {
-  ElMessage.success('转录组数据处理任务已提交')
+  ElMessage.success('Transcriptome data processing task has been submitted')
 }
 
 const handleStatusChange = (status: string) => {
@@ -194,7 +194,7 @@ const handleStatusChange = (status: string) => {
   // 如果任务完成或失败，提示用户
   if (status === 'COMPLETED' || status === 'Completed' || status === 'FAILED' || status === 'Failed') {
     setTimeout(() => {
-      ElMessage.info('任务已完成')
+      ElMessage.info('Task has been completed')
     }, 2000)
   }
 }

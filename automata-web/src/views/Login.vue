@@ -3,14 +3,14 @@
     <div class="login-container">
       <div class="login-card">
         <div class="login-header">
-          <h2 class="login-title">AutoMATA 平台</h2>
-          <p class="login-subtitle">生物信息学数据分析平台</p>
+          <h2 class="login-title">AutoMATA</h2>
+          <p class="login-subtitle">Bioinformatics data analysis platform</p>
         </div>
 
         <div class="login-form">
           <el-tabs v-model="activeTab" class="login-tabs">
             <!-- 登录标签页 -->
-            <el-tab-pane label="登录" name="login">
+            <el-tab-pane label="Sign in" name="login">
               <el-form
                 ref="loginFormRef"
                 :model="loginForm"
@@ -18,21 +18,21 @@
                 label-position="top"
                 @submit.prevent="handleLogin"
               >
-                <el-form-item label="用户名或邮箱" prop="username">
+                <el-form-item label="Username or email" prop="username">
                   <el-input
                     v-model="loginForm.username"
-                    placeholder="请输入用户名或邮箱"
+                    placeholder="Enter username or email"
                     prefix-icon="User"
                     size="large"
                     clearable
                   />
                 </el-form-item>
 
-                <el-form-item label="密码" prop="password">
+                <el-form-item label="Password" prop="password">
                   <el-input
                     v-model="loginForm.password"
                     type="password"
-                    placeholder="请输入密码"
+                    placeholder="Enter password"
                     prefix-icon="Lock"
                     size="large"
                     show-password
@@ -41,7 +41,7 @@
                 </el-form-item>
 
                 <el-form-item>
-                  <el-checkbox v-model="rememberMe">记住我</el-checkbox>
+                  <el-checkbox v-model="rememberMe">Remember me</el-checkbox>
                 </el-form-item>
 
                 <el-form-item>
@@ -52,14 +52,14 @@
                     class="login-button"
                     @click="handleLogin"
                   >
-                    {{ userStore.loading ? '登录中...' : '登录' }}
+                    {{ userStore.loading ? 'Signing in…' : 'Sign in' }}
                   </el-button>
                 </el-form-item>
               </el-form>
             </el-tab-pane>
 
             <!-- 注册标签页 -->
-            <el-tab-pane label="注册" name="register">
+            <el-tab-pane label="Register" name="register">
               <el-form
                 ref="registerFormRef"
                 :model="registerForm"
@@ -67,42 +67,42 @@
                 label-position="top"
                 @submit.prevent="handleRegister"
               >
-                <el-form-item label="用户名" prop="username">
+                <el-form-item label="Username" prop="username">
                   <el-input
                     v-model="registerForm.username"
-                    placeholder="请输入用户名（5-50字符）"
+                    placeholder="Username (5–50 characters)"
                     prefix-icon="User"
                     size="large"
                     clearable
                   />
                 </el-form-item>
 
-                <el-form-item label="邮箱" prop="email">
+                <el-form-item label="Email" prop="email">
                   <el-input
                     v-model="registerForm.email"
-                    placeholder="请输入邮箱地址"
+                    placeholder="Email address"
                     prefix-icon="Message"
                     size="large"
                     clearable
                   />
                 </el-form-item>
 
-                <el-form-item label="密码" prop="password">
+                <el-form-item label="Password" prop="password">
                   <el-input
                     v-model="registerForm.password"
                     type="password"
-                    placeholder="请输入密码（至少8位，包含大小写字母和数字）"
+                    placeholder="At least 8 characters with upper, lower, and digits"
                     prefix-icon="Lock"
                     size="large"
                     show-password
                   />
                 </el-form-item>
 
-                <el-form-item label="确认密码" prop="confirmPassword">
+                <el-form-item label="Confirm password" prop="confirmPassword">
                   <el-input
                     v-model="registerForm.confirmPassword"
                     type="password"
-                    placeholder="请再次输入密码"
+                    placeholder="Re-enter password"
                     prefix-icon="Lock"
                     size="large"
                     show-password
@@ -118,7 +118,7 @@
                     class="register-button"
                     @click="handleRegister"
                   >
-                    {{ userStore.loading ? '注册中...' : '注册' }}
+                    {{ userStore.loading ? 'Registering…' : 'Register' }}
                   </el-button>
                 </el-form-item>
               </el-form>
@@ -183,38 +183,38 @@ const registerForm = reactive({
 // 登录表单验证规则
 const loginRules = reactive<FormRules>({
   username: [
-    { required: true, message: '请输入用户名或邮箱', trigger: 'blur' }
+    { required: true, message: 'Please enter username or email', trigger: 'blur' }
   ],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+    { required: true, message: 'Please enter password', trigger: 'blur' },
+    { min: 6, message: 'Password must be at least 6 characters', trigger: 'blur' }
   ]
 })
 
 // 注册表单验证规则
 const registerRules = reactive<FormRules>({
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 5, max: 50, message: '用户名长度应在5-50字符之间', trigger: 'blur' }
+    { required: true, message: 'Please enter username', trigger: 'blur' },
+    { min: 5, max: 50, message: 'Username must be 5–50 characters', trigger: 'blur' }
   ],
   email: [
-    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+    { required: true, message: 'Please enter email', trigger: 'blur' },
+    { type: 'email', message: 'Please enter a valid email', trigger: 'blur' }
   ],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
+    { required: true, message: 'Please enter password', trigger: 'blur' },
     { 
       pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/,
-      message: '密码至少8位，包含大小写字母和数字',
+      message: 'At least 8 characters with upper, lower, and digits',
       trigger: 'blur'
     }
   ],
   confirmPassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
+    { required: true, message: 'Please confirm password', trigger: 'blur' },
     {
       validator: (rule, value, callback) => {
         if (value !== registerForm.password) {
-          callback(new Error('两次输入的密码不一致'))
+          callback(new Error('Passwords do not match'))
         } else {
           callback()
         }
@@ -255,7 +255,7 @@ async function handleLogin() {
       localStorage.removeItem('remember_me')
     }
     
-    ElMessage.success('登录成功！')
+    ElMessage.success('Signed in successfully')
     
     // 确保状态完全更新后再跳转
     await nextTick()
@@ -283,7 +283,7 @@ async function handleRegister() {
       registerForm.password
     )
     
-    ElMessage.success('注册成功！已自动为您登录')
+    ElMessage.success('Registered successfully. You are now signed in.')
     
     // 确保状态完全更新后再跳转
     await nextTick()

@@ -63,7 +63,7 @@ const analysisFields: AnalysisField[] = [
   },
   {
     type: 'radio',
-    name: 'scal',
+    name: 'scale',
     label: 'Center and scale data',
     defaultValue: 'none',
     options: [
@@ -74,7 +74,7 @@ const analysisFields: AnalysisField[] = [
   },
   {
     type: 'radio',
-    name: 'annotation',
+    name: 'annotation_type',
     label: 'Row/col annotation',
     defaultValue: 'only_data',
     options: [

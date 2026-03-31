@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from typing import Optional, Dict
 
 # 导入路由
-from api.routers import auth, files, data_process, task_websocket, training, jobs, analysis
+from api.routers import auth, files, data_process, task_websocket, training, jobs, analysis, model_use, analysis_train
 
 # --- debug: systematic-debugging instrumentation ---
 DEBUG_LOG_PATH = "/xp/www/AutoMATA/.cursor/debug-d45b01.log"
@@ -135,6 +135,9 @@ app.include_router(training.router)
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["Jobs"])
 # 数据分析路由（/api/v1/analysis/...）
 app.include_router(analysis.router)
+app.include_router(analysis_train.router)
+# 模型应用路由（/api/v1/model-use/...）
+app.include_router(model_use.router)
 # AI Agent 路由（可选）
 if AGENT_AVAILABLE:
     app.include_router(agent_router)

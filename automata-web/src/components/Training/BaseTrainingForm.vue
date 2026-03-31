@@ -6,11 +6,11 @@
         <div class="step-header d-flex justify-content-between align-items-center">
           <h5 class="step-title mb-0">
             <span class="step-number">1</span>
-            选择策略并上传数据
+            Select strategy and upload data
           </h5>
           <button type="button" class="btn btn-outline-primary btn-sm" @click="downloadExample">
             <i class="fas fa-download me-1"></i>
-            下载示例数据
+            Download example data
           </button>
         </div>
         
@@ -62,7 +62,7 @@
         <!-- 数据集上传区域 -->
         <div class="upload-section" v-show="localFormData.strategy === 'split'">
           <div class="mb-3">
-            <label class="form-label">{{ config.splitDatasetLabel || '上传数据集' }}</label>
+            <label class="form-label">{{ config.splitDatasetLabel || 'Upload dataset' }}</label>
             <FileUploader
               ref="datasetUploader"
               :allowed-types="['txt', 'csv', 'tsv']"
@@ -71,10 +71,10 @@
             />
           </div>
           
-          <label class="form-label">当前比例</label>
+          <label class="form-label">Current ratio</label>
           <div class="ratio-controls d-flex align-items-center">
             <div class="ratio-item d-flex align-items-center me-4">
-              <label class="ratio-label me-2">训练集：</label>
+              <label class="ratio-label me-2">Train:</label>
               <input 
                 type="number" 
                 class="form-control ratio-input text-center"
@@ -88,7 +88,7 @@
             </div>
             <span class="ratio-separator me-4">-</span>
             <div class="ratio-item d-flex align-items-center me-4">
-              <label class="ratio-label me-2">验证集：</label>
+              <label class="ratio-label me-2">Validation:</label>
               <input 
                 type="number" 
                 class="form-control ratio-input text-center"
@@ -102,7 +102,7 @@
             </div>
             <span class="ratio-separator me-4">-</span>
             <div class="ratio-item d-flex align-items-center">
-              <label class="ratio-label me-2">测试集：</label>
+              <label class="ratio-label me-2">Test:</label>
               <input 
                 type="number" 
                 class="form-control ratio-input text-center"
@@ -116,7 +116,7 @@
             </div>
           </div>
           <div class="ratio-display mt-3">
-            当前分割比例: {{ localSplitRatio.train }}:{{ localSplitRatio.validation }}:{{ localSplitRatio.test }}
+            Current split: {{ localSplitRatio.train }}:{{ localSplitRatio.validation }}:{{ localSplitRatio.test }}
           </div>
         </div>
 
@@ -124,7 +124,7 @@
         <div class="upload-section" v-show="localFormData.strategy === 'upload'">
           <div class="row">
             <div class="col-md-4 mb-3" v-if="config.showTrainUpload !== false">
-              <label class="form-label">训练集</label>
+              <label class="form-label">Training set</label>
               <FileUploader
                 ref="trainUploader"
                 :allowed-types="['txt', 'csv', 'tsv']"
@@ -133,7 +133,7 @@
               />
             </div>
             <div class="col-md-4 mb-3" v-if="config.showValidationUpload !== false">
-              <label class="form-label">验证集</label>
+              <label class="form-label">Validation set</label>
               <FileUploader
                 ref="validationUploader"
                 :allowed-types="['txt', 'csv', 'tsv']"
@@ -142,7 +142,7 @@
               />
             </div>
             <div class="col-md-4 mb-3" v-if="config.showTestUpload !== false">
-              <label class="form-label">测试集</label>
+              <label class="form-label">Test set</label>
               <FileUploader
                 ref="testUploader"
                 :allowed-types="['txt', 'csv', 'tsv']"
@@ -156,7 +156,7 @@
         <!-- K折交叉验证区域 -->
         <div class="upload-section" v-show="localFormData.strategy === 'kfold'">
           <div class="mb-3">
-            <label class="form-label">{{ config.kfoldDatasetLabel || '上传数据集' }}</label>
+            <label class="form-label">{{ config.kfoldDatasetLabel || 'Upload dataset' }}</label>
             <FileUploader
               ref="kfoldUploader"
               :allowed-types="['txt', 'csv', 'tsv']"
@@ -165,7 +165,7 @@
             />
           </div>
           <div class="mb-3" v-if="config.showTestUpload !== false">
-            <label class="form-label">上传测试集</label>
+            <label class="form-label">Upload test set</label>
             <FileUploader
               ref="kfoldTestUploader"
               :allowed-types="['txt', 'csv', 'tsv']"
@@ -174,14 +174,14 @@
             />
           </div>
           <div class="mb-3">
-            <label class="form-label">K值</label>
+            <label class="form-label">K</label>
             <input 
               type="number" 
               class="form-control" 
               v-model="localFormData.kfold" 
               min="2" 
               max="10"
-              placeholder="请输入K折数 (2-10)"
+              placeholder="K-fold count (2–10)"
             >
           </div>
         </div>
@@ -192,7 +192,7 @@
         <div class="step-header">
           <h5 class="step-title mb-0">
             <span class="step-number">2</span>
-            模型参数配置
+            Model hyperparameters
           </h5>
         </div>
 
@@ -205,7 +205,7 @@
               v-model="localFormData.epochs" 
               min="1" 
               required
-              placeholder="训练轮数"
+              placeholder="Epochs"
             >
           </div>
           <div class="col-md-6 mb-3">
@@ -218,7 +218,7 @@
               max="1" 
               step="0.0001"
               required
-              placeholder="学习率"
+              placeholder="Learning rate"
             >
           </div>
           <div class="col-md-6 mb-3">
@@ -229,7 +229,7 @@
               v-model="localFormData.seed" 
               min="1"
               required
-              placeholder="随机种子"
+              placeholder="Random seed"
             >
           </div>
           <div class="col-md-6 mb-3">
@@ -240,7 +240,7 @@
               v-model="localFormData.earlyStopping" 
               min="1"
               required
-              placeholder="早停耐心值"
+              placeholder="Early stopping patience"
             >
           </div>
           <div class="col-md-6 mb-3">
@@ -287,13 +287,13 @@
         <div class="step-header">
           <h5 class="step-title mb-0">
             <span class="step-number">3</span>
-            选择模型
+            Choose model
           </h5>
         </div>
 
         <div class="row mt-3">
           <div class="col-md-6 mb-3">
-            <label class="form-label">模型类型 *</label>
+            <label class="form-label">Model type *</label>
             <select 
               class="form-select" 
               v-model="localFormData.modelType" 
@@ -310,12 +310,12 @@
             </select>
           </div>
           <div class="col-md-6 mb-3">
-            <label class="form-label">联系邮箱（可选）</label>
+            <label class="form-label">Contact email (optional)</label>
             <input
               type="email"
               class="form-control"
               v-model="localFormData.email"
-              placeholder="请输入邮箱地址（选填，用于接收训练结果通知）"
+              placeholder="Email (optional, for training notifications)"
             >
           </div>
         </div>
@@ -328,7 +328,7 @@
           class="btn btn-secondary px-4"
           @click="resetForm"
         >
-          重置
+          Reset
         </button>
         <button 
           type="submit" 
@@ -340,7 +340,7 @@
             class="spinner-border spinner-border-sm me-2" 
             role="status"
           ></span>
-          {{ isSubmitting ? config.submittingText || '训练中...' : config.submitText || '开始训练' }}
+          {{ isSubmitting ? config.submittingText || 'Training…' : config.submitText || 'Start training' }}
         </button>
       </div>
     </form>

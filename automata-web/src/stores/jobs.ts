@@ -72,7 +72,7 @@ export const useJobsStore = defineStore('jobs', () => {
       jobs.value = response.jobs
       total.value = response.total
     } catch (e: any) {
-      error.value = e.message || '获取任务列表失败'
+      error.value = e.message || 'Failed to load task list'
       console.error('获取任务列表失败:', e)
     } finally {
       loading.value = false
@@ -97,7 +97,7 @@ export const useJobsStore = defineStore('jobs', () => {
     try {
       return await jobsApi.getJobDetail(jobId)
     } catch (e: any) {
-      throw new Error(e.message || '获取任务详情失败')
+      throw new Error(e.message || 'Failed to load task details')
     }
   }
 
@@ -114,7 +114,7 @@ export const useJobsStore = defineStore('jobs', () => {
       }
       return updated
     } catch (e: any) {
-      throw new Error(e.message || '取消任务失败')
+      throw new Error(e.message || 'Failed to cancel task')
     }
   }
 
@@ -128,7 +128,7 @@ export const useJobsStore = defineStore('jobs', () => {
       jobs.value = jobs.value.filter(j => j.job_id !== jobId)
       total.value = Math.max(0, total.value - 1)
     } catch (e: any) {
-      throw new Error(e.message || '删除任务失败')
+      throw new Error(e.message || 'Failed to delete task')
     }
   }
 
@@ -141,12 +141,13 @@ export const useJobsStore = defineStore('jobs', () => {
 
   /**
    * 设置过滤器并刷新
+   * 注意：不要在合并时强制 offset=0，否则会覆盖调用方传入的分页偏移（例如任务列表翻页）。
+   * 需要回到第一页时，由调用方传入 offset: 0（例如筛选条件变化时）。
    */
   function setFilter(newFilter: Partial<JobFilter>) {
-    filter.value = { 
-      ...filter.value, 
-      ...newFilter, 
-      offset: 0  // 重置到第一页
+    filter.value = {
+      ...filter.value,
+      ...newFilter
     }
     fetchJobs()
   }

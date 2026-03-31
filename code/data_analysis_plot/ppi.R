@@ -8,6 +8,7 @@ library(clusterProfiler)
 library(STRINGdb)  #  安装BiocManager::install("STRINGdb")，https://www.bioconductor.org/packages/release/bioc/vignettes/STRINGdb/inst/doc/STRINGdb.pdf
 library(igraph)
 library(ggraph)
+# library(jsonlite)
 
 getOption('timeout')  # 解决超时
 
@@ -20,9 +21,9 @@ library(optparse)
 # 参数
 option_list <- list(
   make_option(c("-i", "--input"), type="character", default="D:\\wamp\\www\\multi_omics_own\\download_data\\Jobs\\protein_case\\ppi_data.txt", action="store", help="This argument is input path"),
-  make_option(c("-j", "--jobID"), type="character", default="protein_case", action="store", help="This argument is jobID"),  # 默认ppi_example
+  make_option(c("-j", "--jobID"), type="character", default="test_ppi", action="store", help="This argument is jobID"),  # 默认ppi_example
   make_option(c("-a", "--type"), type="character", default="SYMBOL", action="store", help="This argument is the type of data, inluding SYMBOL, ENTREZID, and ENSEMBL"), 
-  make_option(c("-b", "--org"), type="character", default="Homo_sapiens", action="store", help="This argument is the organism, inluding Mus_musculus, Homo_sapiens, Drosophila_melanogaster, and Bos_taurus"),   # 默认Mus_musculus
+  make_option(c("-b", "--org"), type="character", default="Mus_musculus", action="store", help="This argument is the organism, inluding Mus_musculus, Homo_sapiens, Drosophila_melanogaster, and Bos_taurus"),   # 默认Mus_musculus
   make_option(c("-c", "--score_threshold"), type="double", default=400, action="store", help="The interaction results were filtered according to the protein interaction scores."), # 默认400
   make_option(c("-d", "--plot_type"), type="character", default="linear", action="store", help="This parameter is the type of plot, including linear, kk, and stress"), # 默认linear
   make_option(c("-e", "--show_num"), type="integer", default=5, action="store", help="Only gene names with more than <show_num> nodes are shown in the plot") # 默认5
@@ -69,8 +70,23 @@ data <- read.table(input,header = TRUE, check.names = FALSE)
 print("read data done")
 data <- na.omit(data)
 
-string_db <- STRINGdb$new( version="12", species=species,
-                           score_threshold=score_threshold, input_directory="")
+
+
+## STRINGdb 会在首次使用时下载物种数据库/互作数据；之后会从 input_directory 复用本地文件。
+## 将在线下载改为“本地优先”：指定一个固定缓存目录（可用环境变量覆盖）。
+stringdb_cache_dir <- Sys.getenv(
+    "AUTOMATA_STRINGDB_CACHE_DIR",
+    unset = file.path("/xp/www/AutoMATA/code/data_analysis_plot", "stringdb_cache")
+)
+dir.create(stringdb_cache_dir, recursive = TRUE, showWarnings = FALSE)
+
+# 只有当缓存缺文件时才会尝试下载；离线则会失败
+string_db <- STRINGdb$new(
+    version="12",
+    species=species,
+    score_threshold=score_threshold,
+    input_directory=stringdb_cache_dir
+)
 
 
 if(type == "ENSEMBL"){
@@ -91,8 +107,24 @@ if(type == "ENTREZID"){
 }
 
 
-data_mapped <- data %>% string_db$map(my_data_frame_id_col_names = "ENTREZID", 
-                removeUnmappedRows = TRUE)  # 需要下载。data_mapped包含ENTREZID   SYMBOL   STRING_id三列
+data_mapped <- tryCatch(
+    {
+        data %>% string_db$map(
+            my_data_frame_id_col_names = "ENTREZID",
+            removeUnmappedRows = TRUE
+        )
+    },
+    error = function(e) {
+        stop(
+            paste0(
+                # "STRINGdb mapping failed. If running offline, pre-download/cache STRINGdb files first.\n",
+                # "Cache dir: ", stringdb_cache_dir, "\n",
+                "Original error: ", conditionMessage(e)
+            ),
+            call. = FALSE
+        )
+    }
+)  # data_mapped包含ENTREZID   SYMBOL   STRING_id三列
 # # 报错schannel: CertGetCertificateChain trust error CERT_TRUST_IS_UNTRUSTED_ROOT
 # # 解决：没解决
 # string_db$plot_network( data_mapped$STRING_id )  # 和官网出图相同
@@ -100,7 +132,21 @@ data_mapped <- data %>% string_db$map(my_data_frame_id_col_names = "ENTREZID",
 
 # 使用get_interactions获取蛋白互作信息，以用于后续可视化
 hit<-data_mapped$STRING_id
-info <- string_db$get_interactions(hit)  # 需要下载. 特别慢。info包含from to combined_score三列
+info <- tryCatch(
+    {
+        string_db$get_interactions(hit)
+    },
+    error = function(e) {
+        stop(
+            paste0(
+                # "STRINGdb get_interactions failed. If running offline, ensure STRINGdb interaction files are cached.\n",
+                # "Cache dir: ", stringdb_cache_dir, "\n",
+                "Original error: ", conditionMessage(e)
+            ),
+            call. = FALSE
+        )
+    }
+)  # info包含from to combined_score三列
 # 可视化info表格 https://www.jianshu.com/p/5bfb94b0e250
 
 # 转换stringID为Symbol，只取前两列和最后一列
@@ -128,6 +174,7 @@ cir <- FALSE
 if(plot_type == "linear"){
     cir <- TRUE
 }
+
 p1 <- ggraph(net, layout = plot_type, circular = cir)+
   geom_edge_arc(aes(edge_width=width), color = "lightblue", show.legend = F)+
   geom_node_point(aes(size=size), color="orange", alpha=0.7)+

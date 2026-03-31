@@ -153,15 +153,20 @@ if (type == "bubble"){
         # 绘制气泡图, 显示前5个ontology分类，按基因比例排序
         bubble <- dotplot(GO, showCategory = termNum, split="ONTOLOGY", orderBy="GeneRatio") +   
             facet_grid(ONTOLOGY ~ ., scale = "free")  # 创建分面网格，每个ontology分类一个面
+        
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), bubble, device = dev, width = 15, height = 10)
+        }
             
     }else{
         print("No GO enrichment data found")
-        # text(0.5, 0.5, "No GO enrichment data found", col = "red", cex = 2)
+        empty_plot <- ggplot() + theme_void()
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), empty_plot, device = dev, width = 15, height = 8)
+        }
     }
 
-    for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
-        ggsave(paste(result_path, dev, sep = "."), bubble, device = dev, width = 15, height = 10)
-    }
+    
     # ggsave(paste("GO", dev, sep="."), bubble, width = 15, height = 10, device = dev)
     # # ggsave("GO_bubble.pdf", bubble, width = 20, height = 10)
 }
@@ -170,21 +175,22 @@ if (type == "bubble"){
 
 
 # 柱状图
-if (type == "bar"){
+if (type == "barplot"){
     # 判断GO结果是否为空
     if (length(GO) > 0){
         # 绘制柱状图, 显示前5个ontology分类，按基因比例排序
         bar <- barplot(GO, drop=TRUE, showCategory = termNum, split="ONTOLOGY", orderBy="GeneRatio") +
             facet_grid(ONTOLOGY ~ ., scale = "free") # 创建分面网格，每个ontology分类一个面
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), bar, device = dev, width = 15, height = 10)
+        }
     }else{
         print("No GO enrichment data found")
-
+        empty_plot <- ggplot() + theme_void()
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), empty_plot, device = dev, width = 15, height = 8)
+        }
     }
-    for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
-        ggsave(paste(result_path, dev, sep = "."), bar, device = dev, width = 15, height = 10)
-    }
-    # ggsave(paste("GO_bar", dev, sep="."), bar, width = 15, height = 10, device = dev)
-    # # ggsave("GO_bar.pdf", bar, width = 15, height = 10)
 }
 
 
@@ -240,14 +246,17 @@ if (type == "chord"){
                 # border.size = 0.1,  # 基因节点边框大小
                 process.label = 10  # 处理标签大小？
                 ) 
+        for(dev in c("png", "jpeg", "tiff", "png", "bmp", "svg")){  # "pdf", "jpeg", "tiff", "png", "bmp", "svg"
+            ggsave(paste(result_path, dev, sep = "."), gochord, device = dev, width = 15, height = 15)
+        }
     }else{
         print("No created chord object")
+        empty_plot <- ggplot() + theme_void()
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), empty_plot, device = dev, width = 15, height = 8)
+        }
     }
-    for(dev in c("png", "jpeg", "tiff", "png", "bmp", "svg")){  # "pdf", "jpeg", "tiff", "png", "bmp", "svg"
-        ggsave(paste(result_path, dev, sep = "."), gochord, device = dev, width = 15, height = 15)
-    }
-    # ggsave(paste("GO_chord", dev, sep="."), gochord, width = 15, height = 15, device = dev)
-    # # ggsave("GO_chord.pdf", gochord, width = 15, height = 10)
+
 }
 
 
@@ -258,21 +267,31 @@ if (type == "cluster"){
     # 如果GO数据不为空且行数大于0，则绘制GO聚类图，使用前termNum个术语
     if (!is.null(GO) && nrow(GO) > 0){
         gocluster <- GOCluster(circ, as.character(GO[1:termNum, 3]))
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), gocluster, device = dev, width = 15, height = 8)
+        }
     }else{
         print("No GO enrichment data found, we can not draw GO cluster plot")
+        empty_plot <- ggplot() + theme_void()
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), empty_plot, device = dev, width = 15, height = 8)
+        }
     }
-    for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
-        ggsave(paste(result_path, dev, sep = "."), gocluster, device = dev, width = 15, height = 8)
-    }
-    # ggsave(paste("GO_cluster", dev, sep="."), gocluster, width = 15, height = 8, device = dev)
-    # # ggsave("GO_cluster.pdf", gocluster, width = 15, height = 8)
+    
 }
 
 # 圆形图
 if (type == "circle"){
     go_circ <- GOCircle(circ, zsc.col=c("purple", "black", "cyan"), label.size=4)
-    for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
-        ggsave(paste(result_path, dev, sep = "."), go_circ, device = dev, width = 15, height = 8)
+    if (!is.null(go_circ)){
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), go_circ, device = dev, width = 15, height = 8)
+        }
+    }else{
+        print("No GO enrichment data found, we can not draw GO circle plot")
+        empty_plot <- ggplot() + theme_void()
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), empty_plot, device = dev, width = 15, height = 8)
+        }
     }
-    # ggsave(paste("GO_circle", dev, sep="."), go_circ, width = 15, height = 8, device = dev)
 }

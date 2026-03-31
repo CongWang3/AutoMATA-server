@@ -69,7 +69,7 @@ export const useFilesStore = defineStore('files', () => {
       
       console.log(`✅ 加载文件列表成功: ${response.files.length} 个文件`)
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '加载文件列表失败'
+      error.value = err instanceof Error ? err.message : 'Failed to load file list'
       console.error('❌ 加载文件列表失败:', error.value)
       throw err
     } finally {
@@ -123,7 +123,7 @@ export const useFilesStore = defineStore('files', () => {
       return fileInfo
         
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : '上传失败'
+      const errorMsg = err instanceof Error ? err.message : 'Upload failed'
       console.error('❌ 上传失败:', errorMsg)
       error.value = errorMsg
       throw err
@@ -178,7 +178,7 @@ export const useFilesStore = defineStore('files', () => {
       await FileService.downloadFile(fileId, filename)
       console.log('✅ 文件下载成功:', filename || fileId)
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '文件下载失败'
+      error.value = err instanceof Error ? err.message : 'File download failed'
       console.error('❌ 文件下载失败:', error.value)
       throw err
     } finally {
@@ -203,7 +203,7 @@ export const useFilesStore = defineStore('files', () => {
       
       console.log('✅ 文件删除成功:', fileId)
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '文件删除失败'
+      error.value = err instanceof Error ? err.message : 'Failed to delete file'
       console.error('❌ 文件删除失败:', error.value)
       throw err
     } finally {
@@ -221,7 +221,7 @@ export const useFilesStore = defineStore('files', () => {
       console.log('✅ 获取文件详情成功:', fileInfo.filename)
       return fileInfo
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '获取文件详情失败'
+      error.value = err instanceof Error ? err.message : 'Failed to load file details'
       console.error('❌ 获取文件详情失败:', error.value)
       throw err
     } finally {

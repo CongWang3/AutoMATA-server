@@ -1,8 +1,8 @@
 <template>
   <div class="dashboard-page">
     <div class="dashboard-header">
-      <h1 class="dashboard-title">欢迎回来，{{ userStore.username }} 👋</h1>
-      <p class="dashboard-subtitle">您的生物信息学分析平台</p>
+      <h1 class="dashboard-title">Welcome, {{ userStore.username }}</h1>
+      <p class="dashboard-subtitle">Your bioinformatics analysis platform</p>
     </div>
 
     <!-- 平台简介 -->
@@ -15,22 +15,22 @@
               A deep learning-enhanced bioinformatics platform for <strong>multi-omics data processing</strong>, 
               <strong>exploration</strong> and <strong>modelling</strong>.
             </p>
-            <p class="intro-desc-cn">
+            <!-- <p class="intro-desc-cn">
               基于深度学习的生物信息学平台，支持多组学数据处理、探索与建模。
-            </p>
+            </p> -->
           </div>
           <div class="intro-features">
             <div class="feature-item">
               <el-icon class="feature-icon" color="#409eff"><DataAnalysis /></el-icon>
-              <span>多组学分析</span>
+              <span>Multi-omics analysis</span>
             </div>
             <div class="feature-item">
               <el-icon class="feature-icon" color="#67c23a"><Cpu /></el-icon>
-              <span>深度学习</span>
+              <span>Deep learning</span>
             </div>
             <div class="feature-item">
               <el-icon class="feature-icon" color="#e6a23c"><TrendCharts /></el-icon>
-              <span>数据可视化</span>
+              <span>Data visualization</span>
             </div>
           </div>
         </div>
@@ -47,7 +47,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-number">{{ filesStore.total }}</div>
-              <div class="stat-label">文件总数</div>
+              <div class="stat-label">Total files</div>
             </div>
           </div>
         </el-card>
@@ -59,7 +59,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-number">{{ uploadingCount }}</div>
-              <div class="stat-label">正在上传</div>
+              <div class="stat-label">Uploading</div>
             </div>
           </div>
         </el-card>
@@ -71,7 +71,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-number">0</div>
-              <div class="stat-label">分析任务</div>
+              <div class="stat-label">Analysis tasks</div>
             </div>
           </div>
         </el-card>
@@ -83,7 +83,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-number">0</div>
-              <div class="stat-label">完成任务</div>
+              <div class="stat-label">Completed tasks</div>
             </div>
           </div>
         </el-card>
@@ -94,7 +94,7 @@
         <el-card class="actions-card">
           <template #header>
             <div class="card-header">
-              <span>快捷操作</span>
+              <span>Quick actions</span>
             </div>
           </template>
           
@@ -103,12 +103,12 @@
               type="primary" 
               size="large"
               class="action-button"
-              @click="goToFiles"
+              @click="goToProcessing"
             >
               <template #icon>
                 <el-icon><Upload /></el-icon>
               </template>
-              上传文件
+              Data Processing
             </el-button>
             
             <el-button 
@@ -120,7 +120,7 @@
               <template #icon>
                 <el-icon><Setting /></el-icon>
               </template>
-              模型训练
+              Model training
             </el-button>
             
             <el-button 
@@ -132,7 +132,7 @@
               <template #icon>
                 <el-icon><DataAnalysis /></el-icon>
               </template>
-              数据分析
+              Data analysis
             </el-button>
             
             <el-button 
@@ -144,7 +144,7 @@
               <template #icon>
                 <el-icon><QuestionFilled /></el-icon>
               </template>
-              使用帮助
+              Help
             </el-button>
           </div>
         </el-card>
@@ -155,13 +155,13 @@
         <el-card class="files-card">
           <template #header>
             <div class="card-header">
-              <span>最近文件</span>
+              <span>Recent files</span>
               <el-button 
                 type="primary" 
                 text
                 @click="goToFiles"
               >
-                查看全部
+                View all
               </el-button>
             </div>
           </template>
@@ -195,14 +195,14 @@
                 :icon="Download"
                 size="small"
               >
-                下载
+                Download
               </el-button>
             </div>
           </div>
           
           <div v-else class="empty-state">
-            <el-empty description="暂无文件，快来上传您的第一个文件吧！">
-              <el-button type="primary" @click="goToFiles">上传文件</el-button>
+            <el-empty description="No files, upload your first file now!">
+              <el-button type="primary" @click="goToFiles">Upload file</el-button>
             </el-empty>
           </div>
         </el-card>
@@ -213,7 +213,7 @@
         <el-card class="status-card">
           <template #header>
             <div class="card-header">
-              <span>系统状态</span>
+              <span>System status</span>
               <el-tag :type="connectionStatus.type">
                 {{ connectionStatus.text }}
               </el-tag>
@@ -222,21 +222,21 @@
 
           <div class="status-content">
             <div class="status-item">
-              <span class="status-label">WebSocket连接:</span>
+              <span class="status-label">WebSocket connection:</span>
               <el-tag :type="webSocketStatus.type">
                 {{ webSocketStatus.text }}
               </el-tag>
             </div>
             
             <div class="status-item">
-              <span class="status-label">认证状态:</span>
+              <span class="status-label">Authentication status:</span>
               <el-tag :type="authStatus.type">
                 {{ authStatus.text }}
               </el-tag>
             </div>
             
             <div class="status-item">
-              <span class="status-label">服务器时间:</span>
+              <span class="status-label">Server time:</span>
               <span>{{ currentTime }}</span>
             </div>
           </div>
@@ -299,38 +299,43 @@ const uploadingCount = computed(() => {
 
 const connectionStatus = computed(() => {
   if (webSocketService.isConnected()) {
-    return { type: 'success', text: '已连接' }
+    return { type: 'success', text: 'Connected' }
   } else {
-    return { type: 'danger', text: '未连接' }
+    return { type: 'danger', text: 'Not connected' }
   }
 })
 
 const webSocketStatus = computed(() => {
   const managerStatus = webSocketManager.getStatus()
   if (managerStatus.isActive && managerStatus.isConnected) {
-    return { type: 'success', text: '已连接' }
+    return { type: 'success', text: 'Connected' }
   } else if (managerStatus.isActive && !managerStatus.isConnected) {
-    return { type: 'warning', text: '连接中' }
+    return { type: 'warning', text: 'Connecting' }
   } else {
-    return { type: 'danger', text: '已断开' }
+    return { type: 'danger', text: 'Disconnected' }
   }
 })
 
 const authStatus = computed(() => {
   if (userStore.isAuthenticated) {
-    return { type: 'success', text: '已认证' }
+    return { type: 'success', text: 'Authenticated' }
   } else {
-    return { type: 'danger', text: '未认证' }
+    return { type: 'danger', text: 'Not authenticated' }
   }
 })
 
 // 方法
+function goToProcessing() {
+  router.push('/data-process/genome')
+}
+
 function goToFiles() {
   router.push('/files')
 }
 
 function goToTraining() {
-  router.push('/model/train/dashboard')
+  // router.push('/model/train/dashboard')
+  router.push('/model/train/supervised')
 }
 
 function goToAnalysis() {
@@ -344,9 +349,9 @@ function goToHelp() {
 async function downloadRecentFile(file: any) {
   try {
     await filesStore.downloadFile(file.id, file.original_name)
-    ElMessage.success('文件下载已开始')
+    ElMessage.success('File download has started')
   } catch (error) {
-    ElMessage.error('文件下载失败')
+    ElMessage.error('File download failed')
     console.error('下载失败:', error)
   }
 }
@@ -356,7 +361,7 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('zh-CN')
+  return new Date(dateString).toLocaleDateString('en-US')
 }
 
 function getFileTypeTagType(fileType: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' {
@@ -372,11 +377,11 @@ function getFileTypeTagType(fileType: string): '' | 'success' | 'warning' | 'dan
 
 function getFileTypeText(fileType: string): string {
   const textMap: Record<string, string> = {
-    'dataset': '数据集',
-    'train': '训练集',
-    'validation': '验证集',
-    'test': '测试集',
-    'kfold_dataset': '交叉验证集'
+    'dataset': 'Dataset',
+    'train': 'Train',
+    'validation': 'Validation',
+    'test': 'Test',
+    'kfold_dataset': 'K-fold dataset'
   }
   return textMap[fileType] || fileType
 }

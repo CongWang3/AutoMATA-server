@@ -2,8 +2,8 @@
   <div class="help-page">
     <!-- 页面标题 -->
     <div class="help-header">
-      <h1 class="help-title">帮助中心 / Help Center</h1>
-      <p class="help-subtitle">AutoMATA 平台使用指南</p>
+      <h1 class="help-title">Help Center</h1>
+      <p class="help-subtitle">AutoMATA user guide</p>
     </div>
 
     <!-- 帮助内容 -->
@@ -14,7 +14,7 @@
           <template #title>
             <div class="collapse-title">
               <el-icon><DataAnalysis /></el-icon>
-              <span>1. 数据处理 / Data Process</span>
+              <span>1. Data processing</span>
             </div>
           </template>
           <div class="module-content">
@@ -22,7 +22,7 @@
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag type="primary" size="small">Genome</el-tag>
-                基因组数据处理
+                Genome data processing
               </h4>
               <p class="module-desc">
                 This platform provides conversion of gene expression data from 
@@ -34,7 +34,7 @@
                 Users can select different gene nomenclatures as GeneID, EnsemblID and Symbol, 
                 and the generated result file provides the Symbol data of the genes corresponding 
                 to different nomenclatures. Click "Example" button to download the example data 
-                of human gene expression. Missing values were filled with zeros.
+                of multiple species gene expression data. Missing values were filled with zeros.
               </p>
             </div>
 
@@ -42,7 +42,7 @@
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag type="success" size="small">Transcriptome</el-tag>
-                转录组数据处理
+                Transcriptome data processing
               </h4>
               <p class="module-desc">
                 This platform provides conversion of mRNA expression data from 
@@ -63,7 +63,7 @@
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag type="warning" size="small">Protein</el-tag>
-                蛋白质数据处理
+                Protein data processing
               </h4>
               <p class="module-desc">
                 This platform provides conversion of protein expression data from 
@@ -79,6 +79,38 @@
                 the example data. Missing values were filled with zeros.
               </p>
             </div>
+
+            <div class="sub-module">
+              <h4 class="sub-title">
+                <el-tag type="primary" size="small">Integration</el-tag>
+                Multi-omics data integration
+              </h4>
+              <p class="module-desc">
+                This platform provides combination of multi-omics data from 
+                gene expression, transcriptome, protein and phenotype data by sample name.
+              </p>
+              <p class="module-desc">
+                Click "Example" button to download the example data (Example data are gene expression, transcriptome, protein and phenotype data). 
+                Missing values were filled with k-NN imputation.
+              </p>
+            </div>
+
+            <div class="sub-module">
+              <h4 class="sub-title">
+                <el-tag type="success" size="small">Pvalue integration</el-tag>
+                Pvalue integration for multi-omics data
+              </h4>
+              <p class="module-desc">
+                This platform provides integration of p-values from different sources using directional and non-directional methods.
+                Users can select different methods to merge multi-omics data by p-value, including Fisher, Fisher_directional, Brown, DPM, Stouffer, Stouffer_directional, Strube, Strube_directional, and None.
+              </p>
+              <p class="module-desc">
+                Click "Example" button to download the example data (Example data are p-values from different sources). 
+                Set the p-value for missing values to 1, and the logFC for missing values to 0
+              </p>
+            </div>
+
+            
           </div>
         </el-collapse-item>
 
@@ -87,7 +119,7 @@
           <template #title>
             <div class="collapse-title">
               <el-icon><SetUp /></el-icon>
-              <span>2. 模型 / Model</span>
+              <span>2. Model training</span>
             </div>
           </template>
           <div class="module-content">
@@ -95,15 +127,18 @@
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag type="primary" size="small">Train > Supervised</el-tag>
-                监督学习训练
+                Supervised training
               </h4>
               <p class="module-desc">
                 This platform provides training model function, which including model selection, 
                 hyperparameter settings (EarlyStopping, Epochs, Learning Rate, Batch Size, 
-                Loss Function, Optimizer, Random Seed, and Label number for multi-class task) 
+                Loss Function, Optimizer, Random Seed, Regularization method, Regularization weight / strength, Dropout rate, Feature selection method, and Label number for multi-class task) 
                 and training methods (validation set, StratifiedKFold, or train-validation-test split). 
                 AutoMATA will removes samples with missing values.
               </p>
+              <el-alert type="info" :closable="false" show-icon>
+                <strong>Note:</strong> The last column must be Label with numerical values.
+              </el-alert>
               <div class="output-info">
                 <p><strong>Output files:</strong></p>
                 <ul>
@@ -119,7 +154,7 @@
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag type="success" size="small">Train > Unsupervised</el-tag>
-                无监督学习训练
+                Unsupervised training
               </h4>
               <p class="module-desc">
                 This platform provides training model function for unsupervised tasks, 
@@ -145,7 +180,7 @@
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag type="warning" size="small">Train > Semi-supervised</el-tag>
-                半监督学习训练
+                Semi-supervised training
               </h4>
               <p class="module-desc">
                 This platform provides training model function for semi-supervised tasks, 
@@ -157,13 +192,23 @@
                 <strong>Note:</strong> Validation and testing set must have label for each sample. 
                 Training set could contain 'Unknown' label for samples with no label.
               </el-alert>
+              <div class="output-info">
+                <p><strong>Output files:</strong></p>
+                <ul>
+                  <li><code>model.pth</code> - the trained model</li>
+                  <li><code>scaler.pkl</code> - the scaler</li>
+                  <li><code>terminal.log</code> - training log</li>
+                  <li><code>test_result.png</code> - metrics plot</li>
+                  <li><code>test_result.json</code> - result metrics</li>
+                </ul>
+              </div>
             </div>
 
             <!-- Model Use -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag type="danger" size="small">Use</el-tag>
-                模型使用
+                Model use
               </h4>
               <p class="module-desc">
                 Users can upload trained model or their own trained model 
@@ -187,7 +232,7 @@
           <template #title>
             <div class="collapse-title">
               <el-icon><PieChart /></el-icon>
-              <span>3. 数据分析 / Data Analyse</span>
+              <span>3. Data analysis</span>
             </div>
           </template>
           <div class="module-content">
@@ -197,143 +242,388 @@
               as this will ensure smooth data analysis.
             </el-alert>
 
-            <!-- All Analysis Flow -->
+            <!-- All Analysis Flow (aligns with ComprehensiveAnalysis.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag type="primary" size="small">All Analysis Flow</el-tag>
-                综合分析流程
+                Comprehensive analysis workflow
               </h4>
               <p class="module-desc">
-                This function provides differential expressed analysis to ReadCounts and FPKM, 
-                which use the DESeq2 and limma packages respectively. 
-                Automatically remove genes with low expression levels. Use k-NN to impute missing values.
+                Differential expression for Read Counts (DESeq2) or FPKM (limma); low-expression genes are filtered
+                and missing values imputed with k-NN. After the run you may start GO/KEGG enrichment from the result view
+                when available.
               </p>
               <div class="params-info">
                 <el-descriptions :column="1" border>
-                  <el-descriptions-item label="Expression Data">
-                    The first column is row names, the first row is column names.
+                  <el-descriptions-item label="Expression data file">
+                    First column = feature IDs, first row = sample names; tab-separated.
                   </el-descriptions-item>
-                  <el-descriptions-item label="Sample Information">
-                    Keep the row names in the group file same as the column names in expression file. 
-                    The Group column value must be 'Control' or 'Treatment'.
+                  <el-descriptions-item label="Sample data file (group)">
+                    Row names must match expression column names. Include a Group column with values
+                    <code>Control</code> or <code>Treatment</code>.
                   </el-descriptions-item>
-                  <el-descriptions-item label="log2(FC) threshold">
-                    Genes with |log2(FC)| > threshold were screened as significant differential genes.
+                  <el-descriptions-item label="Select data type">
+                    Read Counts or FPKM (matches DESeq2 vs limma on the backend).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Organism">
+                    Homo sapiens, Bos taurus, Mus musculus, or Drosophila melanogaster (gene ID mapping).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Correction method">
+                    Multiple-testing correction for differential analysis (e.g. BH, BY, holm, bonferroni, none).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="log2FC threshold">
+                    Genes with |log2FC| above this value are treated as significant by magnitude (typical 0.58, 1, or 2).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="padj threshold">
+                    Genes with adjusted p-value below this value are treated as significant (often 0.05).
                   </el-descriptions-item>
                   <el-descriptions-item label="Output">
-                    Volcano plot, differential gene cluster heatmap, all significantly up/down/non-regulated DEGs.
+                    Volcano plot, differential gene cluster heatmap, and tables of up / down / non-regulated genes.
+                    Follow-up GO/KEGG enrichment can be launched from the results UI when offered.
                   </el-descriptions-item>
                 </el-descriptions>
               </div>
             </div>
 
-            <!-- Correlation Heatmap -->
+            <!-- Correlation Heatmap (CorrelationHeatmap.vue — no extra params) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">Correlation Heatmap</el-tag>
-                相关性热图
+                Correlation heatmap
               </h4>
               <p class="module-desc">
-                The first row of input data file is the column name. The separator is '\t'.
+                Computes and plots a sample correlation heatmap from your matrix. Only the main data upload and email
+                are required on the form.
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Data set">
+                    First row = column (sample) names; tab-separated text.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    Correlation heatmap figure (and related result files in the job folder).
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
 
-            <!-- PCA -->
+            <!-- PCA (PCA.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">Principal Component Analysis</el-tag>
-                PCA分析
+                PCA
               </h4>
               <p class="module-desc">
-                The first column of the data is the group information. The separator is '\t'.
-                Options include boundary plot and PERMANOVA analysis.
+                Principal component analysis with optional density boundaries and optional PERMANOVA (distance method
+                configurable when PERMANOVA is enabled).
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Data set">
+                    First column = group or sample label; remaining columns = numeric features; tab-separated.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Confidence level">
+                    Number between 0 and 1 for ellipse / interval construction (default 0.95).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Boundary plot">
+                    Add top/right marginal density plots along the PCA axes, or omit them.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="PERMANOVA analysis">
+                    Run PERMANOVA or skip; when enabled, choose a distance metric (e.g. Bray, Euclidean, Manhattan, …).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    PCA score plot (and PERMANOVA output when requested).
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
 
-            <!-- Volcano Plot with GSEA -->
+            <!-- Volcano (Volcano.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">Volcano Plot with GSEA</el-tag>
-                火山图与GSEA分析
+                Volcano plot and GSEA
               </h4>
               <p class="module-desc">
-                Make sure the column names of the dataset are gene, logFC, padj. The separator is '\t'.
-                GSEA analysis requires GMT file upload.
+                Volcano plot from DE statistics; optional GSEA with a GMT file. Thresholds for highlighting and “TOP”
+                labels can be tuned independently.
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Data set">
+                    Columns must include <code>gene</code>, <code>logFC</code>, <code>padj</code>; tab-separated.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Conduct GSEA analysis">
+                    If Yes, upload a GMT file for GSEA; if No, only the volcano workflow runs.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Emphasized Genes">
+                    Optional comma-separated gene symbols present in the uploaded table (highlighted on the plot).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="log2FC / padj threshold">
+                    Screen significant genes by |log2FC| and padj (defaults 0.5 and 0.05; tips shown on the form).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="TOP gene count">
+                    How many top-ranked genes to emphasize in the display order.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="log2FC / padj for TOP genes">
+                    Stricter (or equal) cutoffs for the TOP layer versus the main thresholds.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    Volcano figure (and GSEA panels when GMT + Yes are used).
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
 
-            <!-- VENN Analysis -->
+            <!-- Venn (Venn.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">VENN Analysis</el-tag>
-                韦恩图分析
+                Venn diagram
               </h4>
               <p class="module-desc">
-                The first row is the column names, and each column is the information for each group. 
-                The separator is '\t'.
+                Overlap visualization across groups; plot style is selectable on the form.
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Data set">
+                    First row = column names; each column lists IDs for one group; tab-separated.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Choose plot type">
+                    Classic Venn, Vennpie, or bar plot.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    Venn-style figure per selected type.
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
 
-            <!-- Differential Gene Cluster -->
+            <!-- Gene cluster (GeneClusterHeatmap.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">Differential Gene Cluster Analysis</el-tag>
-                差异基因聚类分析
+                Differential gene clustering
               </h4>
               <p class="module-desc">
-                The first row of input data file is the column name. 
-                The first column of input data file is the row name. The separator is '\t'.
+                Clustered heatmap with configurable distances, scaling, and optional row/column annotations (upload
+                annotation files when the UI offers them).
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Data set">
+                    First row = column names, first column = row names; tab-separated.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Show column / row name">
+                    Whether to show sample (column) and gene (row) labels.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Cluster method for row / col">
+                    Distance for hierarchical clustering (e.g. Euclidean, Correlation, Manhattan, …).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Center and scale data">
+                    None, scale rows, or scale columns before heatmapping.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Row/col annotation">
+                    None, row only, column only, or both; extra annotation uploads may appear when needed.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Display data by group">
+                    Shown only when column annotation or both annotations are selected—split layout by group if Yes.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    Differential gene cluster heatmap figure.
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
 
-            <!-- GO Enrichment -->
+            <!-- GO (GOEnrichment.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">GO Enrichment</el-tag>
-                GO富集分析
+                GO enrichment
               </h4>
               <p class="module-desc">
-                The first column is row names, the first row is column names.
-                Parameters include pvalue/qvalue threshold, plot type, term number, and correction method.
+                GO over-representation / visualization. Chord, Cluster, and Circle plot types expect a
+                <code>logFC</code> column in the input (see form note).
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Data set">
+                    First column = feature IDs, first row = column names; tab-separated.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Organism">
+                    Homo sapiens, Bos taurus, Mus musculus, or Drosophila melanogaster.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="pvalue / qvalue threshold">
+                    Each in [0, 1]; used to filter enriched terms.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Correction method">
+                    BH, BY, holm, hochberg, hommel, bonferroni, fdr, or none.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Plot type">
+                    Bubble, Barplot, Chord, Cluster, or Circle.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Terms per ontology">
+                    Maximum number of terms to show per ontology (1–50).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    GO enrichment table and figure.
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
 
-            <!-- KEGG Enrichment -->
+            <!-- KEGG (KEGGEnrichment.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">KEGG Enrichment</el-tag>
-                KEGG富集分析
+                KEGG enrichment
               </h4>
               <p class="module-desc">
-                The first column is row names, the first row is column names.
-                Parameters include pvalue/qvalue threshold, plot type, term number, and correction method.
+                KEGG pathway enrichment. Chord and Cluster plot types require a <code>logFC</code> column (see form note).
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Data set">
+                    First column = feature IDs, first row = column names; tab-separated.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Organism">
+                    Homo sapiens, Bos taurus, Mus musculus, or Drosophila melanogaster
+                  </el-descriptions-item>
+                  <el-descriptions-item label="pvalue / qvalue threshold">
+                    Each in [0, 1]; defaults may differ from GO (see form defaults).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Correction method">
+                    Same family as GO (BH, BY, holm, …, none).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Plot type">
+                    Bubble, Chord, or Cluster.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Number of terms to display">
+                    1–50 pathways/terms in the figure.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    KEGG enrichment table and figure.
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
 
-            <!-- PPI Network -->
+            <!-- PPI (PPINetwork.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">PPI Network</el-tag>
-                蛋白互作网络
+                Protein–protein interaction network
               </h4>
               <p class="module-desc">
-                The first column is gene. Select organism, nomenclature, filtered threshold of score, 
-                node number threshold, and plot type for analysis.
+                Builds a PPI network from a gene list using STRING-style scores; layout and stringency follow the form. The default organism is Mus musculus, and the example data is provided for Mus musculus.
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Data set">
+                    First column lists gene identifiers (tab-separated file).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Organism">
+                    Mus musculus, Bos taurus, Homo sapiens, or Drosophila melanogaster.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Nomenclature">
+                    Gene Symbol, Ensembl ID, or ENTREZID—must match your input IDs.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Score threshold">
+                    Minimum interaction score to keep an edge (0–1000; higher = stricter).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Min nodes">
+                    Only genes with at least this many connected nodes are drawn in the figure.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Plot type">
+                    Linear, KK, or Stress graph layout.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    PPI network figure.
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
 
-            <!-- Dumbbell with Bar Plot -->
+            <!-- Dumbbell (DumbbellBar.vue) -->
             <div class="sub-module">
               <h4 class="sub-title">
                 <el-tag size="small">Dumbbell with Bar Plot</el-tag>
-                哑铃柱状图
+                Dumbbell bar chart
               </h4>
               <p class="module-desc">
-                Data Set for dumbbell is used to draw dumbbell diagrams. 
-                Data Set for bar is used to draw barplot diagrams. 
-                Keep the contents and name of the first column in both files similar and same respectively.
+                Combined dumbbell and bar chart: two uploads (dumbbell matrix + bar summary) plus axis label and
+                optional highlighted terms.
               </p>
+              <div class="params-info">
+                <el-descriptions :column="1" border>
+                  <el-descriptions-item label="Dumbbell data set">
+                    Tab-separated file used for the dumbbell tracks.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Bar data set">
+                    Tab-separated file for bars; first column should align with the dumbbell file’s first column.
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Label for the x-axis">
+                    Text label shown under the x-axis (required).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Terms to emphasize">
+                    Comma-separated labels that must appear in the uploaded data (required).
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Output">
+                    Dumbbell with bar plot figure.
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
             </div>
+          </div>
+        </el-collapse-item>
+
+        <!-- 训练分析集成流程 -->
+        <el-collapse-item name="analyze-train">
+          <template #title>
+            <div class="collapse-title">
+              <el-icon><SetUp /></el-icon>
+              <span>4. Analyze & train</span>
+            </div>
+          </template>
+          <div class="module-content">
+            <!-- Supervised -->
+              <el-alert type="info" :closable="false" show-icon class="mb-4">
+                Example data are provided for the comprehensive differential analysis and supervised training function. 
+                The samples of whole dataset or training dataset for model training must match group info file.
+              </el-alert>
+            <div class="sub-module">
+              
+              <h4 class="sub-title">
+                <el-tag type="primary" size="small">Analyze &amp; Train</el-tag>
+                Comprehensive differential analysis + Supervised training
+              </h4>
+              <p class="module-desc">
+                This platform provides comprehensive differential analysis and supervised training function, which including data integration, differential analysis, model selection, 
+                hyperparameter settings (EarlyStopping, Epochs, Learning Rate, Batch Size, 
+                Loss Function, Optimizer, Random Seed, Regularization method, Regularization weight / strength, Dropout rate, Feature selection method, and Label number for multi-class task) 
+                and training methods (validation set, StratifiedKFold, or train-validation-test split). AutoMATA will removes samples with missing values. Differential expression for Read Counts (DESeq2) or FPKM (limma); low-expression genes are filtered.
+                After the run you may start GO/KEGG enrichment from the result view when available.
+                
+              </p>
+              <el-alert type="info" :closable="false" show-icon>
+                <strong>Note:</strong> The last column must be Label with numerical values.
+              </el-alert>
+              <div class="output-info">
+                <p><strong>Output files:</strong></p>
+                <ul>
+                  <li><code>model.pth</code> - the trained model</li>
+                  <li><code>terminal.log</code> - training log with loss and accuracy for each epoch</li>
+                  <li><code>figure.png</code> - acc-loss plot during training</li>
+                  <li><code>test_result.txt</code> - metrics obtained using testing set</li>
+                  <li><code>Volcano plot</code> - png/pdf/jpeg/tiff/svg/bmp format</li>
+                  <li><code>Differential gene cluster heatmap</code> - png/pdf/jpeg/tiff/svg/bmp format</li>
+                  <li><code>Tables of up / down / non-regulated genes</code> - txt format</li>
+                  <li><code>GO/KEGG enrichment result</code> - figures in png/pdf/jpeg/tiff/svg/bmp format and tables in txt format</li>
+                </ul>
+              </div>
+            </div>
+
           </div>
         </el-collapse-item>
 
@@ -342,7 +632,7 @@
           <template #title>
             <div class="collapse-title">
               <el-icon><Message /></el-icon>
-              <span>4. 邮件通知 / Mail</span>
+              <span>5. Email notifications</span>
             </div>
           </template>
           <div class="module-content">
@@ -352,7 +642,7 @@
                 when the task is completed.
               </p>
               <el-alert type="success" :closable="false" show-icon>
-                推荐用户填写邮箱，任务完成后，结果会发送至邮箱。
+                We recommend adding an email address so results can be sent when tasks complete.
               </el-alert>
             </div>
           </div>
@@ -363,7 +653,7 @@
           <template #title>
             <div class="collapse-title">
               <el-icon><Download /></el-icon>
-              <span>5. 下载 / Download</span>
+              <span>6. Download</span>
             </div>
           </template>
           <div class="module-content">
@@ -391,36 +681,43 @@
           <template #title>
             <div class="collapse-title">
               <el-icon><Operation /></el-icon>
-              <span>6. 数据处理流程 / Data Process Procedure</span>
+              <span>7. Workflow</span>
             </div>
           </template>
           <div class="module-content">
-            <!-- 暂时移除不存在的图片引用 -->
-            <p class="image-caption">AutoMATA 数据处理流程图（示意图待添加）</p>
+            <!-- <p class="image-caption">AutoMATA data processing diagram</p> -->
+            <div class="procedure-image-wrap">
+              <img
+                src="/images/help_data_process.png"
+                alt="AutoMATA data processing diagram"
+                class="procedure-image"
+                loading="lazy"
+              />
+            </div>
           </div>
         </el-collapse-item>
 
         <!-- 7. Quick Start -->
-        <el-collapse-item name="quickstart">
+        <!-- <el-collapse-item name="quickstart">
           <template #title>
             <div class="collapse-title">
               <el-icon><Promotion /></el-icon>
-              <span>7. 快速开始 / Quick Start</span>
+              <span>7. Quick start</span>
             </div>
           </template>
           <div class="module-content">
             <div class="sub-module">
               <el-steps :active="0" direction="vertical" finish-status="success">
-                <el-step title="注册/登录" description="创建账户或登录现有账户" />
-                <el-step title="上传数据" description="上传您的基因/转录/蛋白表达数据" />
-                <el-step title="数据处理" description="选择合适的数据处理方法进行格式转换" />
-                <el-step title="模型训练" description="配置参数并训练深度学习模型" />
-                <el-step title="数据分析" description="使用多种可视化工具分析数据" />
-                <el-step title="下载结果" description="下载分析结果或接收邮件通知" />
+                <el-step title="Register / sign in" description="Create an account or sign in" />
+                <el-step title="Upload data" description="Upload gene, transcript, or protein expression data" />
+                <el-step title="Data processing" description="Choose a pipeline and convert formats" />
+                <el-step title="Model training" description="Configure hyperparameters and train models" />
+                <el-step title="Data analysis" description="Run visualizations and statistical analyses" />
+                <el-step title="Get results" description="Download outputs or receive email notifications" />
               </el-steps>
             </div>
           </div>
-        </el-collapse-item>
+        </el-collapse-item> -->
       </el-collapse>
     </div>
 
@@ -430,14 +727,14 @@
         <template #header>
           <div class="card-header">
             <el-icon><Guide /></el-icon>
-            <span>快速导航</span>
+            <span>Quick links</span>
           </div>
         </template>
         <div class="nav-buttons">
-          <el-button @click="router.push('/data-process/genome')">数据处理</el-button>
-          <el-button @click="router.push('/model/train/supervised')">模型训练</el-button>
-          <el-button @click="router.push('/data-analysis')">数据分析</el-button>
-          <el-button @click="router.push('/dashboard')">返回首页</el-button>
+          <el-button @click="router.push('/data-process/genome')">Data processing</el-button>
+          <el-button @click="router.push('/model/train/supervised')">Model training</el-button>
+          <el-button @click="router.push('/data-analysis')">Data analysis</el-button>
+          <el-button @click="router.push('/dashboard')">Home</el-button>
         </div>
       </el-card>
     </div>
@@ -616,14 +913,23 @@ function handleImageError(e: Event) {
   margin-top: 16px;
 }
 
-/* 流程图 */
-.procedure-image {
+/* 流程图：宽图在容器内缩放；极宽时可在横轴内滚动查看全貌 */
+.procedure-image-wrap {
+  width: 95%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   text-align: center;
+  line-height: 0;
 }
 
-.procedure-image img {
-  max-width: 100%;
+img.procedure-image {
+  max-width: 95%;
+  width: auto;
   height: auto;
+  display: inline-block;
+  vertical-align: top;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }

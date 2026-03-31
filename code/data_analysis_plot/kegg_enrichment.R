@@ -3,6 +3,15 @@
 # 工作目录
 setwd("/xp/www/AutoMATA/code/data_analysis_plot")
 
+# ===== KEGG 联网说明（默认 enrichKEGG use_internal_data=FALSE）=====
+# clusterProfiler 通过 KEGGREST 访问 https://rest.kegg.jp ，典型包括：
+#   - 物种通路 ID 列表（如 list/pathway/hsa）
+#   - 基因 ID 与 KEGG 通路的对应关系（用于超几何检验的背景集与注释）
+#   - 通路标题/描述等元数据
+# 上述数据会随 KEGG 官网更新，与「本地 org.xx.eg.db 只做 Entrez 映射」是两层：后者离线，前者仍要联网。
+# 离线替代：本脚本支持 use_internal_data=TRUE，使用 Bioconductor 包 KEGG.db 内置旧版快照，不访问外网（注释较旧，需安装 KEGG.db）。
+# 启用方式：环境变量 KEGG_USE_INTERNAL_DATA=1，或增加命令行参数 --use_local_kegg（由后端传入）。
+
 library(clusterProfiler)
 library(org.Hs.eg.db)  # 人类的包 待修改为其他物种的包
 library(dplyr)
@@ -12,6 +21,20 @@ library(ggplot2)
 library(tidyr)
 getOption('timeout')  # 解决超时
 options(timeout=100000)
+
+# --- 访问 rest.kegg.jp 时出现 SSL connect error 时的处理 ---
+# 根因多为系统/OpenSSL 证书链或网络环境；建议先：apt-get install -y ca-certificates && update-ca-certificates
+# 未设置 CURL_CA_BUNDLE 时，常见 Linux 默认 CA 包路径：
+if (Sys.getenv("CURL_CA_BUNDLE", "") == "" && file.exists("/etc/ssl/certs/ca-certificates.crt")) {
+  Sys.setenv(CURL_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt")
+}
+# 仅内网/调试：设置环境变量 KEGG_INSECURE_SSL=1 关闭 HTTPS 校验（存在安全风险，勿用于公网暴露环境）
+if (Sys.getenv("KEGG_INSECURE_SSL", "") == "1") {
+  if (requireNamespace("httr", quietly = TRUE)) {
+    httr::set_config(httr::config(ssl_verifypeer = FALSE, ssl_verifyhost = FALSE))
+  }
+}
+
 library(yulab.utils)
 library(optparse)  # 命令行
 
@@ -24,14 +47,17 @@ library(optparse)  # 命令行
 
 option_list <- list(
   make_option(c("-i", "--input"), type="character", default="", action="store", help="This argument is input path"),
-  make_option(c("-j", "--jobID"), type="character",default="kegg_case1", action="store", help="This argument is jobID"),
+  make_option(c("-j", "--jobID"), type="character",default="20260328215654_b781fdb3", action="store", help="This argument is jobID"),
   make_option(c("-a", "--type"), type="character", default="chord", action="store", help="This argument is the type of figure"),
   make_option(c("-b", "--organism"), type="character", default="hsa", action="store", help="This argument defines organism"),
   make_option(c("-c", "--pvalue"), type="double", default=0.05, action="store", help="This argument defines pvalue threshold for GO enrichment analysis"),
   make_option(c("-d", "--qvalue"), type="double", default=0.05, action="store", help="This argument defines qvalue threshold for GO enrichment analysis"),
   make_option(c("-e", "--termNum"), type="integer", default=5, action="store", help="This argument is the number of terms for each ontology to be displayed"),
   make_option(c("-f", "--type_analysis"), default="none", type="character", action="store", help="up, down, all, or none. All analysis need this parameter, otherwise set it to none."),
-  make_option(c("-g", "--adjust"), type="character", default="BH", action="store", help="This argument is the pvalue adjustment method for KEGG enrichment analysis, one of holm, hochberg, hommel, bonferroni, BH, BY, fdr, none")  # 一审
+  make_option(c("-g", "--adjust"), type="character", default="BH", action="store", help="This argument is the pvalue adjustment method for KEGG enrichment analysis, one of holm, hochberg, hommel, bonferroni, BH, BY, fdr, none"),  # 一审
+  # 默认 online：clusterProfiler::enrichKEGG 经 KEGGREST 访问 rest.kegg.jp 获取最新通路注释（gene↔pathway、通路名称等）
+  # local：use_internal_data=TRUE，改用 Bioconductor 包 KEGG.db 内置快照，不联网；注释较旧，需先安装 KEGG.db（BiocManager::install("KEGG.db")）
+  make_option(c("--use_local_kegg"), action="store_true", default=TRUE, help="Offline: use KEGG.db instead of rest.kegg.jp (requires KEGG.db package)")
 
 )
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw KEGG Enrichment!", add_help_option=FALSE))
@@ -112,12 +138,27 @@ table_data <- table_data[!is.na(table_data$entrezID), ]
 
 # 提取表格中的entrezID列
 gene <- table_data$entrezID
+
+# 是否使用本地 KEGG.db（不访问 rest.kegg.jp）：命令行 --use_local_kegg 或环境变量 KEGG_USE_INTERNAL_DATA=1
+use_internal_data <- isTRUE(opt$use_local_kegg) || (Sys.getenv("KEGG_USE_INTERNAL_DATA", "") == "1")
+if (use_internal_data) {
+  message("KEGG enrichment: use_internal_data=TRUE (KEGG.db local). No rest.kegg.jp access.")
+  if (!requireNamespace("KEGG.db", quietly = TRUE)) {
+    stop("离线 KEGG 需要 Bioconductor 包 KEGG.db。安装：BiocManager::install('KEGG.db')")
+  }
+} else {
+  message("KEGG enrichment: use_internal_data=FALSE (online via KEGGREST → rest.kegg.jp).")
+}
+
 # 进行KEGG富集分析, 设置pvalue和qvalue阈值
-KEGG <- enrichKEGG(gene = gene, 
-                    organism = org, # 物种
-                    pvalueCutoff = pvalue, 
-                    qvalueCutoff = qvalue,
-                    pAdjustMethod = adjust)
+KEGG <- enrichKEGG(
+  gene = gene,
+  organism = org,
+  pvalueCutoff = pvalue,
+  qvalueCutoff = qvalue,
+  pAdjustMethod = adjust,
+  use_internal_data = use_internal_data
+)
 # 将KEGG富集分析结果转换为data frame
 KEGG <- as.data.frame(KEGG)
 # 筛选数据
@@ -142,6 +183,10 @@ write.table(KEGG, file = filename, sep = "\t", row.names = FALSE, quote = FALSE)
 # 此时保留空表输出并正常退出，避免任务失败。
 if (is.null(KEGG) || nrow(KEGG) == 0) {
     message("No KEGG enrichment result. KEGG_enrichment_result.txt has been written (empty). Skip plotting.")
+    empty_plot <- ggplot() + theme_void()
+    for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+        ggsave(paste(result_path, dev, sep = "."), empty_plot, device = dev, width = 15, height = 8)
+    }
     quit(save = "no", status = 0)
 }
 
@@ -168,8 +213,7 @@ genelist <- data.frame(
     ID = table_data$gene,
     logFC = table_data$logFC
 )
-# 使用circle_dat函数创建圆形布局的数据
-KEGGcirc <- circle_dat(kegg, genelist)
+
 termNum <- ifelse(nrow(kegg) < termNum, nrow(kegg), termNum)
 # 获取genelist中的基因数量
 geneNum <- nrow(genelist)
@@ -180,6 +224,9 @@ result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/
 # 和弦图chord
 # 绘制和弦图
 if (type == "chord"){
+    # 使用circle_dat函数创建圆形布局的数据
+    KEGGcirc <- circle_dat(kegg, genelist)
+
     # kegg$Term[1:termNum]为需要展示的KEGG条目
     chord <- chord_dat(KEGGcirc, genelist[1:geneNum, ], kegg$Term[1:termNum])
     # 检查chord对象是否创建成功，如果成功则绘制圆形图
@@ -194,28 +241,42 @@ if (type == "chord"){
                 # border.size = 0.1,  # 基因节点边框大小
                 process.label = 10  # 处理标签大小？
                 ) 
+
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), gochord, device = dev, width = 15, height = 15)
+        }
     }else{
         print("No created chord object")
+        empty_plot <- ggplot() + theme_void()
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), empty_plot, device = dev, width = 15, height = 8)
+        }
     }
-    for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
-        ggsave(paste(result_path, dev, sep = "."), gochord, device = dev, width = 15, height = 15)
-    }
+    
     # ggsave(paste("KEGG_chord", dev, sep="."), gochord, width = 15, height = 15, device = dev)
     # ggsave("GO_chord.pdf", gochord, width = 15, height = 10)
 }
 
 # 绘制GO聚类图
 if (type == "cluster"){
+    # 使用circle_dat函数创建圆形布局的数据
+    KEGGcirc <- circle_dat(kegg, genelist)
+
     # 如果GO数据不为空且行数大于0，则绘制GO聚类图，使用前termNum个术语
     chord <- chord_dat(KEGGcirc, genelist[1:geneNum, ], kegg$Term[1:termNum])
     if (!is.null(KEGG) && nrow(KEGG) > 0){
         keggcluster <- GOCluster(KEGGcirc, as.character(KEGG[1:termNum, 3]))
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), keggcluster, device = dev, width = 15, height = 8)
+        }
     }else{
         print("No KEGG enrichment data found, we can not draw KEGG cluster plot")
+        empty_plot <- ggplot() + theme_void()
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
+            ggsave(paste(result_path, dev, sep = "."), empty_plot, device = dev, width = 15, height = 8)
+        }
     }
-    for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
-        ggsave(paste(result_path, dev, sep = "."), keggcluster, device = dev, width = 15, height = 8)
-    }
+    
     # ggsave(paste("KEGG_cluster", dev, sep="."), keggcluster, width = 15, height = 8, device = dev)
     # ggsave("GO_cluster.pdf", gocluster, width = 15, height = 8)
 }

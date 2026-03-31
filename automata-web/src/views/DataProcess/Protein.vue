@@ -3,12 +3,12 @@
     <!-- 数据处理表单 -->
     <DataProcessForm
       ref="formComponent"
-      title="蛋白质数据处理"
+      title="Protein Data Processing"
       subtitle="Protein Data Processing"
-      file-label="上传蛋白质表达数据"
-      file-tip="仅支持 txt、csv、tsv 格式的文件"
-      nomenclature-label="蛋白质命名方式"
-      nomenclature-placeholder="请选择蛋白质命名方式"
+      file-label="Upload protein expression data"
+      file-tip="Only support txt file with tab delimiter"
+      nomenclature-label="Nomenclature"
+      nomenclature-placeholder="Select protein nomenclature"
       :nomenclature-options="[
         { label: 'UniProt Entry', value: 'Entry' },
         { label: 'RefSeq Accession', value: 'RefSeq' },
@@ -25,7 +25,7 @@
       :on-submit="handleSubmit"
       example-data-url="/example/test_protein_refseq.txt"
       example-file-name="protein_refseq_example.txt"
-      example-note="示例数据包含人类物种的RefSeq蛋白质标识符"
+      example-note="The sample data contains the 'RefSeq' identifiers of the 'Homo sapiens'"
       @submit-success="handleSuccess"
     />
     
@@ -49,7 +49,7 @@
       
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="handleClose">关闭并提交新任务</el-button>
+          <el-button @click="handleClose">Close and Submit New Task</el-button>
         </div>
       </template>
     </el-dialog>
@@ -102,12 +102,12 @@ const connectWebSocket = async () => {
         jobProgress.value = taskProgress || 0
         
         if (taskStatus === 'COMPLETED' || taskStatus === 'Completed') {
-          ElMessage.success(`任务 ${job_id} 已完成！`)
+          ElMessage.success(`Task ${job_id} has been completed!`)
           if (result_file) {
-            ElMessage.info(`结果文件已生成: ${result_file}`)
+            ElMessage.info(`Result file has been generated: ${result_file}`)
           }
         } else if (taskStatus === 'FAILED' || taskStatus === 'Failed') {
-          ElMessage.error(`任务 ${job_id} 失败: ${error_message || '未知错误'}`)
+          ElMessage.error(`Task ${job_id} failed: ${error_message || 'Unknown error'}`)
         }
       }
     })
@@ -117,7 +117,7 @@ const connectWebSocket = async () => {
     
   } catch (error: any) {
     console.error('WebSocket 连接失败:', error)
-    ElMessage.error('任务监控连接失败: ' + (error.message || '未知错误'))
+    ElMessage.error('Task monitoring connection failed: ' + (error.message || 'Unknown error'))
   }
 }
 
@@ -161,7 +161,7 @@ const handleSubmit = async (formData: FormData) => {
 }
 
 const handleSuccess = (result: any) => {
-  ElMessage.success('蛋白质数据处理任务已提交')
+  ElMessage.success('Protein data processing task has been submitted')
 }
 
 const handleStatusChange = (status: string) => {
@@ -170,7 +170,7 @@ const handleStatusChange = (status: string) => {
   // 如果任务完成或失败，提示用户
   if (status === 'COMPLETED' || status === 'Completed' || status === 'FAILED' || status === 'Failed') {
     setTimeout(() => {
-      ElMessage.info('任务已完成')
+      ElMessage.info('Task has been completed')
     }, 2000)
   }
 }

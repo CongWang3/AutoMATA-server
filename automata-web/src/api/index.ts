@@ -14,6 +14,8 @@ export { AnalysisAPI } from './analysis'
 
 // 业务API
 export { trainingApi, TASK_STATUS, MODEL_PARAMETERS } from './training'
+export { analysisTrainApi, submitAnalysisTrain } from './analysisTrain'
+export type { AnalysisTrainSubmitPayload, AnalysisTrainResponse } from './analysisTrain'
 
 // 组合式函数
 export {

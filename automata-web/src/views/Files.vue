@@ -3,8 +3,8 @@
     <div class="page-header">
       <div class="header-content">
         <div class="title-section">
-          <h1 class="page-title">任务与文件管理</h1>
-          <p class="page-description">管理您的任务进度和数据文件</p>
+          <h1 class="page-title">Task and File management</h1>
+          <p class="page-description">Manage your task progress and data files</p>
         </div>
         <div class="header-actions-global">
           <el-button 
@@ -14,7 +14,7 @@
             @click="refreshAll"
             size="default"
           >
-            刷新全部
+            Refresh all
           </el-button>
         </div>
       </div>
@@ -22,47 +22,47 @@
 
     <el-tabs v-model="activeTab" type="border-card" class="main-tabs">
       <!-- Tab 1: 任务管理 -->
-      <el-tab-pane label="任务管理" name="tasks">
+      <el-tab-pane label="Task management" name="tasks">
         <div class="tasks-content">
           <!-- 筛选栏 -->
           <div class="filter-bar">
             <el-select
               v-model="jobTypeFilter"
-              placeholder="任务类型"
+              placeholder="Task type"
               clearable
               style="width: 160px"
               @change="handleFilterChange"
             >
-              <el-option label="全部类型" value="" />
-              <el-option label="基因组处理" value="genome_process" />
-              <el-option label="转录组处理" value="transcriptome_process" />
-              <el-option label="蛋白质处理" value="protein_process" />
-              <el-option label="多组学整合" value="integration_process" />
-              <el-option label="P值整合分析" value="pvalue_integration" />
-              <el-option label="模型训练" value="model_train" />
-              <el-option label="数据分析" value="data_analysis" />
+              <el-option label="All types" value="" />
+              <el-option label="Genome processing" value="genome_process" />
+              <el-option label="Transcriptome processing" value="transcriptome_process" />
+              <el-option label="Protein processing" value="protein_process" />
+              <el-option label="Multi-omics integration" value="integration_process" />
+              <el-option label="P-value integration analysis" value="pvalue_integration" />
+              <el-option label="Model training" value="model_train" />
+              <el-option label="Data analysis" value="data_analysis" />
             </el-select>
 
             <el-select
               v-model="statusFilter"
-              placeholder="任务状态"
+              placeholder="Task status"
               clearable
               style="width: 140px"
               @change="handleFilterChange"
             >
-              <el-option label="全部状态" value="" />
-              <el-option label="已提交" value="Submitted" />
-              <el-option label="处理中" value="Processing" />
-              <el-option label="已完成" value="Completed" />
-              <el-option label="失败" value="Failed" />
-              <el-option label="已取消" value="Cancelled" />
+              <el-option label="All status" value="" />
+              <el-option label="Submitted" value="Submitted" />
+              <el-option label="Processing" value="Processing" />
+              <el-option label="Completed" value="Completed" />
+              <el-option label="Failed" value="Failed" />
+              <el-option label="Cancelled" value="Cancelled" />
             </el-select>
 
             <el-input
               v-model="keywordFilter"
-              placeholder="搜索关键词"
+              placeholder="Search by Job ID"
               clearable
-              style="width: 200px"
+              style="width: 250px"
               @keyup.enter="handleFilterChange"
               @clear="handleFilterChange"
             >
@@ -72,7 +72,7 @@
             </el-input>
 
             <el-button type="primary" :icon="Refresh" :loading="jobsStore.loading" @click="refreshJobs">
-              刷新
+              Refresh
             </el-button>
           </div>
 
@@ -82,38 +82,38 @@
             v-loading="jobsStore.loading"
             stripe
             style="width: 100%"
-            empty-text="暂无任务"
+            empty-text="No tasks"
             header-cell-class-name="table-header-cell"
           >
             <template #empty>
               <div class="empty-state">
                 <el-icon :size="48" color="#c0c4cc"><Document /></el-icon>
-                <p>暂无任务</p>
+                <p>No tasks</p>
               </div>
             </template>
-            <el-table-column prop="job_type_display" label="任务类型" width="130">
+            <el-table-column prop="job_type_display" label="Task type" width="200">
               <template #default="{ row }">
                 <el-tag :type="getJobTypeTagType(row.job_type)" size="small">
-                  {{ row.job_type_display || getJobTypeDisplay(row.job_type) }}
+                  {{ getJobTypeDisplay(row.job_type) }}
                 </el-tag>
               </template>
             </el-table-column>
 
-            <el-table-column prop="job_id" label="任务ID" width="200">
+            <el-table-column prop="job_id" label="Job ID" width="270">
               <template #default="{ row }">
                 <span class="job-id">{{ row.job_id }}</span>
               </template>
             </el-table-column>
 
-            <el-table-column prop="status" label="状态" width="100">
+            <el-table-column prop="status" label="Status" width="170">
               <template #default="{ row }">
                 <el-tag :type="getStatusTagType(row.status)" :class="{ 'processing-badge': row.status === 'Processing' }">
-                  {{ row.status_display || getStatusDisplay(row.status) }}
+                  {{ getStatusDisplay(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
 
-            <el-table-column prop="progress" label="进度" width="150">
+            <!-- <el-table-column prop="progress" label="进度" width="150">
               <template #default="{ row }">
                 <el-progress
                   :percentage="row.progress || 0"
@@ -121,21 +121,21 @@
                   :stroke-width="10"
                 />
               </template>
-            </el-table-column>
+            </el-table-column> -->
 
-            <el-table-column prop="current_step" label="当前步骤" min-width="200" show-overflow-tooltip>
+            <!-- <el-table-column prop="current_step" label="当前步骤" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">
                 <span class="current-step">{{ row.current_step || '-' }}</span>
               </template>
-            </el-table-column>
+            </el-table-column> -->
 
-            <el-table-column prop="created_at" label="创建时间" width="180">
+            <el-table-column prop="created_at" label="Created time" width="240">
               <template #default="{ row }">
                 <span class="create-time">{{ formatDateTime(row.created_at) }}</span>
               </template>
             </el-table-column>
 
-            <el-table-column label="操作" width="400" fixed="right">
+            <el-table-column label="Actions" width="470" fixed="right">
               <template #default="{ row }">
                 <div class="action-buttons">
                   <!-- 下载结果：仅 Completed 状态且有 result_file 时显示 -->
@@ -146,7 +146,7 @@
                     :icon="Download"
                     @click="handleDownload(row)"
                   >
-                    下载
+                    Download
                   </el-button>
 
                   <!-- 取消：仅 Submitted/Processing 状态时显示 -->
@@ -156,7 +156,7 @@
                     size="small"
                     @click="handleCancel(row)"
                   >
-                    取消
+                    Cancel
                   </el-button>
 
                   <!-- 删除：仅 Completed/Failed/Cancelled 状态时显示 -->
@@ -167,12 +167,12 @@
                     :icon="Delete"
                     @click="handleDelete(row)"
                   >
-                    删除
+                    Delete
                   </el-button>
 
                   <!-- 查看详情：始终显示 -->
                   <el-button type="info" size="small" plain @click="showJobDetail(row)">
-                    详情
+                    Details
                   </el-button>
                 </div>
               </template>
@@ -195,10 +195,10 @@
       </el-tab-pane>
 
       <!-- Tab 2: 文件管理 -->
-      <el-tab-pane label="文件管理" name="files">
+      <el-tab-pane label="File management" name="files">
         <div class="files-content">
           <!-- 上传区域 -->
-          <div class="upload-section">
+          <!-- <div class="upload-section">
             <el-card class="upload-card">
               <template #header>
                 <div class="card-header">
@@ -218,7 +218,7 @@
                 @upload-error="handleUploadError"
               />
               
-              <!-- 文件类型选择 -->
+              
               <div v-if="selectedFile" class="file-type-selector mt-3">
                 <el-form :model="uploadForm" label-position="top">
                   <el-row :gutter="20">
@@ -259,10 +259,10 @@
                 </el-form>
               </div>
             </el-card>
-          </div>
+          </div> -->
 
           <!-- 上传进度 -->
-          <div v-if="filesStore.uploadingFiles.size > 0" class="upload-progress-section">
+          <!-- <div v-if="filesStore.uploadingFiles.size > 0" class="upload-progress-section">
             <el-card class="progress-card">
               <template #header>
                 <div class="card-header">
@@ -301,14 +301,14 @@
                 </div>
               </div>
             </el-card>
-          </div>
+          </div> -->
 
           <!-- 文件列表 -->
           <div class="files-list-section">
             <el-card class="files-card">
               <template #header>
                 <div class="card-header">
-                  <span class="card-title">我的文件</span>
+                  <span class="card-title">My files</span>
                   <div class="header-actions">
                     <el-button 
                       type="primary" 
@@ -317,7 +317,7 @@
                       @click="loadFiles"
                       size="default"
                     >
-                      刷新
+                      Refresh
                     </el-button>
                   </div>
                 </div>
@@ -329,16 +329,16 @@
                 :loading="filesStore.loading"
                 stripe
                 style="width: 100%"
-                empty-text="暂无文件"
+                empty-text="No files"
                 header-cell-class-name="table-header-cell"
               >
                 <template #empty>
                   <div class="empty-state">
                     <el-icon :size="48" color="#c0c4cc"><Folder /></el-icon>
-                    <p>暂无文件</p>
+                    <p>No files</p>
                   </div>
                 </template>
-                <el-table-column prop="original_name" label="文件名" min-width="200">
+                <el-table-column prop="original_name" label="File name" min-width="200">
                   <template #default="{ row }">
                     <div class="file-name-cell">
                       <el-icon class="file-icon"><Document /></el-icon>
@@ -347,7 +347,7 @@
                   </template>
                 </el-table-column>
                 
-                <el-table-column prop="file_type" label="类型" width="120">
+                <el-table-column prop="file_type" label="Type" width="200">
                   <template #default="{ row }">
                     <el-tag :type="getFileTypeTagType(row.file_type)">
                       {{ getFileTypeText(row.file_type) }}
@@ -355,19 +355,19 @@
                   </template>
                 </el-table-column>
                 
-                <el-table-column prop="file_size" label="大小" width="120">
+                <el-table-column prop="file_size" label="File size" width="120">
                   <template #default="{ row }">
                     {{ formatFileSize(row.file_size) }}
                   </template>
                 </el-table-column>
                 
-                <el-table-column prop="upload_time" label="上传时间" width="180">
+                <el-table-column prop="upload_time" label="Upload time" width="200">
                   <template #default="{ row }">
                     {{ getFileUploadTime(row) }}
                   </template>
                 </el-table-column>
                 
-                <el-table-column label="操作" width="200" fixed="right">
+                <el-table-column label="Actions" width="300" fixed="right">
                   <template #default="{ row }">
                     <SmartDownloadButton
                       :file-id="row.id"
@@ -375,7 +375,7 @@
                       :file-size="row.file_size"
                       type="primary"
                       size="small"
-                      text="下载"
+                      text="Download"
                     />
                     <el-button 
                       type="danger" 
@@ -384,7 +384,7 @@
                       @click="deleteFile(row)"
                       style="margin-left: 8px"
                     >
-                      删除
+                      Delete
                     </el-button>
                   </template>
                 </el-table-column>
@@ -409,48 +409,48 @@
     </el-tabs>
 
     <!-- 任务详情弹窗 -->
-    <el-dialog v-model="detailDialogVisible" title="任务详情" width="700px" destroy-on-close>
+    <el-dialog v-model="detailDialogVisible" title="Task details" width="700px" destroy-on-close>
       <div v-if="currentJobDetail" class="job-detail">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="任务ID" :span="2">
+          <el-descriptions-item label="Job ID" :span="2">
             <span class="job-id">{{ currentJobDetail.job_id }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="任务类型">
+          <el-descriptions-item label="Task type">
             <el-tag :type="getJobTypeTagType(currentJobDetail.job_type)" size="small">
-              {{ currentJobDetail.job_type_display || getJobTypeDisplay(currentJobDetail.job_type) }}
+              {{ getJobTypeDisplay(currentJobDetail.job_type) }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="状态">
+          <el-descriptions-item label="Task Status">
             <el-tag :type="getStatusTagType(currentJobDetail.status)">
-              {{ currentJobDetail.status_display || getStatusDisplay(currentJobDetail.status) }}
+              {{ getStatusDisplay(currentJobDetail.status) }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="进度">
+          <!-- <el-descriptions-item label="进度">
             <el-progress :percentage="currentJobDetail.progress || 0" :stroke-width="15" />
-          </el-descriptions-item>
-          <el-descriptions-item label="当前步骤">
+          </el-descriptions-item> -->
+          <!-- <el-descriptions-item label="当前步骤">
             {{ currentJobDetail.current_step || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="创建时间">
+          </el-descriptions-item> -->
+          <el-descriptions-item label="Created time">
             {{ formatDateTime(currentJobDetail.created_at) }}
           </el-descriptions-item>
-          <el-descriptions-item label="开始时间">
+          <!-- <el-descriptions-item label="开始时间">
             {{ formatDateTime(currentJobDetail.started_at) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="完成时间" :span="2">
+          </el-descriptions-item> -->
+          <!-- <el-descriptions-item label="Completed time" :span="2">
             {{ formatDateTime(currentJobDetail.completed_at) }}
-          </el-descriptions-item>
-          <el-descriptions-item v-if="currentJobDetail.error_message" label="错误信息" :span="2">
+          </el-descriptions-item> -->
+          <el-descriptions-item v-if="currentJobDetail.error_message" label="Error message" :span="2">
             <el-text type="danger">{{ currentJobDetail.error_message }}</el-text>
           </el-descriptions-item>
-          <el-descriptions-item v-if="currentJobDetail.result_file" label="结果文件" :span="2">
+          <!-- <el-descriptions-item v-if="currentJobDetail.result_file" label="结果文件" :span="2">
             <el-link type="primary">{{ currentJobDetail.result_file }}</el-link>
-          </el-descriptions-item>
+          </el-descriptions-item> -->
         </el-descriptions>
 
         <!-- 输入参数 -->
         <div v-if="currentJobDetail.input_params" class="input-params-section">
-          <h4>输入参数</h4>
+          <h4>Input parameters</h4>
           <el-card shadow="never" class="params-card">
             <pre class="params-json">{{ formatJson(currentJobDetail.input_params) }}</pre>
           </el-card>
@@ -465,14 +465,14 @@
             :icon="Download"
             @click="handleDownload(currentJobDetail)"
           >
-            下载结果
+            Download results
           </el-button>
           <el-button
             v-if="currentJobDetail?.status === 'Submitted' || currentJobDetail?.status === 'Processing'"
             type="warning"
             @click="handleCancel(currentJobDetail!)"
           >
-            取消任务
+            Cancel task
           </el-button>
           <el-button
             v-if="['Completed', 'Failed', 'Cancelled'].includes(currentJobDetail?.status || '')"
@@ -480,9 +480,9 @@
             :icon="Delete"
             @click="handleDelete(currentJobDetail!)"
           >
-            删除任务
+            Delete task
           </el-button>
-          <el-button @click="detailDialogVisible = false">关闭</el-button>
+          <el-button @click="detailDialogVisible = false">Close</el-button>
         </div>
       </template>
     </el-dialog>
@@ -543,22 +543,23 @@ const uploadForm = reactive({
 
 // ===== 任务类型映射 =====
 const JOB_TYPE_MAP: Record<string, { display: string; tagType: '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' }> = {
-  genome_process: { display: '基因组处理', tagType: 'primary' },
-  transcriptome_process: { display: '转录组处理', tagType: '' },
-  protein_process: { display: '蛋白质处理', tagType: '' },
-  integration_process: { display: '多组学整合', tagType: 'warning' },
-  pvalue_integration: { display: 'P值整合', tagType: '' },
-  model_train: { display: '模型训练', tagType: 'success' },
-  data_analysis: { display: '数据分析', tagType: 'info' }
+  genome_process: { display: 'Genome Processing', tagType: 'success' },
+  transcriptome_process: { display: 'Transcriptome Processing', tagType: 'success' },
+  protein_process: { display: 'Protein Processing', tagType: 'success' },
+  integration_process: { display: 'Multi-omics Integration', tagType: 'success' },
+  pvalue_integration: { display: 'P-value Integration', tagType: 'success' },
+  model_train: { display: 'Model Training', tagType: 'primary' },
+  data_analysis: { display: 'Data Analysis', tagType: 'warning' },
+  analysis_train: { display: 'Analysis & Training', tagType: 'danger' }
 }
 
 // ===== 状态映射 =====
 const STATUS_MAP: Record<string, { display: string; tagType: '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' }> = {
-  Submitted: { display: '已提交', tagType: 'info' },
-  Processing: { display: '处理中', tagType: 'primary' },
-  Completed: { display: '已完成', tagType: 'success' },
-  Failed: { display: '失败', tagType: 'danger' },
-  Cancelled: { display: '已取消', tagType: 'warning' }
+  Submitted: { display: 'Submitted', tagType: 'info' },
+  Processing: { display: 'Processing', tagType: 'primary' },
+  Completed: { display: 'Completed', tagType: 'success' },
+  Failed: { display: 'Failed', tagType: 'danger' },
+  Cancelled: { display: 'Cancelled', tagType: 'warning' }
 }
 
 // ===== 任务管理方法 =====
@@ -609,22 +610,24 @@ function handleFilterChange() {
 }
 
 async function loadJobs() {
+  const kw = keywordFilter.value.trim()
   jobsStore.setFilter({
     job_type: jobTypeFilter.value || undefined,
     status: statusFilter.value || undefined,
-    keyword: keywordFilter.value || undefined,
+    keyword: kw.length > 0 ? kw : undefined,
     limit: jobsPageSize.value,
     offset: (jobsCurrentPage.value - 1) * jobsPageSize.value
   })
 }
 
+/** 刷新：与下拉筛选一致，必须走 loadJobs，否则不会带上输入框中的 job_id 关键词 */
 async function refreshJobs() {
-  await jobsStore.fetchJobs()
+  await loadJobs()
 }
 
 async function refreshAll() {
   await Promise.all([
-    jobsStore.fetchJobs(),
+    loadJobs(),
     filesStore.loadFileList(filesCurrentPage.value, filesPageSize.value)
   ])
 }
@@ -645,7 +648,7 @@ async function showJobDetail(job: UnifiedJob) {
     currentJobDetail.value = await jobsStore.fetchJobDetail(job.job_id)
     detailDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error(error.message || '获取任务详情失败')
+    ElMessage.error(error.message || 'Failed to load task details')
   }
 }
 
@@ -654,23 +657,23 @@ async function handleDownload(job: UnifiedJob) {
     const downloadUrl = await jobsStore.getDownloadUrl(job.job_id)
     window.open(downloadUrl, '_blank')
   } catch (error: any) {
-    ElMessage.error(error.message || '获取下载链接失败')
+    ElMessage.error(error.message || 'Failed to get download link')
   }
 }
 
 async function handleCancel(job: UnifiedJob) {
   try {
     await ElMessageBox.confirm(
-      `确定要取消任务 "${job.job_id}" 吗？`,
-      '确认取消',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+      `Cancel task "${job.job_id}"?`,
+      'Confirm cancel',
+      { confirmButtonText: 'OK', cancelButtonText: 'Cancel', type: 'warning' }
     )
     await jobsStore.cancelJob(job.job_id)
-    ElMessage.success('任务已取消')
+    ElMessage.success('Task cancelled')
     detailDialogVisible.value = false
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '取消任务失败')
+      ElMessage.error(error.message || 'Failed to cancel task')
     }
   }
 }
@@ -678,16 +681,16 @@ async function handleCancel(job: UnifiedJob) {
 async function handleDelete(job: UnifiedJob) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除任务 "${job.job_id}" 吗？删除后无法恢复。`,
-      '确认删除',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+      `Delete task "${job.job_id}"? This cannot be undone.`,
+      'Confirm delete',
+      { confirmButtonText: 'OK', cancelButtonText: 'Cancel', type: 'warning' }
     )
     await jobsStore.deleteJob(job.job_id)
-    ElMessage.success('任务已删除')
+    ElMessage.success('Task deleted')
     detailDialogVisible.value = false
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '删除任务失败')
+      ElMessage.error(error.message || 'Failed to delete task')
     }
   }
 }
@@ -738,7 +741,7 @@ async function handleUploadStart(files: File[]) {
   if (!file) return
   
   if (!uploadForm.fileType) {
-    ElMessage.warning('请选择文件类型')
+    ElMessage.warning('Please select a file type')
     return
   }
 
@@ -754,7 +757,7 @@ function handleUploadProgress(progress: number) {
 }
 
 function handleUploadComplete(_response: any) {
-  ElMessage.success('文件上传成功！')
+  ElMessage.success('File uploaded successfully')
   selectedFile.value = null
   uploadForm.fileType = ''
   uploadForm.description = ''
@@ -762,17 +765,17 @@ function handleUploadComplete(_response: any) {
 }
 
 function handleUploadError(error: Error) {
-  ElMessage.error(`上传失败: ${error.message}`)
+  ElMessage.error(`Upload failed: ${error.message}`)
 }
 
 async function startUpload() {
   if (!selectedFile.value) {
-    ElMessage.warning('请先选择文件')
+    ElMessage.warning('Please select a file first')
     return
   }
 
   if (!uploadForm.fileType) {
-    ElMessage.warning('请选择文件类型')
+    ElMessage.warning('Please select a file type')
     return
   }
 
@@ -800,16 +803,16 @@ function clearCompletedUploads() {
 async function deleteFile(fileInfo: any) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除文件 "${fileInfo.original_name}" 吗？`,
-      '确认删除',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+      `Delete file "${fileInfo.original_name}"?`,
+      'Confirm delete',
+      { confirmButtonText: 'OK', cancelButtonText: 'Cancel', type: 'warning' }
     )
 
     await filesStore.deleteFile(fileInfo.id)
-    ElMessage.success('文件删除成功')
+    ElMessage.success('File deleted')
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('文件删除失败')
+      ElMessage.error('Failed to delete file')
       console.error('删除失败:', error)
     }
   }
@@ -851,11 +854,11 @@ function getFileTypeTagType(fileType: string): '' | 'success' | 'warning' | 'dan
 
 function getFileTypeText(fileType: string): string {
   const textMap: Record<string, string> = {
-    'dataset': '数据集',
-    'train': '训练集',
-    'validation': '验证集',
-    'test': '测试集',
-    'kfold_dataset': '交叉验证集'
+    'dataset': 'Dataset',
+    'train': 'Training Set',
+    'validation': 'Validation Set',
+    'test': 'Test Set',
+    'kfold_dataset': 'K-fold Cross-validation Set'
   }
   return textMap[fileType] || fileType
 }
@@ -872,10 +875,10 @@ function getUploadStatusTagType(status: string): '' | 'success' | 'warning' | 'd
 
 function getUploadStatusText(status: string): string {
   const textMap: Record<string, string> = {
-    'pending': '等待上传',
-    'uploading': '上传中',
-    'completed': '上传完成',
-    'failed': '上传失败'
+    'pending': 'Pending',
+    'uploading': 'Uploading',
+    'completed': 'Completed',
+    'failed': 'Failed'
   }
   return textMap[status] || status
 }
@@ -910,7 +913,21 @@ onMounted(async () => {
   setupWebSocket()
 })
 
+const KEYWORD_SEARCH_DEBOUNCE_MS = 400
+let keywordSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+// 输入 job_id 片段后自动搜索（不必按 Enter）；避免未带 keyword 时仍显示全量任务
+watch(keywordFilter, () => {
+  if (keywordSearchDebounceTimer) clearTimeout(keywordSearchDebounceTimer)
+  keywordSearchDebounceTimer = setTimeout(() => {
+    keywordSearchDebounceTimer = null
+    jobsCurrentPage.value = 1
+    void loadJobs()
+  }, KEYWORD_SEARCH_DEBOUNCE_MS)
+})
+
 onUnmounted(() => {
+  if (keywordSearchDebounceTimer) clearTimeout(keywordSearchDebounceTimer)
   cleanupWebSocket()
 })
 

@@ -26,7 +26,7 @@ const router = createRouter({
       path: '/tasks',
       name: 'tasks',
       component: () => import('../views/Files.vue'),
-      meta: { requiresAuth: true, title: '任务管理' }
+      meta: { requiresAuth: true, title: 'Tasks' }
     },
     {
       path: '/files',
@@ -78,6 +78,12 @@ const router = createRouter({
       component: () => import('../views/ModelTrain/Supervised.vue')
     },
     {
+      path: '/model/train/analyze-train',
+      name: 'train-analyze-train',
+      component: () => import('../views/ModelTrain/AnalyzeTrain.vue'),
+      meta: { requiresAuth: true, title: 'Analyze & Train' }
+    },
+    {
       path: '/model/train/unsupervised',
       name: 'train-unsupervised',
       component: () => import('../views/ModelTrain/Unsupervised.vue')
@@ -102,92 +108,92 @@ const router = createRouter({
       path: '/model/task/:id',
       name: 'model-task-detail',
       component: () => import('../views/ModelTrain/TaskDetail.vue'),
-      meta: { requiresAuth: true, title: '任务详情' }
+      meta: { requiresAuth: true, title: 'Task detail' }
     },
     {
       path: '/model/result/:id',
       name: 'model-result',
       component: () => import('../views/ModelTrain/Result.vue'),
-      meta: { requiresAuth: true, title: '训练结果' }
+      meta: { requiresAuth: true, title: 'Training result' }
     },
     {
       path: '/model/use/result/:id',
       name: 'model-use-result',
       component: () => import('../views/ModelUse/Result.vue'),
-      meta: { requiresAuth: true, title: '模型使用结果' }
+      meta: { requiresAuth: true, title: 'Model use result' }
     },
     // 数据分析相关路由
     {
       path: '/data-analysis',
       name: 'data-analysis',
       component: () => import('../views/DataAnalysis/Index.vue'),
-      meta: { requiresAuth: true, title: '数据分析' }
+      meta: { requiresAuth: true, title: 'Data analysis' }
     },
     {
       path: '/data-analysis/pca',
       name: 'analysis-pca',
       component: () => import('../views/DataAnalysis/PCA.vue'),
-      meta: { requiresAuth: true, title: 'PCA分析' }
+      meta: { requiresAuth: true, title: 'PCA' }
     },
     {
       path: '/data-analysis/heatmap',
       name: 'analysis-heatmap',
       component: () => import('../views/DataAnalysis/CorrelationHeatmap.vue'),
-      meta: { requiresAuth: true, title: '相关性热图' }
+      meta: { requiresAuth: true, title: 'Correlation heatmap' }
     },
     {
       path: '/data-analysis/volcano',
       name: 'analysis-volcano',
       component: () => import('../views/DataAnalysis/Volcano.vue'),
-      meta: { requiresAuth: true, title: '火山图' }
+      meta: { requiresAuth: true, title: 'Volcano plot' }
     },
     {
       path: '/data-analysis/venn',
       name: 'analysis-venn',
       component: () => import('../views/DataAnalysis/Venn.vue'),
-      meta: { requiresAuth: true, title: '韦恩图' }
+      meta: { requiresAuth: true, title: 'Venn diagram' }
     },
     {
       path: '/data-analysis/cluster',
       name: 'analysis-cluster',
       component: () => import('../views/DataAnalysis/GeneClusterHeatmap.vue'),
-      meta: { requiresAuth: true, title: '差异基因聚类热图' }
+      meta: { requiresAuth: true, title: 'Gene cluster heatmap' }
     },
     {
       path: '/data-analysis/dumbbell',
       name: 'analysis-dumbbell',
       component: () => import('../views/DataAnalysis/Dumbbell.vue'),
-      meta: { requiresAuth: true, title: '哑铃图' }
+      meta: { requiresAuth: true, title: 'Dumbbell plot' }
     },
     {
       path: '/data-analysis/dumbbell-bar',
       name: 'analysis-dumbbell-bar',
       component: () => import('../views/DataAnalysis/DumbbellBar.vue'),
-      meta: { requiresAuth: true, title: '哑铃柱状图' }
+      meta: { requiresAuth: true, title: 'Dumbbell bar chart' }
     },
     {
       path: '/data-analysis/go',
       name: 'analysis-go',
       component: () => import('../views/DataAnalysis/GOEnrichment.vue'),
-      meta: { requiresAuth: true, title: 'GO富集分析' }
+      meta: { requiresAuth: true, title: 'GO enrichment' }
     },
     {
       path: '/data-analysis/kegg',
       name: 'analysis-kegg',
       component: () => import('../views/DataAnalysis/KEGGEnrichment.vue'),
-      meta: { requiresAuth: true, title: 'KEGG富集分析' }
+      meta: { requiresAuth: true, title: 'KEGG enrichment' }
     },
     {
       path: '/data-analysis/ppi',
       name: 'analysis-ppi',
       component: () => import('../views/DataAnalysis/PPINetwork.vue'),
-      meta: { requiresAuth: true, title: 'PPI网络分析' }
+      meta: { requiresAuth: true, title: 'PPI network' }
     },
     {
       path: '/data-analysis/comprehensive',
       name: 'analysis-comprehensive',
       component: () => import('../views/DataAnalysis/ComprehensiveAnalysis.vue'),
-      meta: { requiresAuth: true, title: '综合分析' }
+      meta: { requiresAuth: true, title: 'Comprehensive analysis' }
     },
     // 帮助页面路由
     {

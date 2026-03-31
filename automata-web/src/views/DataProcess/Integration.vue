@@ -4,7 +4,7 @@
     <el-card class="integration-card">
       <template #header>
         <div class="card-header">
-          <span class="title">多组学数据整合</span>
+          <span class="title">Multi-omics Data Integration</span>
           <el-tag type="success">Multi-omics Data Integration</el-tag>
         </div>
       </template>
@@ -17,7 +17,7 @@
         class="integration-form"
       >
         <!-- 1. 表型数据 -->
-        <el-form-item label="上传表型数据" prop="phenoFile">
+        <el-form-item label="Upload Phenotype Data" prop="phenoFile">
           <el-upload
             class="upload-block"
             drag
@@ -32,18 +32,18 @@
               <upload-filled />
             </el-icon>
             <div class="el-upload__text">
-              将表型数据拖到此处，或<em>点击上传</em>
+              Drag and drop the phenotype file here, or <em>click to upload</em>
             </div>
             <template #tip>
               <div class="upload-tip-container">
-                <span class="file-types">仅支持 txt、csv、tsv 格式的文件</span>
+                <span class="file-types">Only support txt file with tab delimiter</span>
                 <el-button
                   type="primary"
                   size="small"
                   @click="downloadExample('pheno')"
                   class="example-btn"
                 >
-                  下载示例数据
+                  Download Example Phenotype Data
                 </el-button>
               </div>
             </template>
@@ -51,7 +51,7 @@
         </el-form-item>
 
         <!-- 2. 基因组数据 -->
-        <el-form-item label="上传基因组数据" prop="omics1File">
+        <el-form-item label="Upload Genome Data" prop="omics1File">
           <el-upload
             class="upload-block"
             drag
@@ -66,18 +66,18 @@
               <upload-filled />
             </el-icon>
             <div class="el-upload__text">
-              将基因组数据拖到此处，或<em>点击上传</em>
+              Drag and drop the genome file here, or <em>click to upload</em>
             </div>
             <template #tip>
               <div class="upload-tip-container">
-                <span class="file-types">仅支持 txt、csv、tsv 格式的文件</span>
+                <span class="file-types">Only support txt file with tab delimiter</span>
                 <el-button
                   type="primary"
                   size="small"
                   @click="downloadExample('omics1')"
                   class="example-btn"
                 >
-                  下载示例数据
+                  Download Example Genome Data
                 </el-button>
               </div>
             </template>
@@ -85,7 +85,7 @@
         </el-form-item>
 
         <!-- 3. 转录组数据 -->
-        <el-form-item label="上传转录组数据" prop="omics2File">
+        <el-form-item label="Upload Transcriptome Data" prop="omics2File">
           <el-upload
             class="upload-block"
             drag
@@ -100,18 +100,18 @@
               <upload-filled />
             </el-icon>
             <div class="el-upload__text">
-              将转录组数据拖到此处，或<em>点击上传</em>
+              Drag and drop the transcriptome file here, or <em>click to upload</em>
             </div>
             <template #tip>
               <div class="upload-tip-container">
-                <span class="file-types">仅支持 txt、csv、tsv 格式的文件</span>
+                <span class="file-types">Only support txt file with tab delimiter</span>
                 <el-button
                   type="primary"
                   size="small"
                   @click="downloadExample('omics2')"
                   class="example-btn"
                 >
-                  下载示例数据
+                  Download Example Transcriptome Data
                 </el-button>
               </div>
             </template>
@@ -119,7 +119,7 @@
         </el-form-item>
 
         <!-- 4. 蛋白组数据 -->
-        <el-form-item label="上传蛋白组数据" prop="omics3File">
+        <el-form-item label="Upload Proteomics Data" prop="omics3File">
           <el-upload
             class="upload-block"
             drag
@@ -134,18 +134,18 @@
               <upload-filled />
             </el-icon>
             <div class="el-upload__text">
-              将蛋白组数据拖到此处，或<em>点击上传</em>
+              Drag and drop the proteomics file here, or <em>click to upload</em>
             </div>
             <template #tip>
               <div class="upload-tip-container">
-                <span class="file-types">仅支持 txt、csv、tsv 格式的文件</span>
+                <span class="file-types">Only support txt file with tab delimiter</span>
                 <el-button
                   type="primary"
                   size="small"
                   @click="downloadExample('omics3')"
                   class="example-btn"
                 >
-                  下载示例数据
+                  Download Example Proteomics Data
                 </el-button>
               </div>
             </template>
@@ -153,10 +153,10 @@
         </el-form-item>
 
         <!-- 邮箱 -->
-        <el-form-item label="您的邮箱" prop="email">
+        <el-form-item label="Email" prop="email">
           <el-input
             v-model="formData.email"
-            placeholder="请输入邮箱地址（可选）"
+            placeholder="Enter your email address (optional)"
             type="email"
           />
         </el-form-item>
@@ -170,9 +170,9 @@
             size="large"
             class="submit-btn"
           >
-            {{ submitting ? '处理中...' : '提交整合' }}
+            {{ submitting ? 'Processing...' : 'Submit' }}
           </el-button>
-          <el-button @click="resetForm">重置</el-button>
+          <el-button @click="resetForm">Reset</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -196,7 +196,7 @@
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="handleClose">关闭并提交新任务</el-button>
+          <el-button @click="handleClose">Close and Submit New Task</el-button>
         </div>
       </template>
     </el-dialog>
@@ -229,11 +229,11 @@ const formData = reactive<IntegrationFormData>({
 })
 
 const formRules: FormRules = {
-  phenoFile: [{ required: true, message: '请上传表型数据文件', trigger: 'change' }],
-  omics1File: [{ required: true, message: '请上传基因组数据文件', trigger: 'change' }],
-  omics2File: [{ required: true, message: '请上传转录组数据文件', trigger: 'change' }],
-  omics3File: [{ required: true, message: '请上传蛋白组数据文件', trigger: 'change' }],
-  email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }]
+  phenoFile: [{ required: true, message: 'Upload phenotype data file', trigger: 'change' }],
+  omics1File: [{ required: true, message: 'Upload genome data file', trigger: 'change' }],
+  omics2File: [{ required: true, message: 'Upload transcriptome data file', trigger: 'change' }],
+  omics3File: [{ required: true, message: 'Upload proteomics data file', trigger: 'change' }],
+  email: [{ type: 'email', message: 'Enter a valid email address', trigger: 'blur' }]
 }
 
 const submitting = ref(false)
@@ -271,7 +271,7 @@ const handleFileChange = (uploadFile: UploadFile, key: keyof IntegrationFormData
 }
 
 const handleExceed = () => {
-  ElMessage.warning('每个位置只能上传一个文件')
+  ElMessage.warning('Only one file can be uploaded at each location')
 }
 
 const downloadExample = (type: 'pheno' | 'omics1' | 'omics2' | 'omics3') => {
@@ -314,12 +314,12 @@ const connectWebSocket = async () => {
         jobProgress.value = taskProgress || 0
 
         if (taskStatus === 'COMPLETED' || taskStatus === 'Completed') {
-          ElMessage.success(`任务 ${job_id} 已完成！`)
+          ElMessage.success(`Task ${job_id} has been completed!`)
           if (result_file) {
-            ElMessage.info(`结果文件已生成: ${result_file}`)
+            ElMessage.info(`Result file has been generated: ${result_file}`)
           }
         } else if (taskStatus === 'FAILED' || taskStatus === 'Failed') {
-          ElMessage.error(`任务 ${job_id} 失败: ${error_message || '未知错误'}`)
+          ElMessage.error(`Task ${job_id} failed: ${error_message || 'Unknown error'}`)
         }
       }
     })
@@ -328,7 +328,7 @@ const connectWebSocket = async () => {
     wsConnected.value = true
   } catch (error: any) {
     console.error('WebSocket 连接失败:', error)
-    ElMessage.error('任务监控连接失败: ' + (error.message || '未知错误'))
+    ElMessage.error('Task monitoring connection failed: ' + (error.message || 'Unknown error'))
   }
 }
 
@@ -352,7 +352,7 @@ const submitForm = async () => {
       !formData.omics2File ||
       !formData.omics3File
     ) {
-      ElMessage.error('请上传所有必需的文件')
+      ElMessage.error('Please upload all required files')
       return
     }
 
@@ -380,10 +380,10 @@ const submitForm = async () => {
     jobProgress.value = 0
     showResultDialog.value = true
 
-    ElMessage.success('多组学数据整合任务已提交')
+    ElMessage.success('Multi-omics data integration task has been submitted')
   } catch (error: any) {
     console.error('提交失败:', error)
-    ElMessage.error(error.response?.data?.detail || '提交失败，请重试')
+    ElMessage.error(error.response?.data?.detail || 'Submission failed. Please try again')
   } finally {
     submitting.value = false
   }
@@ -398,7 +398,7 @@ const resetForm = () => {
 }
 
 const handleSuccess = (result: any) => {
-  ElMessage.success('多组学数据整合任务已提交')
+  ElMessage.success('Multi-omics data integration task has been submitted')
 }
 
 const handleStatusChange = (status: string) => {
@@ -411,7 +411,7 @@ const handleStatusChange = (status: string) => {
     status === 'Failed'
   ) {
     setTimeout(() => {
-      ElMessage.info('任务已完成')
+      ElMessage.info('Task has been completed')
     }, 2000)
   }
 }

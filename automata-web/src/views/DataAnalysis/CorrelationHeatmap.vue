@@ -1,7 +1,7 @@
 <template>
   <AnalysisForm
     title="Correlation Heatmap"
-    subtitle="相关性热图"
+    subtitle="Correlation Heatmap"
     :fields="analysisFields"
     :on-submit="handleSubmit"
     example-data-url="/example/draw_example/cor_heatmap_example.txt"

@@ -83,17 +83,19 @@ class CenterLoss(nn.Module):
     Center loss function
     Force samples to be close to their cluster centers
     """
-    def __init__(self, num_classes, feat_dim, use_gpu=True, reduction='sum'):
+    def __init__(self, num_classes, feat_dim, use_gpu=True, reduction='sum', device=None):
         super(CenterLoss, self).__init__()
         self.num_classes = num_classes
         self.feat_dim = feat_dim
         self.use_gpu = use_gpu
         self.reduction = reduction
-        
-        if self.use_gpu:
-            self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim).cuda())
-        else:
-            self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim))
+        if device is None:
+            # 自动选择设备：如果已经有可用 CUDA 则使用，否则回退到 CPU
+            device = torch.device("cuda" if (self.use_gpu and torch.cuda.is_available()) else "cpu")
+        self.register_buffer("_center_device", torch.tensor(0, device=device))
+        self.centers = nn.Parameter(
+            torch.randn(self.num_classes, self.feat_dim, device=device)
+        )
     
     def forward(self, x, labels):
         batch_size = x.size(0)
@@ -298,8 +300,9 @@ class CombinedClusteringLoss(nn.Module):
         self.separation_weight = separation_weight
         self.reduction = reduction
         
-        # Initialize various loss functions
-        self.center_loss = CenterLoss(num_classes=10, feat_dim=128, use_gpu=True)
+        # Initialize various loss functions (center loss 跟随当前模块所在设备)
+        current_device = next(self.parameters()).device
+        self.center_loss = CenterLoss(num_classes=10, feat_dim=128, use_gpu=(current_device.type == "cuda"), device=current_device)
         self.contrastive_loss = ContrastiveClusteringLoss()
         self.entropy_loss = EntropyLoss()
         self.compactness_loss = CompactnessLoss()
@@ -979,7 +982,12 @@ def train_epoch(model, train_loader, optimizer, device, loss_function='mse', alp
             loss, recon_loss, cluster_loss = loss_fn(recon_batch, data, latent, cluster_assignments, model.cluster_centers)
         elif loss_function.lower() == 'center':
             # Center loss
-            center_loss_fn = CenterLoss(num_classes=model.n_clusters, feat_dim=model.latent_dim, use_gpu=device.type=='cuda')
+            center_loss_fn = CenterLoss(
+                num_classes=model.n_clusters,
+                feat_dim=model.latent_dim,
+                use_gpu=(device.type == 'cuda'),
+                device=device,
+            )
             recon_loss = F.mse_loss(recon_batch, data, reduction='sum')
             cluster_loss = center_loss_fn(latent, cluster_assignments)
             loss = alpha * recon_loss + beta * cluster_loss

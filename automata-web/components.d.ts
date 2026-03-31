@@ -54,6 +54,7 @@ declare module 'vue' {
     ElResult: typeof import('element-plus/es')['ElResult']
     ElRow: typeof import('element-plus/es')['ElRow']
     ElSelect: typeof import('element-plus/es')['ElSelect']
+    ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
     ElStep: typeof import('element-plus/es')['ElStep']
     ElSteps: typeof import('element-plus/es')['ElSteps']
     ElTable: typeof import('element-plus/es')['ElTable']
@@ -86,6 +87,7 @@ declare module 'vue' {
     TheWelcome: typeof import('./src/components/TheWelcome.vue')['default']
     TrainingDashboard: typeof import('./src/components/TrainingDashboard.vue')['default']
     TrainingForm: typeof import('./src/components/ModelTrain/TrainingForm.vue')['default']
+    TrainingResultPanel: typeof import('./src/components/Training/TrainingResultPanel.vue')['default']
     TrainingTaskManager: typeof import('./src/components/TrainingTaskManager.vue')['default']
     WelcomeItem: typeof import('./src/components/WelcomeItem.vue')['default']
   }

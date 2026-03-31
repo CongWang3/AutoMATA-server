@@ -12,13 +12,13 @@
 
     <!-- 提示信息（不影响“原生文件输入”外观） -->
     <div class="upload-hint text-muted small mt-2">
-      支持 {{ allowedTypes.join(', ') }} 格式，最大 {{ formatFileSize(maxSize) }}
+      Supported {{ allowedTypes.join(', ') }} formats, maximum {{ formatFileSize(maxSize) }}
     </div>
 
     <!-- 仅当 autoUpload=true 时才展示“内部上传进度/列表”，避免干扰训练页/ModelUse 的选择交互 -->
     <div v-if="autoUpload && uploadProgress > 0 && uploadProgress < 100" class="upload-progress mt-3">
       <div class="progress-header d-flex justify-content-between align-items-center mb-2">
-        <span>上传进度: {{ uploadProgress }}%</span>
+        <span>Upload progress: {{ uploadProgress }}%</span>
         <span v-if="uploadSpeed > 0" class="speed-indicator">
           {{ formatSpeed(uploadSpeed) }}
         </span>
@@ -35,7 +35,7 @@
     </div>
 
     <div v-if="autoUpload && selectedFiles.length > 0" class="selected-files mt-3">
-      <h6 class="mb-2">已选择文件：</h6>
+      <h6 class="mb-2">Selected files:</h6>
       <div
         v-for="(file, index) in selectedFiles"
         :key="index"
@@ -62,7 +62,7 @@
           </button>
           <span v-if="isUploading" class="text-primary">
             <iconify-icon icon="mdi:loading" class="spin"></iconify-icon>
-            上传中...
+            Uploading…
           </span>
         </div>
       </div>
@@ -75,14 +75,14 @@
         :disabled="!canUpload"
         @click="uploadFiles"
       >
-        开始上传
+        Start upload
       </button>
       <button
         type="button"
         class="btn btn-secondary ms-2"
         @click="selectedFiles = []"
       >
-        清空
+        Clear
       </button>
     </div>
 
@@ -178,7 +178,7 @@ const processFiles = (files: File[]) => {
   
   // 验证文件数量
   if (!props.multiple && files.length > 1) {
-    errorMessage.value = '只能选择一个文件'
+    errorMessage.value = 'Only one file can be selected'
     return
   }
 
@@ -192,7 +192,7 @@ const processFiles = (files: File[]) => {
   })
 
   if (invalidFiles.length > 0) {
-    errorMessage.value = `发现无效文件：${invalidFiles.map(f => f.name).join(', ')}`
+    errorMessage.value = `Invalid file(s): ${invalidFiles.map(f => f.name).join(', ')}`
     return
   }
 
@@ -241,7 +241,7 @@ const uploadFiles = async () => {
     }
 
     emit('upload-complete', { success: true, files: results })
-    ElMessage.success(`${selectedFiles.value.length} 个文件上传成功`)
+    ElMessage.success(`${selectedFiles.value.length} file(s) uploaded successfully`)
     
     // 重置状态
     setTimeout(() => {
@@ -255,7 +255,7 @@ const uploadFiles = async () => {
     isUploading.value = false
     uploadProgress.value = 0
     uploadSpeed.value = 0
-    errorMessage.value = `上传失败: ${error.message || '未知错误'}`
+    errorMessage.value = `Upload failed: ${error.message || 'Unknown error'}`
     emit('upload-error', error)
     ElMessage.error(errorMessage.value)
   }
@@ -312,11 +312,11 @@ const uploadSingleFile = (file: File, index: number): Promise<any> => {
     })
 
     xhr.addEventListener('error', () => {
-      reject(new Error('网络错误'))
+      reject(new Error('Network error'))
     })
 
     xhr.addEventListener('abort', () => {
-      reject(new Error('上传被取消'))
+      reject(new Error('Upload cancelled'))
     })
 
     // 发送请求

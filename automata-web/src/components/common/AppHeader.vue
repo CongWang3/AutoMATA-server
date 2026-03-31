@@ -23,7 +23,7 @@
               :class="{ active: $route.name === 'dashboard' }"
             >
               <el-icon class="menu-icon"><House /></el-icon>
-              首页
+              Home
             </router-link>
           </li>
           
@@ -36,7 +36,7 @@
               aria-expanded="false"
             >
               <el-icon class="menu-icon"><DataAnalysis /></el-icon>
-              数据处理
+              Data processing
             </a>
             <ul class="dropdown-menu" aria-labelledby="dataProcessDropdown">
               <li>
@@ -44,7 +44,7 @@
                   to="/data-process/genome" 
                   class="dropdown-item"
                 >
-                  基因组
+                  Genome
                 </router-link>
               </li>
               <li>
@@ -52,7 +52,7 @@
                   to="/data-process/transcriptome" 
                   class="dropdown-item"
                 >
-                  转录组
+                  Transcriptome
                 </router-link>
               </li>
               <li>
@@ -60,7 +60,7 @@
                   to="/data-process/protein" 
                   class="dropdown-item"
                 >
-                  蛋白质组
+                  Proteome
                 </router-link>
               </li>
               <li>
@@ -68,7 +68,7 @@
                   to="/data-process/integration" 
                   class="dropdown-item"
                 >
-                  数据整合
+                  Integration
                 </router-link>
               </li>
               <li>
@@ -76,7 +76,7 @@
                   to="/data-process/pvalue-integration" 
                   class="dropdown-item"
                 >
-                  pvalue整合
+                  P-value integration
                 </router-link>
               </li>
             </ul>
@@ -91,7 +91,7 @@
               aria-expanded="false"
             >
               <el-icon class="menu-icon"><SetUp /></el-icon>
-              模型训练
+              Model training
             </a>
             <ul class="dropdown-menu" aria-labelledby="modelDropdown">
               <li>
@@ -99,7 +99,7 @@
                   to="/model/train/supervised" 
                   class="dropdown-item"
                 >
-                  监督学习
+                  Supervised
                 </router-link>
               </li>
               <li>
@@ -107,7 +107,7 @@
                   to="/model/train/unsupervised" 
                   class="dropdown-item"
                 >
-                  无监督学习
+                  Unsupervised
                 </router-link>
               </li>
               <li>
@@ -115,7 +115,15 @@
                   to="/model/train/semi-supervised" 
                   class="dropdown-item"
                 >
-                  半监督学习
+                  Semi-supervised
+                </router-link>
+              </li>
+              <li>
+                <router-link 
+                  to="/model/train/analyze-train" 
+                  class="dropdown-item"
+                >
+                  Analyze &amp; train
                 </router-link>
               </li>
               <li>
@@ -123,7 +131,7 @@
                   to="/model/use" 
                   class="dropdown-item"
                 >
-                  模型使用
+                  Model use
                 </router-link>
               </li>
             </ul>
@@ -136,7 +144,7 @@
               :class="{ active: $route.path.startsWith('/data-analysis') }"
             >
               <el-icon class="menu-icon"><PieChart /></el-icon>
-              数据分析
+              Data analysis
             </router-link>
           </li>
           
@@ -147,7 +155,7 @@
               :class="{ active: $route.name === 'files' }"
             >
               <el-icon class="menu-icon"><Document /></el-icon>
-              文件管理
+              Tasks
             </router-link>
           </li>
           
@@ -158,7 +166,7 @@
               :class="{ active: $route.name === 'help' }"
             >
               <el-icon class="menu-icon"><QuestionFilled /></el-icon>
-              帮助
+              Help
             </router-link>
           </li>
         </ul>
@@ -182,7 +190,7 @@
           </el-tooltip>
           
           <el-tooltip 
-            :content="`认证: ${authStatus.text}`" 
+            :content="`Auth: ${authStatus.text}`" 
             placement="bottom"
           >
             <el-tag 
@@ -212,15 +220,15 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">
                   <el-icon><User /></el-icon>
-                  个人资料
+                  Profile
                 </el-dropdown-item>
                 <el-dropdown-item command="settings">
                   <el-icon><Setting /></el-icon>
-                  系统设置
+                  Settings
                 </el-dropdown-item>
                 <el-dropdown-item divided command="logout">
                   <el-icon><SwitchButton /></el-icon>
-                  退出登录
+                  Log out
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -250,7 +258,7 @@
       aria-labelledby="mobileMenuLabel"
     >
       <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="mobileMenuLabel">菜单</h5>
+        <h5 class="offcanvas-title" id="mobileMenuLabel">Menu</h5>
         <button 
           type="button" 
           class="btn-close" 
@@ -262,7 +270,7 @@
       <div class="offcanvas-body">
         <div class="mobile-menu">
           <div class="menu-section">
-            <h6 class="section-title">主要功能</h6>
+            <h6 class="section-title">Main</h6>
             <ul class="menu-list">
               <li>
                 <router-link 
@@ -271,7 +279,7 @@
                   @click="closeMobileMenu"
                 >
                   <el-icon><House /></el-icon>
-                  首页
+                  Home
                 </router-link>
               </li>
               <li>
@@ -281,14 +289,14 @@
                   @click="closeMobileMenu"
                 >
                   <el-icon><Document /></el-icon>
-                  文件管理
+                  Files
                 </router-link>
               </li>
             </ul>
           </div>
           
           <div class="menu-section">
-            <h6 class="section-title">数据处理</h6>
+            <h6 class="section-title">Data processing</h6>
             <ul class="menu-list">
               <li>
                 <router-link 
@@ -296,7 +304,7 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  基因组
+                  Genome
                 </router-link>
               </li>
               <li>
@@ -305,7 +313,7 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  转录组
+                  Transcriptome
                 </router-link>
               </li>
               <li>
@@ -314,7 +322,7 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  蛋白质组
+                  Proteome
                 </router-link>
               </li>
               <li>
@@ -323,14 +331,14 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  数据整合
+                  Integration
                 </router-link>
               </li>
             </ul>
           </div>
           
           <div class="menu-section">
-            <h6 class="section-title">模型训练</h6>
+            <h6 class="section-title">Model training</h6>
             <ul class="menu-list">
               <li>
                 <router-link 
@@ -338,7 +346,7 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  监督学习
+                  Supervised
                 </router-link>
               </li>
               <li>
@@ -347,7 +355,7 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  无监督学习
+                  Unsupervised
                 </router-link>
               </li>
               <li>
@@ -356,7 +364,16 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  半监督学习
+                  Semi-supervised
+                </router-link>
+              </li>
+              <li>
+                <router-link 
+                  to="/model/train/analyze-train" 
+                  class="menu-item"
+                  @click="closeMobileMenu"
+                >
+                  Analyze &amp; train
                 </router-link>
               </li>
               <li>
@@ -365,14 +382,14 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  模型使用
+                  Model use
                 </router-link>
               </li>
             </ul>
           </div>
           
           <div class="menu-section">
-            <h6 class="section-title">数据分析</h6>
+            <h6 class="section-title">Data analysis</h6>
             <ul class="menu-list">
               <li>
                 <router-link 
@@ -380,7 +397,7 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  差异表达
+                  Differential expression
                 </router-link>
               </li>
               <li>
@@ -389,7 +406,7 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  富集分析
+                  Enrichment
                 </router-link>
               </li>
               <li>
@@ -398,14 +415,14 @@
                   class="menu-item"
                   @click="closeMobileMenu"
                 >
-                  可视化
+                  Visualization
                 </router-link>
               </li>
             </ul>
           </div>
           
           <div class="menu-section">
-            <h6 class="section-title">其他</h6>
+            <h6 class="section-title">Other</h6>
             <ul class="menu-list">
               <li>
                 <router-link 
@@ -414,7 +431,7 @@
                   @click="closeMobileMenu"
                 >
                   <el-icon><QuestionFilled /></el-icon>
-                  帮助
+                  Help
                 </router-link>
               </li>
             </ul>
@@ -442,7 +459,7 @@
                 class="w-100"
               >
                 <el-icon><SwitchButton /></el-icon>
-                退出登录
+                Log out
               </el-button>
             </div>
           </div>
@@ -532,25 +549,25 @@ const logoPath = computed(() => {
 // 状态计算属性
 const webSocketStatus = computed((): StatusObject => {
   if (wsStatus.value.isActive && wsStatus.value.isConnected) {
-    return { text: '已连接', type: 'success' }
+    return { text: 'Connected', type: 'success' }
   } else if (wsStatus.value.isActive && !wsStatus.value.isConnected) {
-    return { text: '连接中', type: 'warning' }
+    return { text: 'Connecting', type: 'warning' }
   } else {
-    return { text: '已断开', type: 'danger' }
+    return { text: 'Disconnected', type: 'danger' }
   }
 })
 
 const authStatus = computed((): StatusObject => {
   return userStore.isAuthenticated 
-    ? { text: '已认证', type: 'success' }
-    : { text: '未认证', type: 'warning' }
+    ? { text: 'Authenticated', type: 'success' }
+    : { text: 'Not authenticated', type: 'warning' }
 })
 
 const connectionStatus = computed((): StatusObject => {
   const managerStatus = webSocketManager.getStatus()
   return managerStatus.isActive && managerStatus.isConnected
-    ? { text: '已连接', type: 'success' }
-    : { text: '未连接', type: 'danger' }
+    ? { text: 'Connected', type: 'success' }
+    : { text: 'Not connected', type: 'danger' }
 })
 
 // 方法

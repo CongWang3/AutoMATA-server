@@ -213,7 +213,7 @@ async def get_training_task(
         .first()
     )
     if not job:
-        raise HTTPException(status_code=404, detail="训练任务不存在")
+        raise HTTPException(status_code=404, detail="Training task does not exist")
 
     return _create_response(job)
 
@@ -277,7 +277,7 @@ async def get_training_status(
     查询训练任务状态（仅限 MODEL_TRAIN 类型）
     """
     if not JOB_ID_PATTERN.match(job_id):
-        raise HTTPException(status_code=400, detail="任务 ID 格式不正确")
+        raise HTTPException(status_code=400, detail="Task ID format is incorrect")
 
     job = (
         db.query(Job)
@@ -290,7 +290,7 @@ async def get_training_status(
     )
 
     if not job:
-        raise HTTPException(status_code=404, detail="训练任务不存在")
+        raise HTTPException(status_code=404, detail="Training task does not exist")
 
     return {
         "job_id": job.job_id,
@@ -362,7 +362,7 @@ async def get_training_download_url(
     获取训练任务结果下载链接（带签名）
     """
     if not JOB_ID_PATTERN.match(job_id):
-        raise HTTPException(status_code=400, detail="任务 ID 格式不正确")
+        raise HTTPException(status_code=400, detail="Task ID format is incorrect")
 
     job = (
         db.query(Job)
@@ -375,15 +375,15 @@ async def get_training_download_url(
     )
 
     if not job:
-        raise HTTPException(status_code=404, detail="训练任务不存在")
+        raise HTTPException(status_code=404, detail="Training task does not exist")
 
     if (hasattr(job.status, "value") and job.status.value != JobStatus.COMPLETED.value) or (
         not hasattr(job.status, "value") and job.status != "Completed"
     ):
-        raise HTTPException(status_code=400, detail="训练任务尚未完成")
+        raise HTTPException(status_code=400, detail="Training task is not completed")
 
     if not job.result_file:
-        raise HTTPException(status_code=404, detail="结果文件不存在")
+        raise HTTPException(status_code=404, detail="Result file does not exist")
 
     from config.settings import settings
 

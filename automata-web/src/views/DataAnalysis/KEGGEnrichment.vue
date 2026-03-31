@@ -88,7 +88,7 @@ const analysisFields: AnalysisField[] = [
   {
     type: 'number',
     name: 'term_num',
-    label: 'Number of terms to display',
+    label: 'Displayed terms',
     defaultValue: 5,
     min: 1,
     max: 50,

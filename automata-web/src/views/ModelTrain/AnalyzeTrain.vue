@@ -7,28 +7,20 @@
                     <el-card class="form-card">
                         <template #header>
                             <div class="card-header">
-                                <span class="title">Supervised learning model training</span>
-                                <el-tag type="primary">Supervised Learning</el-tag>
+                                <span class="title">Analyze and Train</span>
+                                <el-tag type="success">Differential analysis + Supervised training</el-tag>
                             </div>
                         </template>
                         <div class="card-body p-4">
                             <form @submit.prevent="handleSubmit" class="train_form" enctype="multipart/form-data">
 
-                                <!-- 步骤 1：选择策略并上传文件 -->
                                 <div class="step-section mb-4">
                                     <div class="step-header d-flex justify-content-between align-items-center" style="border-bottom: none; padding-bottom: 0;">
-                                        <!-- <h5 class="step-title mb-0">
-                                            <span class="step-number">1</span>
-                                            选择策略并上传数据
-                                        </h5> -->
                                         <h5 class="section-title">
-                                            1. Select Strategy and Upload Data
+                                            1. Differential analysis settings
                                             <span class="section-subtitle">Required</span>
                                         </h5>
-                                        <!-- <button type="button" class="btn btn-outline-primary btn-sm" @click="downloadStrategyExample">
-                                            <i class="fas fa-download me-1"></i>
-                                            Download Example Data
-                                        </button> -->
+
                                         <el-button 
                                             type="primary" 
                                             size="small" 
@@ -38,13 +30,99 @@
                                             Download Example Data
                                         </el-button>
                                     </div>
+                                    <div class="row g-3 mt-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label">Data type</label>
+                                            <select class="form-select" v-model="analysisForm.dataType">
+                                                <option value="read_counts">Read counts (DESeq2)</option>
+                                                <option value="fpkm">FPKM (limma)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Gene nomenclature</label>
+                                            <select class="form-select" v-model="analysisForm.geneNomenclature">
+                                                <option value="symbol">Gene Symbol</option>
+                                                <option value="ensembl">Ensembl ID</option>
+                                                <option value="gene_id">Gene ID</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Organism</label>
+                                            <select class="form-select" v-model="analysisForm.organism">
+                                                <option value="Homo_sapiens">Homo sapiens</option>
+                                                <option value="Bovine">Bovine</option>
+                                                <option value="Mus_musculus">Mus musculus</option>
+                                                <option value="Drosophila_melanogaster">Drosophila melanogaster</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">log2(FC) threshold</label>
+                                            <input type="number" class="form-control" v-model.number="analysisForm.fc" min="0" step="0.1">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">padj threshold</label>
+                                            <input type="number" class="form-control" v-model.number="analysisForm.padj" min="0" max="1" step="0.01">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Correction</label>
+                                            <select class="form-select" v-model="analysisForm.correction">
+                                                <option value="BH">BH</option>
+                                                <option value="BY">BY</option>
+                                                <option value="holm">holm</option>
+                                                <option value="hochberg">hochberg</option>
+                                                <option value="hommel">hommel</option>
+                                                <option value="bonferroni">bonferroni</option>
+                                                <option value="none">none</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label">Group info (Sample / Group, tab-separated)</label>
+                                            <input type="file" class="form-control"
+                                                @change="handleFileUpload($event, 'groupInfo')"
+                                                accept=".txt,.csv,.tsv,.xlsx,.xls" required>
+                                            <div v-if="uploadProgress.groupInfo > 0 && uploadProgress.groupInfo < 100" class="mt-2">
+                                                <div class="progress">
+                                                    <div class="progress-bar" role="progressbar"
+                                                        :style="{ width: uploadProgress.groupInfo + '%' }">
+                                                        {{ uploadProgress.groupInfo }}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div v-if="uploadedFiles.groupInfo" class="mt-2">
+                                                <span class="badge bg-success">{{ uploadedFiles.groupInfo }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 步骤 1：选择策略并上传文件 -->
+                                <div class="step-section mb-4">
+                                    <div class="step-header d-flex justify-content-between align-items-center" style="border-bottom: none; padding-bottom: 0;">
+                                        <!-- <h5 class="step-title mb-0">
+                                            <span class="step-number">1</span>
+                                            选择策略并上传数据
+                                        </h5> -->
+                                        <h5 class="section-title">
+                                            2. Select Strategy and Upload Data
+                                            <span class="section-subtitle">Required</span>
+                                        </h5>
+                                        
+                                        <!-- <el-button 
+                                            type="primary" 
+                                            size="small" 
+                                            @click="downloadStrategyExample"
+                                            class="example-btn"
+                                            >
+                                            Download Example Data
+                                        </el-button> -->
+                                    </div>
                                     <div class="strategy-options mb-4 mt-3">
                                         <div class="form-check mb-3">
                                             <input class="form-check-input" type="radio" name="strategy"
                                                 id="splitStrategy" value="split" v-model="strategy"
                                                 @change="handleStrategyChange" checked>
                                             <label class="form-check-label" for="splitStrategy" style="color: #606266; font-size: 14px;">
-                                                Upload a dataset to conduct training/validation/testing split
+                                                Upload a dataset to conduct training/validation/testing split (Samples must match group info)
                                             </label>
                                             
                                         </div>
@@ -54,7 +132,7 @@
                                                 id="uploadStrategy" value="upload" v-model="strategy"
                                                 @change="handleStrategyChange">
                                             <label class="form-check-label" for="uploadStrategy" style="color: #606266; font-size: 14px;">
-                                                Upload training/validation/testing datasets respectively
+                                                Upload training/validation/testing datasets respectively (Training samples must match group info)
                                             </label>
                                         </div>
 
@@ -63,7 +141,7 @@
                                                 id="kfoldStrategy" value="kfold" v-model="strategy"
                                                 @change="handleStrategyChange">
                                             <label class="form-check-label" for="kfoldStrategy" style="color: #606266; font-size: 14px;">
-                                                Upload a dataset to conduct K-Fold cross-validation
+                                                Upload a dataset to conduct K-Fold cross-validation (Samples must match group info)
                                             </label>
                                         </div>
                                         
@@ -252,7 +330,7 @@
                                             <span class="step-subtitle">Choose Model</span>
                                         </h5> -->
                                         <h5 class="section-title">
-                                            2. Choose Model
+                                            3. Choose Model
                                             <span class="section-subtitle">Required</span>
                                         </h5>
                                     </div>
@@ -305,7 +383,7 @@
                                     </h5> -->
 
                                     <h5 class="section-title">
-                                        3. Set Training Hyperparameters
+                                        4. Set Training Hyperparameters
                                         <span class="section-subtitle">Required</span>
                                     </h5>
 
@@ -421,7 +499,7 @@
                                 <div class="notification-section mb-4">
                                     <h5 class="section-title">
                                         <!-- 通知信息 -->
-                                        4. Notification
+                                        5. Notification
                                         <span class="section-subtitle">Optional</span>
                                     </h5>
                                     <div class="row g-3">
@@ -463,14 +541,21 @@
                 :close-on-click-modal="false"
                 @close="handleClose"
             >
-                <TrainingResultPanel
+                <AnalysisResultPanel
                     v-if="currentJob"
                     :job-id="currentJob.id"
                     :status="currentJob.status"
-                    :input-params="unifiedJob?.input_params || submittedInputParams || {}"
+                    :progress="currentJob.progress ?? 0"
+                    analysis-type-label="Analyze and Train"
+                    waiting-banner-title="Analyze and Train"
+                    waiting-hint="Task is in progress, please wait"
+                    :param-rows="analysisResultParamRows"
+                    :result-files="analysisResultFiles"
                     :error-message="unifiedJob?.error_message || currentJob.errorMessage"
-                    :download-ready="downloadReady"
-                    :on-download="handleDownloadFromPanel"
+                    :show-package-download="showPackageDownloadInPanel"
+                    :on-download-package="handleDownloadFromPanel"
+                    result-failure-label="Analyze and Train"
+                    @enrichment-followup-started="onEnrichmentFollowupStarted"
                 />
                 
                 <template #footer>
@@ -486,9 +571,11 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { trainingApi } from '@/api'
+import { trainingApi, submitAnalysisTrain } from '@/api'
+import { AnalysisAPI, type AnalysisResultFile } from '@/api/analysis'
 import { WebSocketService } from '@/api/websocket'
-import TrainingResultPanel from '@/components/Training/TrainingResultPanel.vue'
+import AnalysisResultPanel from '@/components/AnalysisResultPanel.vue'
+import { buildTrainingResultParamRows } from '@/components/Training/trainingResultParams'
 import { jobsApi, type UnifiedJob } from '@/api/jobs'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
@@ -527,7 +614,7 @@ interface UploadedFileInfo {
 // 审查上下文：
 // - 设计意图：监督学习训练页面，支持多种策略（split/upload/kfold）和多模型选择
 // - 已知局限：UI较为复杂，保留原有布局但接入了新的API调用模式
-// - 业务背景：与后端 /v1/training/supervised 端点集成
+// - 业务背景：与后端 /v1/analysis-train/tasks 及统一 jobs 接口集成
 // - 测试重点：确保文件上传、表单提交、WebSocket状态更新正常工作
 // -->
 
@@ -544,7 +631,8 @@ const uploadedFiles = reactive<Record<string, string>>({
     validation: '',
     test: '',
     kfoldDataset: '',
-    kfoldTest: ''
+    kfoldTest: '',
+    groupInfo: '',
 })
 
 // 文件上传进度（使用固定字段，避免 ts 推断为 possibly undefined）
@@ -555,6 +643,7 @@ interface UploadProgress {
     test: number
     kfoldDataset: number
     kfoldTest: number
+    groupInfo: number
 }
 
 const uploadProgress = reactive<UploadProgress>({
@@ -563,7 +652,8 @@ const uploadProgress = reactive<UploadProgress>({
     validation: 0,
     test: 0,
     kfoldDataset: 0,
-    kfoldTest: 0
+    kfoldTest: 0,
+    groupInfo: 0,
 })
 
 // 已上传文件信息
@@ -573,7 +663,17 @@ const uploadedFileInfo = reactive<Record<string, UploadedFileInfo | null>>({
     validation: null,
     test: null,
     kfoldDataset: null,
-    kfoldTest: null
+    kfoldTest: null,
+    groupInfo: null,
+})
+
+const analysisForm = reactive({
+    dataType: 'read_counts' as 'read_counts' | 'fpkm',
+    geneNomenclature: 'symbol' as 'symbol' | 'ensembl' | 'gene_id',
+    organism: 'Homo_sapiens',
+    fc: 1,
+    padj: 0.05,
+    correction: 'BH',
 })
 
 const splitRatio = reactive({
@@ -681,15 +781,75 @@ const showResultDialog = ref(false)
 const currentJob = ref<Job | null>(null)
 const unifiedJob = ref<UnifiedJob | null>(null)
 const submittedInputParams = ref<Record<string, any> | null>(null)
-const terminalDetailFetched = ref(false)
-const downloadReady = ref(false)
-const preparedDownloadUrl = ref<string | null>(null)
+const analysisResultFiles = ref<AnalysisResultFile[]>([])
+
+function mergeInputParamsForDisplay(): Record<string, unknown> {
+    const u = unifiedJob.value?.input_params
+    const s = submittedInputParams.value
+    if (u && typeof u === 'object') return u as Record<string, unknown>
+    if (s) return s
+    return {}
+}
+
+const analysisResultParamRows = computed(() => {
+    const src = mergeInputParamsForDisplay()
+    const base = buildTrainingResultParamRows(src)
+    const a = (src as Record<string, unknown>).analysis as Record<string, unknown> | undefined
+    if (!a || typeof a !== 'object') {
+        return base.map((r) => ({ label: r.label, value: r.value }))
+    }
+    const extra = [
+        { label: 'DE data type', value: String(a.data_type ?? '') },
+        { label: 'Gene nomenclature', value: String(a.gene_nomenclature ?? '') },
+        { label: 'Organism (DE)', value: String(a.organism ?? '') },
+        { label: 'log2 FC threshold', value: String(a.fc ?? '') },
+        { label: 'padj threshold', value: String(a.padj ?? '') },
+        { label: 'Correction (DE)', value: String(a.correction ?? '') },
+    ].filter((r) => r.value !== '')
+    return [...base.map((r) => ({ label: r.label, value: r.value })), ...extra]
+})
+
+/** 主流程 Completed，或 GO/KEGG 进行中（仍为 Processing 但已有差异分析结果文件）时允许展示整包下载 */
+const showPackageDownloadInPanel = computed(() => {
+    const st = String(currentJob.value?.status || '').toLowerCase()
+    if (st === 'completed') return true
+    if (st === 'processing') {
+        const names = analysisResultFiles.value.map((f) => f.filename.toLowerCase())
+        return names.includes('select_all.txt')
+    }
+    return false
+})
+
+async function loadAnalysisResultFiles(jobId: string) {
+    try {
+        const r = await AnalysisAPI.getResult(jobId)
+        const files = r.result_files || []
+        analysisResultFiles.value = files.map((f) => ({
+            filename: f.filename,
+            format: f.format,
+            url: AnalysisAPI.getResultFileUrl(jobId, f.filename),
+        }))
+    } catch (e) {
+        console.warn('加载分析并训练结果文件列表失败:', e)
+        analysisResultFiles.value = []
+    }
+}
 
 // WebSocket 服务
 let wsService: WebSocketService | null = null
 
 // 任务轮询控制
 let pollingInterval: ReturnType<typeof setTimeout> | null = null
+/** WebSocket 高频推状态时合并刷新，避免 resultFiles 抖动导致子组件反复重绘 */
+let resultFilesRefreshDebounce: ReturnType<typeof setTimeout> | null = null
+
+function scheduleLoadAnalysisResultFiles(jobId: string) {
+    if (resultFilesRefreshDebounce) clearTimeout(resultFilesRefreshDebounce)
+    resultFilesRefreshDebounce = setTimeout(() => {
+        resultFilesRefreshDebounce = null
+        void loadAnalysisResultFiles(jobId)
+    }, 1200)
+}
 
 // 计算属性
 const ratioDisplay = computed(() => {
@@ -733,7 +893,9 @@ const isFormValid = computed(() => {
         filesValid = !!(uploadedFiles.kfoldDataset && uploadedFiles.kfoldTest && kfoldValue.value)
     }
 
-    return basicValid && filesValid
+    const groupOk = !!uploadedFiles.groupInfo && !!uploadedFileInfo.groupInfo?.id
+
+    return basicValid && filesValid && groupOk
 })
 
 // 方法
@@ -746,7 +908,7 @@ const handleFileUpload = async (event: Event, fileType: keyof UploadProgress) =>
         const fileExtension = file.name.split('.').pop()?.toLowerCase() || ''
 
         if (!allowedExtensions.includes(fileExtension)) {
-            ElMessage.error('Please upload a txt file with tab delimiter!')
+            ElMessage.error('Please upload a txt file with tab delimiter.')
             input.value = ''
             return
         }
@@ -787,8 +949,9 @@ const handleFileUpload = async (event: Event, fileType: keyof UploadProgress) =>
 }
 
 const handleStrategyChange = () => {
-    // 清空之前上传的文件
+    const preserve = new Set(['groupInfo'])
     Object.keys(uploadedFiles).forEach(key => {
+        if (preserve.has(key)) return
         const k = key as keyof UploadProgress
         uploadedFiles[key] = ''
         uploadProgress[k] = 0
@@ -873,55 +1036,57 @@ const handleSubmit = async () => {
         const modelType = selectedModel.value
 
         const trainingParams = {
-            task_name: `Supervised_${getModelName(modelType)}_${Date.now()}`,
+            task_name: `AnalyzeTrain_${getModelName(modelType)}_${Date.now()}`,
             model_type: modelType,
             parameters: parameters,
-            // upload：三文件 ID 在 parameters 中传递；dataset_path 仅作兼容/占位（训练集）
             dataset_path: getDatasetPathWithFileIds(),
-            email: notification.email
+            group_info_file_id: uploadedFileInfo.groupInfo!.id,
+            analysis: {
+                organism: analysisForm.organism,
+                data_type: analysisForm.dataType,
+                gene_nomenclature: analysisForm.geneNomenclature,
+                fc: analysisForm.fc,
+                padj: analysisForm.padj,
+                correction: analysisForm.correction,
+            },
+            email: notification.email || undefined,
         }
-        // 等待阶段参数展示兜底：后端 input_params 若尚未写入，先展示前端提交快照
         submittedInputParams.value = {
-            training_type: 'supervised',
+            training_type: 'analysis_train',
             model_type: modelType,
             parameters,
+            analysis: trainingParams.analysis,
             email: notification.email || undefined,
         }
 
-        console.log('Submitting training task:', trainingParams)
+        console.log('Submitting analyze-train task:', trainingParams)
 
-        // 调用API创建训练任务
-        const response = await trainingApi.trainSupervised(trainingParams)
+        const response = await submitAnalysisTrain(trainingParams)
 
         jobId.value = response.job_id
         currentStatus.value = response.status
-        statusText.value = 'Training task submitted'
-        
-        // 设置当前任务用于状态跟踪（使用后端返回的新字段）
+        statusText.value = 'Analyze-and-train task submitted'
+
+        analysisResultFiles.value = []
+        unifiedJob.value = null
         currentJob.value = {
             id: response.job_id,
             name: response.task_name,
-            status: response.status as Job['status'],  // 直接使用后端返回的状态（如 Submitted）
+            status: response.status as Job['status'],
             progress: response.progress || 0,
             currentStep: response.current_step || 'Submitted, waiting to run',
             createdAt: response.created_at,
             updatedAt: response.created_at,
             duration: 0,
             resultFile: response.result_file || undefined,
-            errorMessage: response.error_message || undefined
+            errorMessage: response.error_message || undefined,
         }
-        
-        // 打开结果弹窗
         showResultDialog.value = true
-        unifiedJob.value = null
-        terminalDetailFetched.value = false
-        downloadReady.value = false
-        preparedDownloadUrl.value = null
-        await refreshUnifiedJobDetail(response.job_id)
-        
-        ElMessage.success('Training task submitted')
 
-        // 启动任务状态轮询作为后备
+        await refreshUnifiedJobDetail(response.job_id)
+
+        ElMessage.success('Analyze-and-train task submitted')
+
         pollTaskStatus(response.job_id)
 
     } catch (error: any) {
@@ -929,6 +1094,9 @@ const handleSubmit = async () => {
         const errorMessage = error.response?.data?.detail || error.message || 'Submission failed'
         statusText.value = 'Submission failed: ' + errorMessage
         ElMessage.error('Submission failed: ' + errorMessage)
+        showResultDialog.value = false
+        currentJob.value = null
+        submittedInputParams.value = null
     } finally {
         isSubmitting.value = false
     }
@@ -970,6 +1138,13 @@ const resetForm = () => {
     splitRatio.validation = 1
     splitRatio.test = 1
 
+    analysisForm.dataType = 'read_counts'
+    analysisForm.geneNomenclature = 'symbol'
+    analysisForm.organism = 'Homo_sapiens'
+    analysisForm.fc = 1
+    analysisForm.padj = 0.05
+    analysisForm.correction = 'BH'
+
     // 重置超参数
     hyperparameters.epoch = 20
     hyperparameters.learningRate = 0.001
@@ -1000,7 +1175,7 @@ const resetForm = () => {
     trainingResults.value = {}
     currentJob.value = null
     unifiedJob.value = null
-    terminalDetailFetched.value = false
+    analysisResultFiles.value = []
 
     // 停止任务轮询
     stopPolling()
@@ -1016,7 +1191,7 @@ const handleClose = () => {
     currentJob.value = null
     unifiedJob.value = null
     submittedInputParams.value = null
-    terminalDetailFetched.value = false
+    analysisResultFiles.value = []
     jobId.value = ''
     currentStatus.value = ''
     statusText.value = 'Initializing...'
@@ -1066,13 +1241,13 @@ const pollTaskStatus = async (taskId: string) => {
 
     const poll = async () => {
         try {
-            const task = await trainingApi.getStatus(taskId)
-            currentStatus.value = task.status
-            statusText.value = task.current_step || `Status: ${task.status}`
+            const task = await jobsApi.getJobDetail(taskId)
+            const st = task.status
+            currentStatus.value = st
+            statusText.value = task.current_step || `Status: ${st}`
             
-            // 更新 currentJob
             if (currentJob.value && currentJob.value.id === taskId) {
-                currentJob.value.status = task.status
+                currentJob.value.status = st as Job['status']
                 currentJob.value.progress = task.progress || 0
                 if (task.current_step) {
                     currentJob.value.currentStep = task.current_step
@@ -1085,27 +1260,25 @@ const pollTaskStatus = async (taskId: string) => {
                 }
             }
 
-            // 使用后端新状态枚举值判断
-            if (task.status === 'Completed') {
-                // 任务完成，停止轮询
+            if (st === 'Processing' || st === 'Submitted') {
+                await loadAnalysisResultFiles(taskId)
+            }
+
+            if (st === 'Completed') {
                 stopPolling()
-                await refreshUnifiedJobDetailIfTerminal(taskId, task.status)
-                await ensureDownloadReady(taskId)
-                ElMessage.success('Training finished')
-            } else if (task.status === 'Submitted' || task.status === 'Processing') {
-                // 继续轮询，每5秒一次
+                await refreshUnifiedJobDetailIfTerminal(taskId, st)
+                ElMessage.success('Analyze and train finished')
+            } else if (st === 'Submitted' || st === 'Processing') {
                 pollingInterval = setTimeout(poll, 5000)
-            } else if (task.status === 'Failed') {
-                // 任务失败，停止轮询
+            } else if (st === 'Failed') {
                 stopPolling()
-                statusText.value = task.error_message || 'Training failed'
-                await refreshUnifiedJobDetailIfTerminal(taskId, task.status)
-                ElMessage.error(task.error_message || 'Training failed')
-            } else if (task.status === 'Cancelled') {
-                // 任务取消，停止轮询
+                statusText.value = task.error_message || 'Task failed'
+                await refreshUnifiedJobDetailIfTerminal(taskId, st)
+                ElMessage.error(task.error_message || 'Task failed')
+            } else if (st === 'Cancelled') {
                 stopPolling()
                 statusText.value = 'Task cancelled'
-                await refreshUnifiedJobDetailIfTerminal(taskId, task.status)
+                await refreshUnifiedJobDetailIfTerminal(taskId, st)
             }
         } catch (error) {
             console.error('轮询任务状态失败:', error)
@@ -1134,14 +1307,15 @@ const stopPolling = () => {
 // -->
 const downloadStrategyExample = () => {
     try {
-        const fileName = 'train_example.zip'
+        const fileName = 'new_analysis_train_example.zip'
         // 直接从后端暴露的 example 目录下载（避免 Vite public/example 缺失导致返回 html）
         // const downloadUrl = `http://localhost:8005/example/${fileName}`
 
         const link = document.createElement('a')
         // 直接使用Vite服务（因为它们在public目录下）
-        const downloadUrl = '/example/train_example.zip'
+        const downloadUrl = '/example/new_analysis_train_example.zip'
         link.href = downloadUrl
+        
         link.download = fileName
         link.target = '_blank' // 新窗口打开，避免阻塞当前页面
         link.style.display = 'none'
@@ -1187,9 +1361,21 @@ function isTerminalJobStatus(status: string) {
     return s === 'COMPLETED' || s === 'FAILED' || s === 'CANCELLED'
 }
 
+/** 继续 GO+KEGG 后主任务轮询往往已停，需重启轮询并拉取 result/ 新文件，否则结果弹窗一直 Running */
+function onEnrichmentFollowupStarted(jobId: string) {
+    void loadAnalysisResultFiles(jobId)
+    pollTaskStatus(jobId)
+}
+
 async function refreshUnifiedJobDetail(id: string) {
     try {
         unifiedJob.value = await jobsApi.getJobDetail(id)
+        const st = String(unifiedJob.value?.status || '').toLowerCase()
+        // GO/KEGG 富集阶段任务多为 Processing，磁盘上 result/ 会持续新增文件；必须同步刷新列表，
+        // 否则 AnalysisResultPanel 的 props.resultFiles 不更新，富集 UI 会一直停在 Running。
+        if (st === 'completed' || st === 'processing' || st === 'submitted') {
+            await loadAnalysisResultFiles(id)
+        }
     } catch (error) {
         console.warn('获取任务详情失败:', error)
     }
@@ -1197,39 +1383,7 @@ async function refreshUnifiedJobDetail(id: string) {
 
 async function refreshUnifiedJobDetailIfTerminal(id: string, status: string) {
     if (!isTerminalJobStatus(status)) return
-    if (terminalDetailFetched.value) return
-    terminalDetailFetched.value = true
     await refreshUnifiedJobDetail(id)
-}
-
-async function ensureDownloadReady(id: string) {
-    downloadReady.value = false
-    preparedDownloadUrl.value = null
-
-    const maxAttempts = 6
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
-    for (let i = 0; i < maxAttempts; i++) {
-        try {
-            const url = await jobsApi.getDownloadUrl(id)
-            preparedDownloadUrl.value = url
-            downloadReady.value = true
-            return
-        } catch (error: any) {
-            const detail: string = error?.response?.data?.detail || ''
-            // 任务未完成 / 结果文件不存在时可以重试，其它错误直接放弃重试
-            const canRetry = /任务尚未完成|结果文件不存在/.test(detail) || !detail
-            if (!canRetry && i === 0) {
-                console.warn('准备下载链接失败，将不再自动重试:', error)
-                break
-            }
-            if (i === maxAttempts - 1) {
-                console.warn('多次重试后仍未准备好下载链接:', error)
-                break
-            }
-            await delay(2000)
-        }
-    }
 }
 
 async function handleDownloadFromPanel() {
@@ -1239,15 +1393,8 @@ async function handleDownloadFromPanel() {
         return
     }
     try {
-        if (!downloadReady.value || !preparedDownloadUrl.value) {
-            ElMessage.info('Result file is still being prepared, please wait a moment…')
-            await ensureDownloadReady(id)
-        }
-        if (!downloadReady.value || !preparedDownloadUrl.value) {
-            ElMessage.error('Result file is not ready yet, please try again later')
-            return
-        }
-        window.open(preparedDownloadUrl.value, '_blank')
+        const downloadUrl = await jobsApi.getDownloadUrl(id)
+        window.open(downloadUrl, '_blank')
     } catch (error: any) {
         console.error('获取下载链接失败:', error)
         ElMessage.error('Failed to get download URL: ' + (error?.response?.data?.detail || error?.message || 'Unknown error'))
@@ -1278,14 +1425,22 @@ const setupWebSocket = async () => {
                 if (message.error_message) {
                     currentJob.value.errorMessage = message.error_message
                 }
-                
+
+                // 主任务完成后轮询已停；继续 GO/KEGG 会再次进入 Processing，需重启轮询并刷新 result 文件列表
+                if (message.status === 'Processing' || message.status === 'Submitted') {
+                    scheduleLoadAnalysisResultFiles(message.job_id)
+                    if (!pollingInterval) {
+                        pollTaskStatus(currentJob.value.id)
+                    }
+                }
+
                 // 更新状态文本
                 currentStatus.value = message.status
                 statusText.value = message.current_step || `Status: ${message.status}`
                 
                 // 处理完成或失败状态（匹配后端新状态枚举值）
                 if (message.status === 'Completed') {
-                    ElMessage.success('Training finished')
+                    ElMessage.success(message.message || 'Analyze and train finished')
                     stopPolling() // 停止轮询
                     refreshUnifiedJobDetailIfTerminal(currentJob.value.id, message.status)
                 } else if (message.status === 'Failed') {
@@ -1320,6 +1475,10 @@ onMounted(async () => {
 // 组件卸载时清理
 onUnmounted(() => {
     stopPolling()
+    if (resultFilesRefreshDebounce) {
+        clearTimeout(resultFilesRefreshDebounce)
+        resultFilesRefreshDebounce = null
+    }
     if (wsService) {
         wsService.disconnect()
         wsService = null

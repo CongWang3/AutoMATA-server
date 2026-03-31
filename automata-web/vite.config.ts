@@ -8,57 +8,6 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [
     vue(),
-    // #region systematic-debugging instrumentation
-    {
-      name: 'debug-systematic-debugging-requests',
-      configureServer(server) {
-        server.middlewares.use((req, _res, next) => {
-          try {
-            const urlStr = req.url || ''
-            const isTarget = urlStr.startsWith('/systematic-debugging')
-            if (isTarget) {
-              // 只记录必要字段；token 可能包含敏感信息，做红action
-              const redactedUrl = urlStr.replace(/([?&]token=)[^&]*/g, '$1REDACTED')
-              let uid = ''
-              let t = ''
-              const queryPart = urlStr.split('?')[1] || ''
-              const params = new URLSearchParams(queryPart)
-              uid = params.get('uid') || ''
-              t = params.get('t') || ''
-
-              //region agent log
-              fetch('http://localhost:7618/ingest/6cda10c1-514a-4099-b96b-d25dcd87149d', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Debug-Session-Id': 'd45b01',
-                },
-                body: JSON.stringify({
-                  sessionId: 'd45b01',
-                  runId: 'pre-fix',
-                  hypothesisId: 'H1_vite_receives_systematic_debugging',
-                  location: 'vite.config.ts:middlewares/systematic-debugging',
-                  message: 'Vite received systematic-debugging request',
-                  data: {
-                    path: '/systematic-debugging*',
-                    uid,
-                    t,
-                    hasToken: queryPart.includes('token='),
-                    redactedUrl,
-                  },
-                  timestamp: Date.now(),
-                }),
-              }).catch(() => {})
-              //endregion
-            }
-          } catch {
-            // Never block dev server for debug logging.
-          }
-          next()
-        })
-      },
-    },
-    // #endregion
     Components({
       resolvers: [ElementPlusResolver()],
       dirs: ['src/components'],

@@ -3,8 +3,8 @@
     <!-- 等待 / 分析中 -->
     <div v-if="phase === 'waiting'" class="phase waiting">
       <div class="banner">
-        <h2 class="banner-title">Data analysis task</h2>
-        <p class="hint">Analysis is in progress, please wait</p>
+        <h2 class="banner-title">{{ waitingBannerTitle }}</h2>
+        <p class="hint">{{ waitingHint }}</p>
         <!-- <p class="job-line">JobID：{{ jobId }}</p> -->
       </div>
       <table class="info-table">
@@ -25,7 +25,7 @@
             <td class="label-cell">Running</td>
             <td>
               <img
-                v-if="statusUpper === 'PROCESSING'"
+                v-if="showWaitingProgressGif"
                 src="/images/progress_bar_new.gif"
                 alt=""
                 class="progress-gif"
@@ -56,6 +56,14 @@
             <td class="label-cell">{{ row.label }}</td>
             <td>{{ row.value }}</td>
           </tr>
+          <tr v-if="showPackageDownload" class="stripe">
+            <td class="label-cell">Full result package</td>
+            <td>
+              <el-button type="primary" size="default" @click="handleDownloadPackage">
+                Download
+              </el-button>
+            </td>
+          </tr>
           <!-- Comprehensive: Volcano/Cluster 显示在表格内（左图右下载），且 Cluster 必须是倒数第一行 -->
           <tr v-if="isComprehensiveResult">
             <td class="label-cell">
@@ -68,7 +76,7 @@
                   alt="Volcano Plot"
                   class="preview-img"
                 >
-                <span v-else class="preview-placeholder">图片生成后可预览</span>
+                <span v-else class="preview-placeholder">Preview available after the image is generated</span>
               </div>
             </td>
             <td>
@@ -105,7 +113,7 @@
                   alt="Cluster Heatmap"
                   class="preview-img"
                 >
-                <span v-else class="preview-placeholder">图片生成后可预览</span>
+                <span v-else class="preview-placeholder">Preview available after the image is generated</span>
               </div>
             </td>
             <td>
@@ -142,7 +150,7 @@
                   alt="Result"
                   class="preview-img"
                 >
-                <span v-else class="preview-placeholder">图片生成后可预览</span>
+                <span v-else class="preview-placeholder">Preview available after the image is generated</span>
               </div>
             </td>
             <td>
@@ -216,7 +224,7 @@
           </div>
         </div>
 
-        <div class="go-txt-outside">
+        <div v-if="showContinueEnrichment" class="go-txt-outside">
           <div class="go-txt-title">Continue GO &amp; KEGG Enrichment</div>
 
           <div class="continue-enrich-form">
@@ -395,7 +403,7 @@
                       alt="GO Enrichment"
                       class="preview-img"
                     >
-                    <span v-else class="preview-placeholder">图片生成后可预览</span>
+                    <span v-else class="preview-placeholder">Preview available after the image is generated</span>
                   </div>
                   <el-dropdown trigger="click" @command="(ext: string) => onDownloadEnrichmentFigure('go', ext)">
                     <el-button type="primary" size="default">Download GO Enrichment</el-button>
@@ -424,7 +432,7 @@
                       alt="KEGG Enrichment"
                       class="preview-img"
                     >
-                    <span v-else class="preview-placeholder">图片生成后可预览</span>
+                    <span v-else class="preview-placeholder">Preview available after the image is generated</span>
                   </div>
                   <el-dropdown trigger="click" @command="(ext: string) => onDownloadEnrichmentFigure('kegg', ext)">
                     <el-button type="primary" size="default">Download KEGG Enrichment</el-button>
@@ -448,7 +456,7 @@
         </div>
       </div>
 
-      <div v-if="goTxtFile" class="go-txt-outside">
+      <div v-if="showContinueEnrichment && goTxtFile" class="go-txt-outside">
         <div class="go-txt-title">GO Enrichment Result</div>
 
         <div class="go-txt-actions">
@@ -502,7 +510,7 @@
         </div>
       </div>
 
-      <div v-if="keggTxtFile" class="go-txt-outside">
+      <div v-if="showContinueEnrichment && keggTxtFile" class="go-txt-outside">
         <div class="go-txt-title">KEGG Enrichment Result</div>
 
         <div class="go-txt-actions">
@@ -574,8 +582,8 @@
             <td>{{ row.value }}</td>
           </tr>
           <tr class="stripe">
-            <td class="label-cell">Data Process Result</td>
-            <td class="error-cell">{{ errorMessage || '未知错误' }}</td>
+            <td class="label-cell">{{ resultFailureLabel }}</td>
+            <td class="error-cell">{{ errorMessage || 'Unknown error' }}</td>
           </tr>
         </tbody>
       </table>
@@ -600,25 +608,70 @@ export interface AnalysisParamRow {
   value: string
 }
 
-const props = defineProps<{
-  jobId: string
-  status: string
-  progress: number
-  analysisTypeLabel: string
-  paramRows: AnalysisParamRow[]
-  resultFiles: AnalysisResultFile[]
-  errorMessage?: string
+const emit = defineEmits<{
+  /** 分析并训练等场景下用户提交「继续 GO+KEGG」后通知父组件重启轮询/刷新结果列表 */
+  enrichmentFollowupStarted: [jobId: string]
 }>()
 
-const statusUpper = computed(() => String(props.status || '').toUpperCase())
-const tablePageSize = 30
+const props = withDefaults(
+  defineProps<{
+    jobId: string
+    status: string
+    progress: number
+    analysisTypeLabel: string
+    paramRows: AnalysisParamRow[]
+    resultFiles: AnalysisResultFile[]
+    errorMessage?: string
+    /** 综合分析完成后是否展示「继续 GO/KEGG」与相关 txt（分析并训练等场景可关闭） */
+    showContinueEnrichment?: boolean
+    /** 是否展示整包 zip 下载行（如 model_result.zip） */
+    showPackageDownload?: boolean
+    onDownloadPackage?: () => void | Promise<void>
+    resultFailureLabel?: string
+    /** 等待阶段顶部标题 */
+    waitingBannerTitle?: string
+    /** 等待阶段说明文案 */
+    waitingHint?: string
+  }>(),
+  {
+    showContinueEnrichment: true,
+    showPackageDownload: false,
+    resultFailureLabel: 'Data Process Result',
+    waitingBannerTitle: 'Data analysis task',
+    waitingHint: 'Analysis is in progress, please wait',
+  }
+)
 
-const phase = computed<'waiting' | 'completed' | 'failed'>(() => {
-  const s = statusUpper.value
-  if (s === 'FAILED') return 'failed'
-  if (s === 'COMPLETED') return 'completed'
-  return 'waiting'
-})
+async function handleDownloadPackage() {
+  await props.onDownloadPackage?.()
+}
+
+const statusUpper = computed(() => String(props.status || '').toUpperCase())
+
+/**
+ * 是否曾为当前 job 收到过 Completed。
+ * 首次 Processing 时 result/ 可能已有 volcano 等中间产物，若仍用「有综合结果文件就当 completed」会吃掉等待页；
+ * 仅在「主流程已跑完过一次」后的再次 Processing（如 GO+KEGG）才在 Processing 下展示结果区。
+ */
+const sawCompletedForJob = ref(false)
+watch(
+  () => [props.jobId, statusUpper.value] as const,
+  ([jobId, st], prev) => {
+    if (!jobId) {
+      sawCompletedForJob.value = false
+      return
+    }
+    const prevJobId = prev?.[0]
+    if (prevJobId !== jobId) {
+      sawCompletedForJob.value = String(st).toUpperCase() === 'COMPLETED'
+      return
+    }
+    if (String(st).toUpperCase() === 'COMPLETED') sawCompletedForJob.value = true
+  },
+  { immediate: true }
+)
+
+const tablePageSize = 30
 
 const displayAnalysisTypeLabel = computed(() => {
   if (isComprehensiveResult.value && enrichState.value === 'running') {
@@ -657,20 +710,42 @@ const pngFile = computed(() => {
 const isComprehensiveResult = computed(() => {
   const files = props.resultFiles || []
   const names = files.map((f) => f.filename.toLowerCase())
-  return names.includes('select_all.txt') || names.some((n) => n.startsWith('volcano.') || n.startsWith('df_cluster_heatmap.'))
+  // return names.includes('select_all.txt') || names.some((n) => n.startsWith('volcano.') || n.startsWith('df_cluster_heatmap.'))
+  // 否则火山图结果弹窗也会出现GO+KEGG选项。
+  return names.includes('select_all.txt') && names.some((n) => n.startsWith('volcano.') || n.startsWith('df_cluster_heatmap.'))
 })
 
+const phase = computed<'waiting' | 'completed' | 'failed'>(() => {
+  const s = statusUpper.value
+  if (s === 'FAILED') return 'failed'
+  if (s === 'COMPLETED') return 'completed'
+  // 仅「本 job 曾 Completed」后的 Processing（富集等）保留结果区；首次跑 pipeline 中间产物不提前结束等待页
+  if (s === 'PROCESSING' && isComprehensiveResult.value && sawCompletedForJob.value) return 'completed'
+  return 'waiting'
+})
+
+/** 已提交 / 排队 / 执行中均显示进度 GIF（与 PHP 等待页一致） */
+const showWaitingProgressGif = computed(() => {
+  if (phase.value !== 'waiting') return false
+  const s = statusUpper.value
+  if (s === 'FAILED' || s === 'COMPLETED' || s === 'CANCELLED') return false
+  return (
+    s === 'PROCESSING' ||
+    s === 'SUBMITTED' ||
+    s === 'RUNNING' ||
+    s === 'PENDING'
+  )
+})
+
+// 预览 URL 勿在 computed 里拼 Date.now()：父组件轮询会频繁改 resultFiles，导致 src 每秒变化、图片反复加载闪烁
 const previewUrl = computed(() => {
   if (!props.jobId || phase.value !== 'completed') return ''
   if (!pngFile.value) return ''
 
   const url = (pngFile.value as any).url as string | undefined
-  if (url) {
-    const sep = url.includes('?') ? '&' : '?'
-    return `${url}${sep}t=${Date.now()}`
-  }
+  if (url) return url.split('?')[0]
 
-  return `${AnalysisAPI.getResultFileUrl(props.jobId, pngFile.value.filename)}?t=${Date.now()}`
+  return AnalysisAPI.getResultFileUrl(props.jobId, pngFile.value.filename)
 })
 
 const downloadFormats = [
@@ -712,18 +787,39 @@ function findComprehensiveFigure(base: 'volcano' | 'cluster', ext: string): Anal
   return files.find((f) => f.filename.toLowerCase() === `${prefix}${normalizedExt}`) || null
 }
 
+/** 预览用：DESeq2/limma 等可能只产出 svg，分析并训练流水线常与 PHP 版（多格式）不一致，需按实际文件回退 */
+const COMPREHENSIVE_FIGURE_PREVIEW_EXT_ORDER = [
+  'png',
+  'svg',
+  'jpg',
+  'jpeg',
+  'webp',
+  'gif',
+  'bmp',
+  'tif',
+  'tiff',
+] as const
+
+function findComprehensiveFigureForPreview(base: 'volcano' | 'cluster'): AnalysisResultFile | null {
+  for (const ext of COMPREHENSIVE_FIGURE_PREVIEW_EXT_ORDER) {
+    const hit = findComprehensiveFigure(base, ext)
+    if (hit) return hit
+  }
+  return null
+}
+
 const volcanoPreviewUrl = computed(() => {
   if (!props.jobId || phase.value !== 'completed') return ''
-  const f = findComprehensiveFigure('volcano', 'png')
+  const f = findComprehensiveFigureForPreview('volcano')
   if (!f) return ''
-  return `${AnalysisAPI.getResultFileUrl(props.jobId, f.filename)}?t=${Date.now()}`
+  return AnalysisAPI.getResultFileUrl(props.jobId, f.filename)
 })
 
 const clusterPreviewUrl = computed(() => {
   if (!props.jobId || phase.value !== 'completed') return ''
-  const f = findComprehensiveFigure('cluster', 'png')
+  const f = findComprehensiveFigureForPreview('cluster')
   if (!f) return ''
-  return `${AnalysisAPI.getResultFileUrl(props.jobId, f.filename)}?t=${Date.now()}`
+  return AnalysisAPI.getResultFileUrl(props.jobId, f.filename)
 })
 
 function hasComprehensiveFigure(base: 'volcano' | 'cluster', ext: string): boolean {
@@ -764,8 +860,7 @@ async function loadComprehensiveTxt() {
   comprehensiveTxtLoading.value = true
   try {
     const url = AnalysisAPI.getResultFileUrl(props.jobId, currentComprehensiveTxtFile.value.filename)
-    const sep = url.includes('?') ? '&' : '?'
-    const text = await fetch(`${url}${sep}t=${Date.now()}`).then((r) => r.text())
+    const text = await fetch(url).then((r) => r.text())
     const parsed = parseTsvQuoted(text)
     comprehensiveTxtColumns.value = parsed.columns
     comprehensiveTxtRows.value = parsed.rows
@@ -858,6 +953,7 @@ async function submitContinueEnrichment() {
   try {
     await AnalysisAPI.runComprehensiveEnrichment(props.jobId, payload)
     ElMessage.success('Submitted')
+    emit('enrichmentFollowupStarted', props.jobId)
   } catch (e: any) {
     enrichState.value = 'failed'
     ElMessage.error(e?.response?.data?.detail || 'Submit failed')
@@ -871,6 +967,58 @@ function findEnrichmentFigure(kind: 'go' | 'kegg', ext: string): AnalysisResultF
   const normalizedExt = ext.toLowerCase()
   const prefix = kind === 'go' ? 'go_enrichment.' : 'kegg_enrichment.'
   return files.find((f) => f.filename.toLowerCase() === `${prefix}${normalizedExt}`) || null
+}
+
+/** GO/KEGG 富集结果 txt（与下方 goTxtFile / keggTxtFile 判定一致） */
+function hasGoEnrichmentTxt(): boolean {
+  const files = props.resultFiles || []
+  if (files.some((f) => f.filename === 'GO_enrichment_result.txt')) return true
+  return !!files.find(
+    (f) =>
+      f.format?.toLowerCase() === 'txt' && f.filename.toLowerCase().includes('go_enrichment_result')
+  )
+}
+
+function hasKeggEnrichmentTxt(): boolean {
+  const files = props.resultFiles || []
+  if (files.some((f) => f.filename === 'KEGG_enrichment_result.txt')) return true
+  return !!files.find(
+    (f) =>
+      f.format?.toLowerCase() === 'txt' && f.filename.toLowerCase().includes('kegg_enrichment_result')
+  )
+}
+
+/** 是否存在任意格式的富集图（不仅 png/pdf，R 可能只出 svg） */
+function hasEnrichmentFigureAny(kind: 'go' | 'kegg'): boolean {
+  const files = props.resultFiles || []
+  const prefix = kind === 'go' ? 'go_enrichment.' : 'kegg_enrichment.'
+  return files.some((f) => f.filename.toLowerCase().startsWith(prefix))
+}
+
+/** GO+KEGG 均已有可展示产物：两侧 txt 或两侧图（满足其一组合即可） */
+function enrichmentOutputsReady(): boolean {
+  const goOk = hasGoEnrichmentTxt() || hasEnrichmentFigureAny('go')
+  const keggOk = hasKeggEnrichmentTxt() || hasEnrichmentFigureAny('kegg')
+  return goOk && keggOk
+}
+
+const ENRICHMENT_FIGURE_PREVIEW_EXT_ORDER = [
+  'png',
+  'svg',
+  'pdf',
+  'jpg',
+  'jpeg',
+  'webp',
+  'tif',
+  'tiff',
+] as const
+
+function findEnrichmentFigureForPreview(kind: 'go' | 'kegg'): AnalysisResultFile | null {
+  for (const ext of ENRICHMENT_FIGURE_PREVIEW_EXT_ORDER) {
+    const hit = findEnrichmentFigure(kind, ext)
+    if (hit) return hit
+  }
+  return null
 }
 
 function hasEnrichmentFigure(kind: 'go' | 'kegg', ext: string): boolean {
@@ -887,16 +1035,16 @@ function onDownloadEnrichmentFigure(kind: 'go' | 'kegg', ext: string) {
 
 const goEnrichPreviewUrl = computed(() => {
   if (!props.jobId || phase.value !== 'completed') return ''
-  const f = findEnrichmentFigure('go', 'png')
+  const f = findEnrichmentFigureForPreview('go')
   if (!f) return ''
-  return `${AnalysisAPI.getResultFileUrl(props.jobId, f.filename)}?t=${Date.now()}`
+  return AnalysisAPI.getResultFileUrl(props.jobId, f.filename)
 })
 
 const keggEnrichPreviewUrl = computed(() => {
   if (!props.jobId || phase.value !== 'completed') return ''
-  const f = findEnrichmentFigure('kegg', 'png')
+  const f = findEnrichmentFigureForPreview('kegg')
   if (!f) return ''
-  return `${AnalysisAPI.getResultFileUrl(props.jobId, f.filename)}?t=${Date.now()}`
+  return AnalysisAPI.getResultFileUrl(props.jobId, f.filename)
 })
 
 watch(
@@ -909,37 +1057,40 @@ watch(
   { immediate: true }
 )
 
+// 勿用 watch(() => [...]) 包一层新数组：resultFiles 轮询刷新时引用常变，会误判为依赖变化
+const enrichRunningSyncKey = computed(
+  () =>
+    `${enrichState.value}\x1e${statusUpper.value}\x1e${(props.resultFiles || []).map((f) => f.filename).join('|')}`
+)
 watch(
-  () => [enrichState.value, statusUpper.value, (props.resultFiles || []).map((f) => f.filename).join('|')],
-  ([state, s]) => {
-    if (state !== 'running') return
-    if (String(s).toUpperCase() === 'FAILED') {
+  enrichRunningSyncKey,
+  () => {
+    if (enrichState.value !== 'running') return
+    const su = statusUpper.value
+    if (su === 'FAILED') {
       enrichState.value = 'failed'
       return
     }
-    // 完成判定：同时出现 GO + KEGG 图（任意格式）即可
-    const hasGo = !!findEnrichmentFigure('go', 'png') || !!findEnrichmentFigure('go', 'pdf')
-    const hasKegg = !!findEnrichmentFigure('kegg', 'png') || !!findEnrichmentFigure('kegg', 'pdf')
-    if (hasGo && hasKegg) {
+    if (su === 'COMPLETED' && enrichmentOutputsReady()) {
+      enrichState.value = 'completed'
+      return
+    }
+    if (enrichmentOutputsReady()) {
       enrichState.value = 'completed'
     }
   },
   { immediate: true }
 )
 
-// 若页面刷新导致 enrichState 回到 idle，但结果文件已存在，则推断为 completed
-watch(
-  () => [phase.value, (props.resultFiles || []).map((f) => f.filename).join('|')],
-  ([p]) => {
-    if (p !== 'completed') return
-    const hasGo = !!findEnrichmentFigure('go', 'png') || !!findEnrichmentFigure('go', 'pdf')
-    const hasKegg = !!findEnrichmentFigure('kegg', 'png') || !!findEnrichmentFigure('kegg', 'pdf')
-    if (hasGo && hasKegg && enrichState.value === 'idle') {
-      enrichState.value = 'completed'
-    }
-  },
-  { immediate: true }
+const phaseResultNamesKey = computed(
+  () => `${phase.value}\x1e${(props.resultFiles || []).map((f) => f.filename).join('|')}`
 )
+watch(phaseResultNamesKey, () => {
+  if (phase.value !== 'completed') return
+  if (enrichmentOutputsReady() && (enrichState.value === 'idle' || enrichState.value === 'running')) {
+    enrichState.value = 'completed'
+  }
+}, { immediate: true })
 
 // ==================== GO enrichment txt ====================
 const goTxtFile = computed<AnalysisResultFile | null>(() => {
@@ -1007,8 +1158,8 @@ async function loadGoTxt() {
     const url = (goTxtFile.value as any).url as string | undefined
     if (!url) return
 
-    const sep = url.includes('?') ? '&' : '?'
-    const text = await fetch(`${url}${sep}t=${Date.now()}`).then((r) => r.text())
+    const text = await fetch(url).then((r) => r.text())
+
 
     const parsed = parseTsvQuoted(text)
     goTxtColumns.value = parsed.columns
@@ -1028,14 +1179,13 @@ function downloadGoTxt() {
   window.open(downloadUrl, '_blank')
 }
 
-// 弹窗打开后自动加载（如果你希望更轻量，也可以删除这段）
-watch(
-  () => [phase.value, goTxtFile.value?.filename],
-  ([p, filename]) => {
-    if (p === 'completed' && filename) void loadGoTxt()
-  },
-  { immediate: true }
+// 勿 watch `() => [phase, filename]`：每次新数组引用会在 resultFiles 轮询时反复触发 load、表格闪烁
+const goTxtLoadKey = computed(() =>
+  phase.value === 'completed' && goTxtFile.value?.filename ? goTxtFile.value.filename : ''
 )
+watch(goTxtLoadKey, (key) => {
+  if (key) void loadGoTxt()
+}, { immediate: true })
 
 // ==================== KEGG enrichment txt ====================
 const keggTxtFile = computed<AnalysisResultFile | null>(() => {
@@ -1064,8 +1214,8 @@ async function loadKeggTxt() {
     const url = (keggTxtFile.value as any).url as string | undefined
     if (!url) return
 
-    const sep = url.includes('?') ? '&' : '?'
-    const text = await fetch(`${url}${sep}t=${Date.now()}`).then((r) => r.text())
+    const text = await fetch(url).then((r) => r.text())
+
 
     const parsed = parseTsvQuoted(text)
     keggTxtColumns.value = parsed.columns
@@ -1085,23 +1235,22 @@ function downloadKeggTxt() {
   window.open(downloadUrl, '_blank')
 }
 
-watch(
-  () => [phase.value, keggTxtFile.value?.filename],
-  ([p, filename]) => {
-    if (p === 'completed' && filename) void loadKeggTxt()
-  },
-  { immediate: true }
+const keggTxtLoadKey = computed(() =>
+  phase.value === 'completed' && keggTxtFile.value?.filename ? keggTxtFile.value.filename : ''
 )
+watch(keggTxtLoadKey, (key) => {
+  if (key) void loadKeggTxt()
+}, { immediate: true })
 
-watch(
-  () => [phase.value, currentComprehensiveTxtFile.value?.filename, comprehensiveSigType.value],
-  ([p, filename]) => {
-    if (p === 'completed' && isComprehensiveResult.value && filename) {
-      void loadComprehensiveTxt()
-    }
-  },
-  { immediate: true }
-)
+const comprehensiveTxtLoadKey = computed(() => {
+  if (phase.value !== 'completed' || !isComprehensiveResult.value) return ''
+  const fn = currentComprehensiveTxtFile.value?.filename
+  if (!fn) return ''
+  return `${fn}\x1e${comprehensiveSigType.value}`
+})
+watch(comprehensiveTxtLoadKey, (key) => {
+  if (key) void loadComprehensiveTxt()
+}, { immediate: true })
 </script>
 
 <style scoped>

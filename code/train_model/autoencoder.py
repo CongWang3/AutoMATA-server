@@ -179,7 +179,7 @@ def val_classifier(classifier, dataloader):
     return val_loss, val_acc, val_precision, val_recall, val_f1
 
 
-def extract_features(autoencoder, dataloader, device):
+def extract_features(autoencoder, dataloader):
     encoder = autoencoder.encoder
     features = []
     labels = []
@@ -225,8 +225,8 @@ def set_random_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 # test model
-def test(dataloader, autoencoder, classifier, device):
-    loader = extract_features(autoencoder, dataloader, device) 
+def test(dataloader, autoencoder, classifier):
+    loader = extract_features(autoencoder, dataloader) 
     true_label_list, pred_label_list= [], []
 
     classifier.eval()

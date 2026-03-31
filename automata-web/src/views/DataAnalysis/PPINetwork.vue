@@ -1,7 +1,7 @@
 <template>
   <AnalysisForm
     title="PPI Network Analysis"
-    subtitle="蛋白质相互作用网络"
+    subtitle="PPI Network Analysis"
     :fields="analysisFields"
     :on-submit="handleSubmit"
     example-data-url="/example/draw_example/ppi_example.txt"
@@ -47,7 +47,7 @@ const analysisFields: AnalysisField[] = [
   },
   {
     type: 'number',
-    name: 'thres',
+    name: 'threshold',
     label: 'Score threshold',
     defaultValue: 400,
     min: 0,
@@ -58,7 +58,7 @@ const analysisFields: AnalysisField[] = [
   },
   {
     type: 'number',
-    name: 'show',
+    name: 'show_nodes',
     label: 'Min nodes',
     defaultValue: 5,
     min: 1,
@@ -69,7 +69,7 @@ const analysisFields: AnalysisField[] = [
   },
   {
     type: 'radio',
-    name: 'type',
+    name: 'plot_type',
     label: 'Plot type',
     defaultValue: 'linear',
     options: [

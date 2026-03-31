@@ -136,30 +136,11 @@ searchLengthSymbolFromGeneID_batch <- function(geneIDs, sqlconnection, table){
   }, error = function(e) {
     warning("Batch query failed: ", e$message)  # 批量出错
 
-    exit(0)
+    # exit(0)
   })
 }
 
 
-# 一审 注释searchLengthSymbolFromEnsembl函数，新增searchLengthSymbolFromEnsembl_batch函数
-# searchLengthSymbolFromEnsembl <- function(EnsemblIDs, sqlconnection, table){
-  
-#   lengths <- c()
-#   symbolss <- c()
-#   for (ID in EnsemblIDs){
-#     # sqlSentence = "select Length from homo_sapiens where GeneID=653635"
-#     sqlSentence = paste("select Length,Symbol from ", table, " where Ensembl_ID='", ID, "';",sep = "")
-#     result = dbSendQuery(sqlconnection, sqlSentence)
-#     data = fetch(result, n = -1)
-#     lengths <- append(lengths, data$Length)
-#     symbolss <- append(symbolss, data$Symbol)
-#     # 关闭查询结果
-#     dbClearResult(dbListResults(mysqlconnection)[[1]])
-#   }
-  
-#   out <- list(lengths=lengths, symbolss=symbolss)
-#   return (out)
-# }
 
 searchLengthSymbolFromEnsembl_batch <- function(EnsemblIDs, sqlconnection, table){
   
@@ -235,7 +216,7 @@ searchLengthSymbolFromEnsembl_batch <- function(EnsemblIDs, sqlconnection, table
   }, error = function(e) {
     warning("Batch query failed: ", e$message)
     
-    exit(0)
+    # exit(0)
   })
 }
 
@@ -397,7 +378,15 @@ searchLengthFromSymbol_batch <- function(symbolNames, sqlconnection, table){
     
   }, error = function(e) {
     warning("Symbol field batch query error: ", e$message)
-    exit(0)
+    # 关键：异常情况下也必须返回结构化 list，避免上层 out$xxx 触发 `$ operator is invalid for atomic vectors`
+    out <- list(
+      lengths = rep(NA_real_, length(symbolNames)),
+      symbolss = rep(NA_character_, length(symbolNames)),
+      missing_symbols = symbolNames,
+      found_symbols = character(0),
+      error = e$message
+    )
+    return(out)
 
   })
 }
@@ -469,7 +458,8 @@ if (opt$type != "none"){
 }else{
   opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", "origin.txt", sep="")
   # 提取文件表达矩阵
-  file_matrix <- read.table(opt$input, header = T, sep = "\t", check.names=F)
+  # 某些输入包含未成对的引号会触发 scan 警告并导致列错位；这里禁用引号解析并允许不齐列填充
+  file_matrix <- read.table(opt$input, header = T, sep = "\t", check.names=F, quote = "", comment.char = "", fill = TRUE)
   IDs <- file_matrix[,1]  # 只取第一列数据：GeneID
 
   # 根据不同ID类型查询基因长度和Symbol
@@ -482,20 +472,52 @@ if (opt$type != "none"){
     out <- searchLengthSymbolFromEnsembl_batch(IDs, mysqlconnection, table = opt$organism)
 
   }else if (opt$gene_nomenclature == "Symbol"){
-    out <- searchLengthFromSymbol_batch(IDs, mysqlconnection, table = opt$organism)
+    # 静默查询过程中的 message/warning（否则会被后端捕获并在前端显示大量红字）
+    out <- suppressWarnings(suppressMessages(searchLengthFromSymbol_batch(IDs, mysqlconnection, table = opt$organism)))
 
   }else{
     print(paste("Only gene nomenclatures you can enter are GeneID, EnsemblID or Symbol"))
-    exit(0)
+    # exit(0)
   }
 
-  lengths <- out$lengths
-  symbolss <- out$symbolss
+  # Symbol 分支：数据库找不到的 symbol 行直接丢弃；用找到的 found_symbols + lengths 继续做 TPM 与 log 转换
+  # 同时把 missing_symbols 写入 Jobs/<jobID>/missing_symbols.txt 便于追溯
+  if (opt$gene_nomenclature == "Symbol") {
+    jobs_dir <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, sep = "")
+    missing_path <- paste(jobs_dir, "/missing_symbols.txt", sep = "")
+    if (!is.null(out$missing_symbols) && length(out$missing_symbols) > 0) {
+      writeLines(as.character(out$missing_symbols), con = missing_path, sep = "\n")
+    } else {
+      # 若全部命中，仍写一个空文件避免前端/运维误判
+      writeLines(character(0), con = missing_path)
+    }
+
+    # out$lengths / out$symbolss 已按输入 symbolNames 顺序对齐（未命中为 NA）
+    # 直接用 lengths 的有效性做过滤即可，保证 lengths 与表达矩阵行一一对应
+    if (is.null(out$lengths) || length(out$lengths) != nrow(file_matrix)) {
+      stop("Unexpected output from searchLengthFromSymbol_batch: lengths not aligned to input rows.", call. = FALSE)
+    }
+    lengths_vec <- suppressWarnings(as.numeric(out$lengths))
+    keep_mask <- !is.na(lengths_vec) & lengths_vec > 0
+    if (!any(keep_mask)) {
+      stop("No symbols were found in the database (or all found lengths are invalid).", call. = FALSE)
+    }
+
+    file_matrix <- file_matrix[keep_mask, , drop = FALSE]
+    IDs <- file_matrix[, 1]
+    lengths <- lengths_vec[keep_mask]
+
+    # Symbol 分支下，第二列 Symbol 与第一列一致（输入即 Symbol）
+    symbolss <- as.character(IDs)
+  } else {
+    lengths <- out$lengths
+    symbolss <- out$symbolss
+  }
 
 
 
   # 根据不同数据类型(FPKM, ReadCounts, RPM, RPKM, TPM等)调用不同函数得出log2(TPM)
-  expression_data <- file_matrix[, -1]  # 忽略第一列数据：GeneID
+  expression_data <- file_matrix[, -1]  # 忽略第一列数据：ID
   if (opt$data_type == "FPKM"){
     tpms <- apply(expression_data, 2, fpkmToTpm)
   }else if (opt$data_type == "ReadCounts"){
@@ -514,7 +536,7 @@ if (opt$type != "none"){
 
   }else{
     print(paste("Only data types you can enter are FPKM, RPM, RPKM, ReadCounts or TPM"))
-    exit(0)
+    # exit(0)
   }
 
   # 拼接ID，Symbol和log2(TPM), 保存为文件

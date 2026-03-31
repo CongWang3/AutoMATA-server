@@ -56,15 +56,15 @@ def test(dataloader, model):
             pred = model(X)
 
             # 一审 计算各类概率并提取最大概率与其对应标签
-            if hasattr(model, 'loss_function') and model.loss_function == 'nllloss':
+            if hasattr(model, 'loss_function') and getattr(model, 'loss_function', '').lower() == 'nllloss':
                 probs = pred.exp()
             else:
                 probs = F.softmax(pred, dim=1)
             max_prob, max_idx = probs.max(dim=1)
 
             true_label_list.append(y.cpu().detach().numpy())
-            pred_label_list.append(pred.argmax(dim=1).cpu().detach().numpy())
-            probability_list.append(pred[:,1].cpu().detach().numpy())
+            pred_label_list.append(max_idx.cpu().detach().numpy())
+            probability_list.append(max_prob.cpu().detach().numpy())
 
     y_true = np.concatenate(true_label_list)
     y_pred = np.concatenate(pred_label_list)
@@ -104,15 +104,16 @@ def test_autoencoder(dataloader, autoencoder, classifier):
             features, labels = data[0].to(device), data[1].to(device)
             outputs = classifier(features)
             # 一审 计算各类概率并提取最大概率与其对应标签
-            if hasattr(classifier, 'loss_function') and model.loss_function == 'nllloss':
+            # classifier 若使用 NLLLoss，通常前向输出为 log-probabilities（log_softmax），此时用 exp() 还原概率
+            if hasattr(classifier, 'loss_function') and getattr(classifier, 'loss_function', '').lower() == 'nllloss':
                 probs = outputs.exp()
             else:
                 probs = F.softmax(outputs, dim=1)
             max_prob, max_idx = probs.max(dim=1)
 
             true_label_list.append(labels.cpu().detach().numpy())
-            pred_label_list.append(outputs.argmax(dim=1).cpu().detach().numpy())
-            probability_list.append(outputs[:,1].cpu().detach().numpy())
+            pred_label_list.append(max_idx.cpu().detach().numpy())
+            probability_list.append(max_prob.cpu().detach().numpy())
 
     y_true = np.concatenate(true_label_list)
     y_pred = np.concatenate(pred_label_list)
@@ -156,10 +157,13 @@ class Autoencoder(nn.Module):
         return decoded, encoded
 
 
-class Classifier(nn.Module):
-    def __init__(self, hidden_size_3=16, cls_hidden_size=8, output_size=2, lr=0.001, loss_function="crossentropy", optimizer_function="adam"):
-        self.output_size = output_size 
+
+class Classifier(nn.Module):  # 16, 8, 2
+    def __init__(self, hidden_size_3=16, cls_hidden_size=8, output_size=2, lr=0.001, loss_function="crossentropy", optimizer_function="adam", r_method=None, r_weight=0.0):
+        self.output_size = output_size  # Record the output dimension of the flatten layer
         super(Classifier, self).__init__()
+        self.r_method = r_method
+        self.r_weight = r_weight
 
         self.fc = nn.Sequential(
             nn.Linear(hidden_size_3, cls_hidden_size),
@@ -172,19 +176,12 @@ class Classifier(nn.Module):
         if loss_function == "crossentropy":
             self.criterion = nn.CrossEntropyLoss()
         elif loss_function == "focalloss":
-            if output_size == 2:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='binary')
-            else:
-                self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
+            self.criterion = FocalLoss(gamma=2, alpha=0.25, task_type='multi-class', num_classes=output_size)
         elif loss_function == "nllloss":
             self.criterion = nn.NLLLoss()
 
-        if optimizer_function == "adam":
-            self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif optimizer_function == "sgd":
-            self.optimizer = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0)  # 应改为0.5 SGD对这些敏感
-        elif optimizer_function == "rmsprop":
-            self.optimizer = optim.RMSprop(self.parameters(), lr=self.learning_rate)
+        # Create optimizer with regularization support
+        self.optimizer = create_optimizer_with_reg(self, optimizer_function, lr, r_method, r_weight)
 
     def forward(self, x):
         # 一审
@@ -192,10 +189,6 @@ class Classifier(nn.Module):
         if self.loss_function == "nllloss":
             return nn.functional.log_softmax(logits, dim=1)
         return logits
-        # if (self.output_size == 2):
-        #     act = nn.Softmax(dim=1).to(device)
-        #     x = act(x)
-        # return self.fc(x)
 
 
 class LSTMModel(nn.Module):

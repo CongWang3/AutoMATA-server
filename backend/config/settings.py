@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # 注意：模型应用需要上传模型权重（pth/pt/pkl），因此在该白名单中补齐。
     ALLOWED_FILE_TYPES: list = ["txt", "csv", "tsv", "xlsx", "xls", "pth", "pkl"]
     
+    # KEGG 富集：为 True 时 R 脚本 enrichKEGG(use_internal_data=TRUE)，使用 KEGG.db 本地注释，不访问 rest.kegg.jp（需安装 KEGG.db）
+    KEGG_USE_INTERNAL_DATA: bool = True
+
     # Redis 配置（Celery 使用）
     REDIS_URL: str = "redis://localhost:6379/0"
     

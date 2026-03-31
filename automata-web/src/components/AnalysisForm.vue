@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span class="title">{{ title }}</span>
-          <el-tag type="primary">{{ subtitle }}</el-tag>
+          <el-tag type="warning">{{ subtitle }}</el-tag>
         </div>
       </template>
       
@@ -32,12 +32,12 @@
             >
               <el-icon class="el-icon--upload"><upload-filled /></el-icon>
               <div class="el-upload__text">
-                将文件拖到此处，或<em>点击上传</em>
+                Drop file here or <em>click to upload</em>
               </div>
               <template #tip>
                 <div class="upload-tip-container">
                   <div class="tip-content">
-                    <span class="file-types">{{ fileTip || '仅支持 txt、csv、tsv 格式的文件' }}</span>
+                    <span class="file-types">{{ fileTip || 'Only support txt file with tab delimiter' }}</span>
                     <el-button 
                       v-if="exampleDataUrl" 
                       type="primary" 
@@ -45,7 +45,7 @@
                       @click="downloadExampleData"
                       class="example-btn"
                     >
-                      下载示例数据
+                      Download example
                     </el-button>
                   </div>
                   <div v-if="exampleNote" class="tip-notes">
@@ -80,13 +80,13 @@
             >
               <el-icon class="el-icon--upload"><upload-filled /></el-icon>
               <div class="el-upload__text">
-                将文件拖到此处，或<em>点击上传</em>
+                Drop file here or <em>click to upload</em>
               </div>
               <template #tip>
                 <div class="upload-tip-container">
                   <div class="tip-content">
                     <span class="file-types">
-                      {{ secondFileTip || fileTip || '仅支持 txt、csv、tsv 格式的文件' }}
+                      {{ secondFileTip || fileTip || 'Only support txt file with tab delimiter' }}
                     </span>
                     <el-button 
                       v-if="secondExampleUrl" 
@@ -95,7 +95,7 @@
                       @click="downloadSecondExampleData"
                       class="example-btn"
                     >
-                      下载示例数据
+                      Download example
                     </el-button>
                   </div>
                 </div>
@@ -105,11 +105,13 @@
         </el-form-item>
 
         <!-- 动态字段渲染 -->
+        <!-- 保持左侧字体对齐，居左的命令 在el-form-item 用这个label-position="left" -->
         <template v-for="(field, index) in visibleFields" :key="field.name">
           <el-form-item 
             :label="`${getFieldIndex(index)}. ${field.label}`" 
             :prop="field.name"
             :rules="getFieldRules(field)"
+            
           >
             <!-- Input 类型 -->
             <el-input
@@ -134,7 +136,7 @@
             <el-select
               v-else-if="field.type === 'select'"
               v-model="formValues[field.name]"
-              :placeholder="field.placeholder || '请选择'"
+              :placeholder="field.placeholder || 'Please select'"
               style="width: 100%"
             >
               <el-option
@@ -172,7 +174,7 @@
         <el-form-item label="Your Email" prop="email">
           <el-input 
             v-model="formValues.email" 
-            placeholder="请输入邮箱地址"
+            placeholder="Enter your email address"
             type="email"
           />
         </el-form-item>
@@ -186,9 +188,9 @@
             size="large"
             class="submit-btn"
           >
-            {{ submitting ? '处理中...' : '提交分析' }}
+            {{ submitting ? 'Submitting…' : 'Submit' }}
           </el-button>
-          <el-button @click="resetForm">重置</el-button>
+          <el-button @click="resetForm">Reset</el-button>
         </el-form-item>
 
         <!-- 示例图片展示 -->
@@ -220,11 +222,12 @@
         :param-rows="submittedAnalysisParams"
         :result-files="analysisResults"
         :error-message="analysisLastError"
+        @enrichmentFollowupStarted="onEnrichmentFollowupStarted"
       />
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="handleDialogClose">关闭并提交新任务</el-button>
+          <el-button @click="handleDialogClose">Close and submit a new task</el-button>
         </div>
       </template>
     </el-dialog>
@@ -363,7 +366,7 @@ const visibleFields = computed(() => {
 const formRules = computed<FormRules>(() => {
   const rules: FormRules = {
     file: [{ required: true, message: '', trigger: 'change' }],
-    email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }]
+    email: [{ type: 'email', message: 'Please enter a valid email address', trigger: 'blur' }]
   }
 
   // 双文件模式下验证第二个文件
@@ -472,13 +475,19 @@ const startStatusPolling = (jobId: string) => {
   }, 3000)
 }
 
+function onEnrichmentFollowupStarted(jobId: string) {
+  // 综合分析：主流程 Completed 后轮询会停；继续 GO/KEGG 后必须重启轮询并刷新 result_files 才能展示富集结果
+  void hydrateAnalysisResults(jobId)
+  startStatusPolling(jobId)
+}
+
 const getFieldRules = (field: AnalysisField) => {
   if (field.required === false) return []
   const trigger: 'blur' | 'change' =
     field.type === 'radio' || field.type === 'select' || field.type === 'number'
       ? 'change'
       : 'blur'
-  return [{ required: true, message: `请填写${field.label}`, trigger }]
+  return [{ required: true, message: `Please fill in ${field.label}`, trigger }]
 }
 
 // 主文件上传处理
@@ -496,7 +505,7 @@ const handleSecondFileChange = (uploadFile: UploadFile) => {
 }
 
 const handleExceed = () => {
-  ElMessage.warning('只能上传一个文件')
+  ElMessage.warning('Only one file is allowed')
 }
 
 const beforeUpload = (file: File): boolean => {
@@ -509,13 +518,13 @@ const beforeUpload = (file: File): boolean => {
   const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
 
   if (!hasValidExtension) {
-    ElMessage.error('不支持的文件类型，请上传指定后缀的文件！')
+    ElMessage.error('Unsupported file type. Please upload a file with an allowed extension.')
     return false
   }
   
   const maxSize = 10 * 1024 * 1024 // 10MB
   if (file.size > maxSize) {
-    ElMessage.error('文件大小不能超过10MB')
+    ElMessage.error('File size must not exceed 10 MB')
     return false
   }
   
@@ -533,13 +542,13 @@ const beforeSecondUpload = (file: File): boolean => {
   const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
 
   if (!hasValidExtension) {
-    ElMessage.error('不支持的文件类型，请上传指定后缀的文件！')
+    ElMessage.error('Unsupported file type. Please upload a file with an allowed extension.')
     return false
   }
 
   const maxSize = 50 * 1024 * 1024 // 10MB
   if (file.size > maxSize) {
-    ElMessage.error('文件大小不能超过50MB')
+    ElMessage.error('File size must not exceed 50 MB')
     return false
   }
 
@@ -549,7 +558,7 @@ const beforeSecondUpload = (file: File): boolean => {
 // 下载示例数据
 const downloadExampleData = () => {
   if (!props.exampleDataUrl) {
-    ElMessage.warning('暂无示例数据')
+    ElMessage.warning('No example data available')
     return
   }
   
@@ -563,7 +572,7 @@ const downloadExampleData = () => {
   link.click()
   document.body.removeChild(link)
   
-  ElMessage.success(`示例数据已开始下载: ${fileName}`)
+  ElMessage.success(`Example download started: ${fileName}`)
 
   // // 使用后端 API 下载示例数据
   // const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
@@ -602,7 +611,7 @@ const extractAnalysisType = (url: string): string | null => {
 // 下载第二个示例数据
 const downloadSecondExampleData = () => {
   if (!props.secondExampleUrl) {
-    ElMessage.warning('暂无示例数据')
+    ElMessage.warning('No example data available')
     return
   }
   
@@ -616,7 +625,7 @@ const downloadSecondExampleData = () => {
   link.click()
   document.body.removeChild(link)
   
-  ElMessage.success(`示例数据已开始下载: ${fileName}`)
+  ElMessage.success(`Example download started: ${fileName}`)
 }
 
 // WebSocket 连接
@@ -647,9 +656,9 @@ const connectWebSocket = async () => {
         if (taskStatus === 'COMPLETED' || taskStatus === 'Completed') {
           analysisLastError.value = ''
           void hydrateAnalysisResults(job_id)
-          ElMessage.success(`分析任务 ${job_id} 已完成！`)
+          ElMessage.success(`Analysis job ${job_id} completed.`)
         } else if (taskStatus === 'FAILED' || taskStatus === 'Failed') {
-          ElMessage.error(`分析任务 ${job_id} 失败: ${error_message || '未知错误'}`)
+          ElMessage.error(`Analysis job ${job_id} failed: ${error_message || 'Unknown error'}`)
         }
       }
     })
@@ -659,7 +668,7 @@ const connectWebSocket = async () => {
     
   } catch (error: any) {
     console.error('WebSocket 连接失败:', error)
-    ElMessage.error('任务监控连接失败: ' + (error.message || '未知错误'))
+    ElMessage.error('Task status connection failed: ' + (error.message || 'Unknown error'))
   }
 }
 
@@ -726,7 +735,7 @@ const submitForm = async () => {
     
   } catch (error: any) {
     console.error('提交失败:', error)
-    ElMessage.error(error.response?.data?.detail || '提交失败，请重试')
+    ElMessage.error(error.response?.data?.detail || 'Submission failed. Please try again.')
   } finally {
     submitting.value = false
   }

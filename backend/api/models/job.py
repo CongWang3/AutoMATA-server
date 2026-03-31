@@ -19,6 +19,7 @@ class JobType(str, enum.Enum):
     PVALUE_INTEGRATION = "pvalue_integration"
     MODEL_TRAIN = "model_train"
     DATA_ANALYSIS = "data_analysis"
+    ANALYSIS_TRAIN = "analysis_train"
     
     def __str__(self):
         return self.value
@@ -34,6 +35,7 @@ class JobType(str, enum.Enum):
             'pvalue_integration': 'P值整合分析',
             'model_train': '模型训练',
             'data_analysis': '数据分析',
+            'analysis_train': '分析并训练',
         }
         return names.get(self.value, self.value)
 
