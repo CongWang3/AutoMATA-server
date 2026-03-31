@@ -68,48 +68,27 @@
           <div class="footer-menu">
             <h5 class="text-uppercase fw-bold mb-4">Follow us</h5>
             <div class="social-links mt-4">
-              <ul class="d-flex list-unstyled gap-3">
-                <li class="social">
-                  <a href="https://www.facebook.com/home.php" target="_blank">
-                    <IconifyIcon 
-                      class="social-icon fs-4 me-2" 
-                      icon="ri:facebook-fill"
-                    />
+              <ul class="menu-list list-unstyled">
+                <li class="menu-item mb-2">
+                  <a 
+                    href="https://www.researchgate.net/profile/Fuyi-Li" 
+                    target="_blank" 
+                    class="footer-link"
+                  >
+                    Research Gate
                   </a>
                 </li>
-                <li class="social">
-                  <a href="https://x.com/i/flow/login" target="_blank">
-                    <IconifyIcon 
-                      class="social-icon fs-4 me-2" 
-                      icon="ri:twitter-fill"
-                    />
-                  </a>
-                </li>
-                <li class="social">
-                  <a href="https://www.pinterest.com/#top" target="_blank">
-                    <IconifyIcon 
-                      class="social-icon fs-4 me-2" 
-                      icon="ri:pinterest-fill"
-                    />
-                  </a>
-                </li>
-                <li class="social">
-                  <a href="https://www.instagram.com/" target="_blank">
-                    <IconifyIcon 
-                      class="social-icon fs-4 me-2" 
-                      icon="ri:instagram-fill"
-                    />
-                  </a>
-                </li>
-                <li class="social">
-                  <a href="https://www.youtube.com/" target="_blank">
-                    <IconifyIcon 
-                      class="social-icon fs-4 me-2" 
-                      icon="ri:youtube-fill"
-                    />
+                <li class="menu-item mb-2">
+                  <a 
+                    href="https://scholar.google.com/citations?user=vrADwVUAAAAJ&hl=en" 
+                    target="_blank" 
+                    class="footer-link"
+                  >
+                    Google Scholar
                   </a>
                 </li>
               </ul>
+              
             </div>
           </div>
         </div>
@@ -150,6 +129,8 @@
 .padding-medium {
   padding: 3rem 0;
 }
+
+
 
 /* 响应式调整 */
 @media (max-width: 767.98px) {
