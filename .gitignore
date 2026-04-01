@@ -21,6 +21,8 @@ example/draw_example/volcano_example.txt
 *.map
 *.tiff
 *.md
+# 保留 superpowers 设计规格（其余 *.md 仍忽略）
+!docs/superpowers/specs/**/*.md
 *.pyc
 *.txt
 icomoon
