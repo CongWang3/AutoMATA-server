@@ -37,10 +37,9 @@
       </el-card>
     </div>
 
-    
     <div class="dashboard-content">
       <!-- 统计卡片 -->
-      <!-- <div class="stats-grid">
+      <div class="stats-grid">
         <el-card class="stat-card">
           <div class="stat-content">
             <div class="stat-icon primary">
@@ -88,7 +87,7 @@
             </div>
           </div>
         </el-card>
-      </div> -->
+      </div>
 
       <!-- 快捷操作 -->
       <div class="quick-actions">
@@ -244,8 +243,6 @@
         </el-card>
       </div>
     </div>
-
-
   </div>
 </template>
 
