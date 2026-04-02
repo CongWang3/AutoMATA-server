@@ -54,6 +54,13 @@
 - 行为：在后台线程中执行 `subprocess.run`，并将 `CompletedProcess` 结果返回到协程上下文
 - 约束：**线程中仅执行子进程调用**；数据库会话、WebSocket 推送、Job 状态更新仍在协程/主线程执行，避免 SQLAlchemy session 的线程安全风险。
 
+补充约束（避免线程池成为隐性瓶颈）：
+
+- 由于本设计对三类任务分别限流为 2，理论上同一进程内“等待子进程结束”的最大并发为 \(2+2+2=6\)。
+- 为避免默认线程池过小导致 `to_thread` 排队，应采用 **专用 ThreadPoolExecutor**（或至少保证 executor 的 `max_workers >= 6`）来承载外部命令等待：
+  - 推荐实现：应用启动时创建 `subprocess_executor = ThreadPoolExecutor(max_workers=6)`（可配置），并用 `loop.run_in_executor(subprocess_executor, subprocess.run, ...)` 执行。
+  - 若仍使用 `asyncio.to_thread`，需明确其底层 executor 配置能够满足并发上限需求。
+
 ### 2) 三类任务各自限流（每类 2）
 
 引入三个全局并发信号量（建议放在服务层模块的单例区域或专门的 `api/services/concurrency.py`）：
@@ -64,8 +71,8 @@
 
 限流点选择原则：
 
-- **只包裹外部脚本的执行阶段**（例如训练脚本/`Rscript`/分析脚本），而非整个任务生命周期。
-- 这样排队等待不会占用名额，且数据库准备/文件拷贝等轻量步骤可并行执行。
+- 限流应包裹“会长期占用关键资源的阶段”。在本次“最小改动”范围内，至少包含外部脚本执行阶段（训练脚本/`Rscript`/分析脚本）。
+- 说明：若外部脚本前后存在明显的重资源步骤（例如大文件准备/压缩/解析），可将其一并纳入限流区间；若不纳入，本方案仍能保证“事件循环不被子进程阻塞”，但不保证这些步骤不会造成资源争用带来的性能抖动。
 
 ### 3) 排队状态语义（Submitted + current_step）
 
@@ -74,6 +81,11 @@
 - Job `status` 保持 `Submitted`
 - `current_step` 更新为：`排队中（等待资源）`（英文可选：`Queued (waiting for resources)`）
 - 可选：通过 WebSocket 推送一次 message，仍使用 `Submitted`/不改变 status，仅提示用户进入队列。
+
+排队写入频率与乱序约束：
+
+- 进入排队时对 DB/WS 的“排队中”写入 **最多写一次**，避免高频重复更新造成噪声。
+- WebSocket 推送应遵循：**先 DB commit 成功，再推送 WS**；客户端/服务端均应遵循“终态保护”和“单调递进”原则，避免晚到消息导致界面回跳。
 
 拿到 semaphore、即将启动外部脚本前：
 
@@ -86,8 +98,10 @@
 为避免 WS/后台任务的晚到更新覆盖终态：
 
 - 设定终态集合：`Completed/Failed/Cancelled`
-- 在每次写入 Job 状态前检查：
-  - 若当前数据库状态已为终态，则忽略任何“非终态”的后续更新（例如 Processing、progress 更新）。
+- 所有“非终态更新”（例如 Processing、progress、current_step 变化）必须使用 **原子条件更新**，避免并发竞态覆盖终态：
+  - 约束：更新语句必须带条件 `WHERE status NOT IN (Completed, Failed, Cancelled)`（或等价 ORM filter）。
+  - 判定：若 `rows_affected == 0`，视为被终态保护拦截，不再推送该次 WS 更新。
+- 终态写入（Completed/Failed/Cancelled）应是“单调递进”的最终写入；建议在数据库层面保证终态不会被非终态覆盖。
 
 该保护适用于三类模块的所有状态写入点。
 
@@ -101,6 +115,11 @@
 - 全局并发可能上升为：`workers * 2`
 
 论文/演示场景通常可接受；若未来需要“全局严格 2/2/2”，应升级为 DB/Redis 锁或任务队列方案（不在本设计范围）。
+
+多 worker 语义补充：
+
+- 本方案不提供“跨进程唯一执行保证”。若未来采用多 worker，且后台任务触发/重启可能导致重复执行或无人续跑，需要引入 DB 级 claim/lease（例如原子更新为 Processing 并记录 owner/started_at）或外部队列系统。
+- 部署建议：论文/演示环境优先使用单 worker，以获得最可预期的并发与状态语义。
 
 ## 影响范围（代码触点）
 
@@ -127,9 +146,18 @@
 - 同时提交 3 个数据处理任务：同理
 - 同时提交 3 个分析任务：同理
 
+### 终态保护与乱序回归（推荐自动化）
+
+- **终态不回滚**：模拟“先写 Completed，再尝试写 Processing/progress”的晚到更新，断言：
+  - 数据库最终状态仍为 Completed
+  - 非终态更新的原子条件更新 `rows_affected == 0`
+- **并发上限可观测**：使用可控的外部命令（例如 sleep）或 mock runner，并发提交 3 个同类任务，断言同一时刻 Processing 数量 ≤ 2（可通过轮询 DB 或内部指标实现）。
+- **WS 顺序最小保证**：定义可观测字段（例如 `updated_at` 或递增 `seq`），客户端按单调递增丢弃旧消息，避免 UI 回跳（实现可延后，但应在测试用例中定义预期）。
+
 ## 风险与缓解
 
 - **R1：线程中误用 DB session** → 通过代码约束：线程 helper 仅做 `subprocess.run`，DB 更新留在协程
+- **R1.1：后台任务复用 request scope session** → 后台任务必须自行创建短生命周期 session；每次状态写入“取 session→更新→commit→关闭”，避免跨多个 `await` 长期持有同一 session
 - **R2：多 worker 下并发限制扩大** → 文档明确 + 部署建议（论文场景可单 worker）
 - **R3：排队期间用户误以为卡住** → `current_step` 明确显示排队中，并可选推送 message
 
