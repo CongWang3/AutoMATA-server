@@ -27,6 +27,11 @@
 
 **No frontend changes required** (queued jobs remain `Submitted`; queuing is shown via `current_step` / message).
 
+**Hard constraints (from spec):**
+- Do **not** use `asyncio.to_thread(subprocess.run, ...)` anywhere. All subprocess waits must go through the dedicated executor via `loop.run_in_executor(subprocess_executor, ...)`.
+- “Queued” must be written **at most once** per job while waiting.
+- All WS sends must happen **after** the corresponding DB commit; if an update is blocked by terminal-state guard (`rows_affected==0`), do not send WS.
+
 ---
 
 ## Task 1: Add global concurrency + subprocess executor modules
@@ -89,10 +94,11 @@ git commit -m "feat(concurrency): add global semaphore and subprocess executor h
 
 - [ ] **Step 1: Write failing test for “terminal state cannot be reverted”**
 
-Test idea (no real DB needed if using a lightweight sqlite test DB fixture; otherwise mock Session.execute):
-- Arrange a job in terminal state.
-- Attempt a non-terminal update through the helper.
-- Assert rows_affected == 0 and state unchanged; assert WS sender not called (mock).
+Test approach (use existing `backend/tests/conftest.py::test_db` session fixture):
+- Insert a Job row, set status to `Completed`.
+- Call the helper to apply a non-terminal update (e.g., `progress=50`, `status=Processing`).
+- Assert helper returns `rows_affected == 0` and DB row remains `Completed`.
+- Mock WS sender; assert it is **not** called when rows_affected==0.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -132,9 +138,17 @@ git commit -m "feat(jobs): add atomic terminal-state guard for status updates"
 - [ ] **Step 1: Write failing test for “training waits behind global semaphore”**
 
 Approach:
-- Monkeypatch `run_subprocess` to block on an asyncio Event.
-- Acquire 4 slots via spawning 4 fake tasks; the 5th should remain queued (job status stays Submitted + current_step indicates queue) until a slot releases.
-- Assert at most 4 concurrent runners invoked.
+- Monkeypatch `run_subprocess` to block on an asyncio Event, and track `in_flight` / `max_in_flight` counters (using an `asyncio.Lock`).
+- Spawn 5 tasks that each try to enter the “subprocess execution” section guarded by `GLOBAL_TASK_SEM`.
+- Assert:
+  - `max_in_flight <= 4` always
+  - the 5th task writes queued step once and stays `Submitted` until one of the first 4 releases
+
+Queued semantics (must be implementable without private semaphore fields):
+- Use a two-phase acquire:
+  - `try: await asyncio.wait_for(GLOBAL_TASK_SEM.acquire(), timeout=0)` to detect immediate availability
+  - `except TimeoutError:` write queued step once (Submitted + queued current_step), then `await GLOBAL_TASK_SEM.acquire()` to actually wait
+  - After acquire: transition to Processing and run subprocess; in `finally:` `GLOBAL_TASK_SEM.release()`
 
 - [ ] **Step 2: Run test; verify failure**
 
@@ -145,13 +159,14 @@ Run: `pytest backend/tests/test_global_concurrency_cap.py -q`
 Changes:
 - Import `GLOBAL_TASK_SEM` and `run_subprocess`.
 - Right before invoking external training scripts:
-  - If semaphore not immediately available, set job `current_step="排队中（等待资源）"` while keeping status `Submitted` (use atomic guard helper).
-  - `async with GLOBAL_TASK_SEM:` then transition job -> `Processing`, and run `await run_subprocess(...)`.
+  - Use the two-phase acquire above so “queued” is only written when contention exists.
+  - Ensure queued write is **at most once** (e.g., guard with a local boolean, and only update if DB current_step is not already queued).
+  - After acquiring slot: transition job -> `Processing`, and run `await run_subprocess(...)`.
 - Replace all `subprocess.run` calls in:
   - supervised
   - unsupervised
   - semi-supervised
-- Ensure WS payload includes ordering field (`updated_at` at minimum).
+- Ensure WS payload includes ordering fields (see Task 6) and is sent only after commit.
 
 - [ ] **Step 4: Run tests**
 
@@ -175,6 +190,10 @@ git commit -m "fix(training): run subprocess in executor and gate with global se
 - [ ] **Step 1: Write failing test for “data-process queued remains Submitted”**
 - [ ] **Step 2: Run test; verify failure**
 - [ ] **Step 3: Implement: wrap Rscript calls with global semaphore + executor helper**
+
+Implementation notes:
+- Reuse the same two-phase acquire + “queued at most once” pattern as Task 3.
+- All non-terminal updates (status/progress/current_step/message) must go through terminal-state guard helper.
 - [ ] **Step 4: Run tests**
 - [ ] **Step 5: Commit**
 
@@ -195,6 +214,10 @@ git commit -m "fix(data-process): run Rscript in executor and gate with global s
 - [ ] **Step 1: Write failing test for “analysis obeys global cap”**
 - [ ] **Step 2: Run test; verify failure**
 - [ ] **Step 3: Implement: route external command waits through executor helper + global semaphore**
+
+Implementation notes:
+- Reuse two-phase acquire + queued-at-most-once.
+- Apply terminal-state guard helper to all non-terminal updates.
 - [ ] **Step 4: Run tests**
 - [ ] **Step 5: Commit**
 
@@ -216,6 +239,12 @@ git commit -m "fix(analysis): run subprocess in executor and gate with global se
 - [ ] **Step 1: Inventory current WS payload fields and pick ordering field**
 
 Prefer `updated_at` (already present on Job model) to avoid migrations.
+
+Ordering caveat + minimal mitigation:
+- `updated_at` may not be strictly monotonic under rapid successive updates. To reduce UI back-jumps:
+  - Include `updated_at` in all WS payloads (required).
+  - Additionally include a **server-side per-process sequence** (e.g., `server_seq`) in WS payloads for tie-breaking when `updated_at` is equal. This does not require DB migration, but only guarantees order within a single worker process.
+  - Client sorting rule: order by `(updated_at, server_seq)`; drop messages that are older by this tuple.
 
 - [ ] **Step 2: Add `updated_at` to payload consistently**
 
