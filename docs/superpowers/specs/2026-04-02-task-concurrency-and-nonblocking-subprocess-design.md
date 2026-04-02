@@ -65,7 +65,7 @@
 
 - **唯一推荐口径：统一使用 `loop.run_in_executor(subprocess_executor, subprocess.run, ...)`** 来执行外部命令等待。
 - 约束：代码库内禁止直接写 `asyncio.to_thread(subprocess.run, ...)`（以免无意使用默认 executor）。
-- 说明：如确需保留 `to_thread` 形式，也必须在应用启动处显式配置默认 executor，并在文档中固化配置点；但本设计以“唯一推荐口径”为准。
+- 迁移约束：若历史代码存在 `to_thread(subprocess.run, ...)` 用法，必须在本次改动中迁移替换为 `run_in_executor(subprocess_executor, ...)`；禁止新增任何 `to_thread(subprocess.run, ...)` 用法。
 
 ### 2) 三类任务各自限流（每类 2）
 
