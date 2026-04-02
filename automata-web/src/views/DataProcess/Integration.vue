@@ -275,29 +275,37 @@ const handleExceed = () => {
 }
 
 const downloadExample = (type: 'pheno' | 'omics1' | 'omics2' | 'omics3') => {
-  // 使用独立下载服务 (8001) 提供示例文件：
-  // 例如 http://localhost:8001/example/train_example/jobID_pheno.txt
-  const origin = window.location.origin
-  const base = origin.replace(/:\d+$/, ':8001')
 
   let relativePath = ''
   switch (type) {
     case 'pheno':
-      relativePath = 'train_example/jobID_pheno.txt'
+      relativePath = 'jobID_pheno.txt'
+      // relativePath = 'omics_integration_file_1.txt'
       break
     case 'omics1':
-      relativePath = 'train_example/jobID_omics_1.txt'
+      relativePath = 'jobID_omics_1.txt'
       break
     case 'omics2':
-      relativePath = 'train_example/jobID_omics_2.txt'
+      relativePath = 'jobID_omics_2.txt'
       break
     case 'omics3':
-      relativePath = 'train_example/jobID_omics_3.txt'
+      relativePath = 'jobID_omics_3.txt'
       break
   }
-
-  const url = `${base}/example/${relativePath}`
-  window.open(url, '_blank')
+  
+  // 对于示例文件，直接使用Vite服务（因为它们在public目录下）
+  // 但为了保持一致性，我们也可以通过下载服务提供
+  const url = '/example/' + relativePath
+  const link = document.createElement('a')
+  link.href = url
+  link.download = relativePath
+  link.style.display = 'none'
+  
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  
+  ElMessage.success(`Example data has started downloading: ${relativePath}`)
 }
 
 const connectWebSocket = async () => {

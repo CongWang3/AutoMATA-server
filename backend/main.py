@@ -103,7 +103,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="AutoMATA 生物信息学多组学分析平台 API",
+    description="AutoMATA Bioinformatics multi-omics analysis platform",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -295,18 +295,6 @@ async def debug_systematic_debugging_404_middleware(request: Request, call_next)
             )
             # Avoid logging token values (may be sensitive). Record only key existence.
             q = dict(request.query_params)
-            _debug_append_ndjson(
-                hypothesis_id="H2_fastapi_returns_404_for_systematic_debugging",
-                location="backend/main.py:middleware/systematic-debugging:404",
-                message="FastAPI returned 404 for systematic-debugging path",
-                data={
-                    "path": path,
-                    "uid": q.get("uid"),
-                    "t": q.get("t"),
-                    "hasToken": "token" in q,
-                },
-                run_id="pre-fix",
-            )
     except Exception:
         # Debug logging must not break the API.
         pass
