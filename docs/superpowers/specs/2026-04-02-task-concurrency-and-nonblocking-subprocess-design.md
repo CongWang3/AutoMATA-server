@@ -61,6 +61,12 @@
   - 推荐实现：应用启动时创建 `subprocess_executor = ThreadPoolExecutor(max_workers=6)`（可配置），并用 `loop.run_in_executor(subprocess_executor, subprocess.run, ...)` 执行。
   - 若仍使用 `asyncio.to_thread`，需明确其底层 executor 配置能够满足并发上限需求。
 
+实现口径（必须固定为唯一方案，避免实现时回退到默认线程池）：
+
+- **唯一推荐口径：统一使用 `loop.run_in_executor(subprocess_executor, subprocess.run, ...)`** 来执行外部命令等待。
+- 约束：代码库内禁止直接写 `asyncio.to_thread(subprocess.run, ...)`（以免无意使用默认 executor）。
+- 说明：如确需保留 `to_thread` 形式，也必须在应用启动处显式配置默认 executor，并在文档中固化配置点；但本设计以“唯一推荐口径”为准。
+
 ### 2) 三类任务各自限流（每类 2）
 
 引入三个全局并发信号量（建议放在服务层模块的单例区域或专门的 `api/services/concurrency.py`）：
@@ -86,6 +92,15 @@
 
 - 进入排队时对 DB/WS 的“排队中”写入 **最多写一次**，避免高频重复更新造成噪声。
 - WebSocket 推送应遵循：**先 DB commit 成功，再推送 WS**；客户端/服务端均应遵循“终态保护”和“单调递进”原则，避免晚到消息导致界面回跳。
+
+WS 顺序的最小保证（必须）：
+
+- **服务端字段**：每次对 job 的状态/步骤写入时，同时写入并对外暴露一个可排序字段（满足其一即可）：
+  - `updated_at`（数据库时间戳，单调递增）
+  - 或递增的 `event_seq`（推荐，单 job 内单调递增）
+- **WS payload**：必须携带上述字段。
+- **客户端规则**：若收到的 `event_seq`（或 `updated_at`）小于当前已渲染值，则丢弃该消息，确保 UI 不回跳。
+- **服务端规则**：仅发送 DB commit 后的最新字段值；若某次更新被“终态原子条件更新”拦截（`rows_affected==0`），禁止发送对应 WS 消息。
 
 拿到 semaphore、即将启动外部脚本前：
 
@@ -153,6 +168,20 @@
   - 非终态更新的原子条件更新 `rows_affected == 0`
 - **并发上限可观测**：使用可控的外部命令（例如 sleep）或 mock runner，并发提交 3 个同类任务，断言同一时刻 Processing 数量 ≤ 2（可通过轮询 DB 或内部指标实现）。
 - **WS 顺序最小保证**：定义可观测字段（例如 `updated_at` 或递增 `seq`），客户端按单调递增丢弃旧消息，避免 UI 回跳（实现可延后，但应在测试用例中定义预期）。
+
+### 终态写入失败与一致性回滚（自动化，必须）
+
+- **场景 A：终态写入 commit 失败**（例如连接中断/事务异常）
+  - 期望：
+    - 不发送终态 WS（避免前端显示 Completed 但 DB 未落地）
+    - job 保持原状态（Submitted/Processing），并记录失败原因到 `current_step`/message
+- **场景 B：终态写入被并发抢先**（终态原子更新 `rows_affected == 0`）
+  - 期望：
+    - 视为“已由他方终态完成”，不再进行任何覆盖写入或回滚
+    - 不发送与之冲突的 WS 消息
+- **断言**：
+  - DB 中终态字段与 WS 最终可见状态一致
+  - 不存在“WS 显示 Completed 但 DB 非 Completed”的终端不一致
 
 ## 风险与缓解
 
