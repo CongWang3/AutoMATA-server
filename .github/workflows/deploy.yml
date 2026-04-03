@@ -17,6 +17,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -28,11 +29,11 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
-              - 'docker-compose.prod.yml'
-              - '.github/workflows/deploy.yml'
             frontend:
               - 'automata-web/**'
+            infra:
               - 'docker-compose.prod.yml'
+              - 'deploy/**'
               - '.github/workflows/deploy.yml'
 
   build-and-push:
