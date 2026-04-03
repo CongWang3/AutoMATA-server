@@ -688,10 +688,11 @@
             <!-- <p class="image-caption">AutoMATA data processing diagram</p> -->
             <div class="procedure-image-wrap">
               <img
-                src="/images/help_data_process.png"
+                :src="helpProcessImageSrc"
                 alt="AutoMATA data processing diagram"
                 class="procedure-image"
                 loading="lazy"
+                @error="handleImageError"
               />
             </div>
           </div>
@@ -758,6 +759,7 @@ import {
 import { ElAlert, ElTag } from 'element-plus'
 
 const router = useRouter()
+const helpProcessImageSrc = '/images/help_data_process.png'
 
 // 当前展开的面板
 const activeNames = ref<string>('data-process')
