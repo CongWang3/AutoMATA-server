@@ -26,6 +26,7 @@ example/draw_example/volcano_example.txt
 !docs/superpowers/specs/**/*.md
 *.pyc
 *.txt
+!backend/requirements.txt
 icomoon
 assets
 
