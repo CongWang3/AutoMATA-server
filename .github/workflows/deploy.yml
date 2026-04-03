@@ -167,15 +167,15 @@ jobs:
             fi
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
+              docker compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head 2>/dev/null || docker-compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml pull frontend
+              docker compose -f docker-compose.prod.yml pull frontend 2>/dev/null || docker-compose -f docker-compose.prod.yml pull frontend
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml pull backend
+              docker compose -f docker-compose.prod.yml pull backend 2>/dev/null || docker-compose -f docker-compose.prod.yml pull backend
             fi
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml up -d 2>/dev/null || docker-compose -f docker-compose.prod.yml up -d
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
             curl -fsS "http://127.0.0.1:18001/health" >/dev/null || echo "[warn] download health failed"
@@ -202,15 +202,15 @@ jobs:
             fi
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
+              docker compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head 2>/dev/null || docker-compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml pull frontend
+              docker compose -f docker-compose.prod.yml pull frontend 2>/dev/null || docker-compose -f docker-compose.prod.yml pull frontend
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml pull backend
+              docker compose -f docker-compose.prod.yml pull backend 2>/dev/null || docker-compose -f docker-compose.prod.yml pull backend
             fi
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml up -d 2>/dev/null || docker-compose -f docker-compose.prod.yml up -d
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
             curl -fsS "http://127.0.0.1:18001/health" >/dev/null || echo "[warn] download health failed"
