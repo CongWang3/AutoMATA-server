@@ -67,7 +67,13 @@ jobs:
             cd "${{ secrets.DEPLOY_PATH }}"
             export GHCR_OWNER="${{ github.repository_owner }}"
             export GHCR_OWNER="${GHCR_OWNER,,}"
+            export FRONTEND_IMAGE_TAG="${{ github.sha }}"
+            export BACKEND_IMAGE_TAG="${{ github.sha }}"
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            docker compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
+            curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
+            curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
+            curl -fsS "http://127.0.0.1:18001/health" >/dev/null || echo "[warn] download health failed"
             docker image prune -f

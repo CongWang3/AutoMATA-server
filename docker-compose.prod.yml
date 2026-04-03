@@ -1,0 +1,109 @@
+services:
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/automata-frontend:${FRONTEND_IMAGE_TAG:-latest}
+    container_name: automata-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - automata-net
+
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/automata-backend:${BACKEND_IMAGE_TAG:-latest}
+    container_name: automata-backend
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      DOWNLOAD_PUBLIC_BASE_URL: ${DOWNLOAD_PUBLIC_BASE_URL:-https://your-domain.com/download}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/uploaded_files:/app/uploaded_files
+      - ./data/logs:/app/logs
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-18005}:8005"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - automata-net
+
+  download-server:
+    image: ghcr.io/${GHCR_OWNER}/automata-backend:${BACKEND_IMAGE_TAG:-latest}
+    container_name: automata-download-server
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    command: ["python", "download_server.py"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/download_data:/app/download_data
+      - ./data/uploaded_files:/app/uploaded_files
+    ports:
+      - "127.0.0.1:${DOWNLOAD_HOST_PORT:-18001}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - automata-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: automata-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - automata-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: automata-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    networks:
+      - automata-net
+
+networks:
+  automata-net:
+    driver: bridge
