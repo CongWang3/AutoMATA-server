@@ -11,7 +11,7 @@ env:
   IMAGE_BACKEND: automata-backend
   IMAGE_FRONTEND: automata-frontend
   # 阿里云 ACR 配置
-  ALIYUN_REGISTRY: registry.cn-hangzhou.aliyuncs.com
+  ALIYUN_REGISTRY: crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com
   ALIYUN_NAMESPACE: automata-bio
 
 jobs:
