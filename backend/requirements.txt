@@ -16,9 +16,9 @@ cryptography==41.0.7
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# 数据验证
-pydantic==2.5.2
-pydantic-settings==2.1.0
+# 数据验证（需与 langgraph/langchain 版本兼容）
+pydantic==2.12.5
+pydantic-settings==2.11.0
 
 # 工具库
 python-multipart==0.0.6
@@ -32,10 +32,13 @@ pytest==7.4.3
 httpx==0.25.2
 
 # 定时任务
-apscheduler>=3.10.0
+apscheduler==3.11.2
 
-# AI Agent
-langgraph>=0.2.0
-langchain-core>=0.3.0
-langchain-openai>=0.2.0
-langchain-community>=0.3.0
+# AI Agent（固定到兼容版本，避免解析回溯冲突）
+langchain==0.3.28
+langgraph==0.6.11
+langchain-core==0.3.83
+langchain-openai==0.3.35
+langchain-community==0.3.31
+langchain-text-splitters==0.3.11
+openai==2.29.0
