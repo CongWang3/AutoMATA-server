@@ -172,6 +172,7 @@ jobs:
             set -euo pipefail
             cd "${{ env.DEPLOY_PATH }}"
             # 下载最新的 docker-compose.prod.yml
+            curl -fsSL "https://raw.githubusercontent.com/CongWang3/AutoMATA-server/refs/heads/main/docker-compose.prod.yml" -o docker-compose.prod.yml || \
             curl -fsSL "https://raw.githubusercontent.com/CongWang3/AutoMATA-server/main/docker-compose.prod.yml" -o docker-compose.prod.yml
             # 使用阿里云 ACR 镜像（国内访问更快）
             export ALIYUN_REGISTRY="crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com"
@@ -224,6 +225,7 @@ jobs:
             set -euo pipefail
             cd "${{ env.DEPLOY_PATH }}"
             # 下载最新的 docker-compose.prod.yml
+            curl -fsSL "https://raw.githubusercontent.com/CongWang3/AutoMATA-server/refs/heads/main/docker-compose.prod.yml" -o docker-compose.prod.yml || \
             curl -fsSL "https://raw.githubusercontent.com/CongWang3/AutoMATA-server/main/docker-compose.prod.yml" -o docker-compose.prod.yml
             # 使用阿里云 ACR 镜像（国内访问更快）
             export ALIYUN_REGISTRY="crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com"
