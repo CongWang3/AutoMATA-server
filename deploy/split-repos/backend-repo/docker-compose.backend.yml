@@ -1,0 +1,66 @@
+services:
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/automata-backend:latest
+    container_name: automata-backend
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    volumes:
+      - ./data/uploaded_files:/app/uploaded_files
+      - ./data/logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "127.0.0.1:8005:8005"
+    networks:
+      - backend-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: automata-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: automata-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend-net
+
+networks:
+  backend-net:
+    driver: bridge

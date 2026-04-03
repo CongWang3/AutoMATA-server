@@ -22,12 +22,15 @@ from api.services.email_service import email_service
 from api.services.training_service import TrainingService, _is_zip_deliverable
 from api.utils.expression_matrix_php import transpose_expression_file_like_php
 from api.websocket.task_manager import task_status_manager
+from api.services.concurrency import GLOBAL_TASK_SEM, next_server_seq
+from api.utils.subprocess_utils import run_subprocess
 from config.database import SessionLocal
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-JOBS_ROOT = Path("/xp/www/AutoMATA/download_data/Jobs")
-REPO_ROOT = Path("/xp/www/AutoMATA")
+JOBS_ROOT = settings.path_jobs
+REPO_ROOT = settings.path_repo
 RSCRIPT = "/opt/anaconda/envs/R_442/bin/Rscript"
 
 
@@ -306,13 +309,45 @@ class AnalysisTrainService:
                 id_log.parent.mkdir(parents=True, exist_ok=True)
                 logger.info("[ANALYSIS_TRAIN] mysql2TPM %s", cmd)
                 with open(id_log, "w", encoding="utf-8") as log_fp:
-                    r1 = subprocess.run(
-                        cmd,
-                        cwd=str(REPO_ROOT),
-                        stdout=log_fp,
-                        stderr=subprocess.STDOUT,
-                        timeout=7200,
-                    )
+                    acquired_immediately = False
+                    try:
+                        await asyncio.wait_for(GLOBAL_TASK_SEM.acquire(), timeout=0)
+                        acquired_immediately = True
+                    except Exception:
+                        acquired_immediately = False
+                    if not acquired_immediately:
+                        if job and job.status == JobStatus.SUBMITTED and (job.current_step or "") != "排队中（等待资源）":
+                            job.current_step = "排队中（等待资源）"
+                            job.updated_at = datetime.now()
+                            self.db.commit()
+                            try:
+                                await task_status_manager.send_task_status(
+                                    str(self.user.id),
+                                    {
+                                        "job_id": job_id,
+                                        "status": JobStatus.SUBMITTED.value,
+                                        "progress": job.progress or 0,
+                                        "current_step": job.current_step,
+                                        "message": "排队中（等待资源）",
+                                        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                                        "server_seq": next_server_seq(),
+                                    },
+                                )
+                            except Exception:
+                                pass
+                        await GLOBAL_TASK_SEM.acquire()
+                    try:
+                        r1 = await run_subprocess(
+                            cmd,
+                            cwd=str(REPO_ROOT),
+                            stdout=log_fp,
+                            stderr=subprocess.STDOUT,
+                            timeout=7200,
+                            shell=False,
+                            text=True,
+                        )
+                    finally:
+                        GLOBAL_TASK_SEM.release()
                 if r1.returncode != 0:
                     raise RuntimeError(
                         f"Gene ID conversion failed, log: {id_log}, exit={r1.returncode}"
@@ -351,13 +386,46 @@ class AnalysisTrainService:
             ]
             logger.info("[ANALYSIS_TRAIN] DE %s", cmd_de)
             with open(de_log, "w", encoding="utf-8") as log_fp:
-                r2 = subprocess.run(
-                    cmd_de,
-                    cwd=str(REPO_ROOT),
-                    stdout=log_fp,
-                    stderr=subprocess.STDOUT,
-                    timeout=7200,
-                )
+                acquired_immediately = False
+                try:
+                    await asyncio.wait_for(GLOBAL_TASK_SEM.acquire(), timeout=0)
+                    acquired_immediately = True
+                except Exception:
+                    acquired_immediately = False
+                if not acquired_immediately:
+                    job = self.db.query(Job).filter(Job.job_id == job_id).first()
+                    if job and job.status == JobStatus.SUBMITTED and (job.current_step or "") != "排队中（等待资源）":
+                        job.current_step = "排队中（等待资源）"
+                        job.updated_at = datetime.now()
+                        self.db.commit()
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(self.user.id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.SUBMITTED.value,
+                                    "progress": job.progress or 0,
+                                    "current_step": job.current_step,
+                                    "message": "排队中（等待资源）",
+                                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                                    "server_seq": next_server_seq(),
+                                },
+                            )
+                        except Exception:
+                            pass
+                    await GLOBAL_TASK_SEM.acquire()
+                try:
+                    r2 = await run_subprocess(
+                        cmd_de,
+                        cwd=str(REPO_ROOT),
+                        stdout=log_fp,
+                        stderr=subprocess.STDOUT,
+                        timeout=7200,
+                        shell=False,
+                        text=True,
+                    )
+                finally:
+                    GLOBAL_TASK_SEM.release()
             if r2.returncode != 0:
                 raise RuntimeError(f"Differential analysis failed, log: {de_log}, exit={r2.returncode}")
 

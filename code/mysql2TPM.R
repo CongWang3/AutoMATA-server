@@ -466,10 +466,10 @@ if (opt$type != "none"){
   print(opt$gene_nomenclature)
   if (opt$gene_nomenclature == "GeneID"){
     print("enter")
-    out <- searchLengthSymbolFromGeneID_batch(IDs, mysqlconnection, table = opt$organism)
+    out <- suppressWarnings(suppressMessages(searchLengthSymbolFromGeneID_batch(IDs, mysqlconnection, table = opt$organism)))
 
   }else if (opt$gene_nomenclature == "EnsemblID"){
-    out <- searchLengthSymbolFromEnsembl_batch(IDs, mysqlconnection, table = opt$organism)
+    out <- suppressWarnings(suppressMessages(searchLengthSymbolFromEnsembl_batch(IDs, mysqlconnection, table = opt$organism)))
 
   }else if (opt$gene_nomenclature == "Symbol"){
     # 静默查询过程中的 message/warning（否则会被后端捕获并在前端显示大量红字）

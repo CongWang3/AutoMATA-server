@@ -132,12 +132,10 @@ def verify_token(token: str) -> Optional[dict]:
 class SecurityValidator:
     """安全验证器类"""
     
-    # 允许的基础目录（防止路径遍历）
-    ALLOWED_BASE_PATHS = [
-        "/xp/www/AutoMATA",
-        "/tmp",
-        "/var/tmp"
-    ]
+    @classmethod
+    def allowed_base_paths(cls) -> list:
+        """允许的基础目录（防止路径遍历）；仓库根目录来自 settings.REPO_ROOT。"""
+        return [str(settings.path_repo), "/tmp", "/var/tmp"]
     
     # 危险字符模式
     DANGEROUS_PATTERNS = [
@@ -187,7 +185,7 @@ class SecurityValidator:
             
             # 检查是否在允许的目录范围内
             is_allowed = False
-            for base_path in cls.ALLOWED_BASE_PATHS:
+            for base_path in cls.allowed_base_paths():
                 base = Path(base_path).resolve()
                 if str(path).startswith(str(base)):
                     is_allowed = True

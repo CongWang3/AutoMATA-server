@@ -31,8 +31,19 @@ from config.settings import settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _download_cors_allow_origin(request: web.Request) -> str:
+    """与 FastAPI settings.CORS_ORIGINS 对齐；含 * 时回显请求的 Origin。"""
+    origin = request.headers.get("Origin") or request.headers.get("origin") or ""
+    origins = list(settings.CORS_ORIGINS)
+    if "*" in origins:
+        return origin or "*"
+    if origin in origins:
+        return origin
+    return origins[0] if origins else "*"
+
+
 # 配置
-CORS_ORIGINS = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
 MAX_SKEW = 60  # 允许的时间偏差，单位秒
 
 # 下载限速（字节/秒）：0 表示不限速。默认不限速，避免大 zip 传输过久触发浏览器「无法完成下载」。
@@ -49,31 +60,6 @@ async def _throttle_after_chunk(chunk_len: int) -> None:
     if DOWNLOAD_THROTTLE_BPS <= 0 or chunk_len <= 0:
         return
     await asyncio.sleep(chunk_len / DOWNLOAD_THROTTLE_BPS)
-
-# --- Debug logging (NDJSON) ---
-DEBUG_LOG_PATH = "/xp/www/.cursor/debug-d7d881.log"
-DEBUG_SESSION_ID = "d7d881"
-
-def _debug_append_ndjson(hypothesis_id: str, location: str, message: str, data: Optional[dict] = None) -> None:
-    """Append a single NDJSON line for debug mode."""
-    if data is None:
-        data = {}
-    try:
-        payload = {
-            "sessionId": DEBUG_SESSION_ID,
-            "runId": "pre-fix",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-            "id": f"log_{int(time.time() * 1000)}_{hypothesis_id}",
-        }
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        # Never break download flow because of logging.
-        return
 
 
 # 示例文件根目录（用于 /example/{file_path} 下载）
@@ -100,8 +86,7 @@ async def handle_example_file(request: web.Request) -> web.FileResponse:
     if not target_path.exists() or not target_path.is_file():
         raise web.HTTPNotFound(text="文件不存在")
 
-    origin = request.headers.get("Origin", "")
-    allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
+    allow_origin = _download_cors_allow_origin(request)
 
     return web.FileResponse(
         path=str(target_path),
@@ -202,7 +187,7 @@ def verify_signature(file_id: str, uid: int, timestamp: int, token: str) -> bool
 
 # ----- 以下为任务结果下载扩展：result.zip / result 目录（仅新增，不改动上方原有函数） -----
 
-JOBS_DOWNLOAD_ROOT = Path("/xp/www/AutoMATA/download_data/Jobs")
+JOBS_DOWNLOAD_ROOT = settings.path_jobs
 
 
 def fetch_job_result_file_field_for_user(job_id: str, uid: int) -> Tuple[bool, Optional[str]]:
@@ -383,8 +368,7 @@ async def handle_download(request: web.Request) -> web.StreamResponse:
         logger.info(f"[DOWNLOAD] 开始传输: {file_path.name}, 大小: {file_size}")
         
         # 设置响应头（使用CORS白名单而非通配符）
-        origin = request.headers.get('Origin', '')
-        allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
+        allow_origin = _download_cors_allow_origin(request)
         
         response = web.StreamResponse(
             status=200,
@@ -471,8 +455,7 @@ async def handle_job_result_download(request: web.Request) -> web.StreamResponse
         file_size = result_file_path.stat().st_size
         encoded_filename = urllib.parse.quote(final_filename, safe="")
 
-        origin = request.headers.get("Origin", "")
-        allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
+        allow_origin = _download_cors_allow_origin(request)
 
         response = web.StreamResponse(
             status=200,
@@ -649,8 +632,7 @@ async def handle_analysis_result_download(request: web.Request) -> web.StreamRes
 
         file_size = file_path.stat().st_size
         encoded_filename = urllib.parse.quote(out_name, safe="")
-        origin = request.headers.get("Origin", "")
-        allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
+        allow_origin = _download_cors_allow_origin(request)
 
         response = web.StreamResponse(
             status=200,
@@ -690,9 +672,8 @@ async def handle_cors_preflight(request: web.Request) -> web.Response:
     Returns:
         Response响应对象
     """
-    origin = request.headers.get('Origin', '')
-    allow_origin = origin if origin in CORS_ORIGINS else CORS_ORIGINS[0]
-    
+    allow_origin = _download_cors_allow_origin(request)
+
     headers = {
         'Access-Control-Allow-Origin': allow_origin,
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -729,8 +710,8 @@ if __name__ == '__main__':
     
     logger.info("=" * 50)
     logger.info("独立下载服务器启动")
-    logger.info(f"端口: 8001")
+    logger.info(f"端口: {settings.DOWNLOAD_SERVER_PORT}")
     logger.info(f"数据库: {settings.DB_HOST}/{settings.DB_NAME}")
     logger.info("=" * 50)
-    
-    web.run_app(app, host='0.0.0.0', port=8001)
+
+    web.run_app(app, host=settings.DOWNLOAD_SERVER_HOST, port=settings.DOWNLOAD_SERVER_PORT)

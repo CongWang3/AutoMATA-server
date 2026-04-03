@@ -11,58 +11,12 @@ from config.settings import settings
 from starlette.requests import Request
 from fastapi.responses import FileResponse
 from typing import Optional, Dict
+from pathlib import Path
 
 # 导入路由
 from api.routers import auth, files, data_process, task_websocket, training, jobs, analysis, model_use, analysis_train
 
-# --- debug: systematic-debugging instrumentation ---
-DEBUG_LOG_PATH = "/xp/www/AutoMATA/.cursor/debug-d45b01.log"
-DEBUG_SESSION_ID = "d45b01"
 
-def _debug_append_ndjson(
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: Optional[Dict] = None,
-    run_id: str = "pre-fix"
-) -> None:
-    """
-    Append one NDJSON line for debug mode; must never break request flow.
-    """
-    payload = {
-        "sessionId": DEBUG_SESSION_ID,
-        "runId": run_id,
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data or {},
-        "timestamp": int(time.time() * 1000),
-        "id": f"log_{int(time.time() * 1000)}_{hypothesis_id}",
-    }
-    try:
-        # Ensure debug directory exists (in some deployments the directory might not be pre-created).
-        try:
-            from pathlib import Path as _Path
-            _Path(DEBUG_LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            # If mkdir fails, the subsequent file open will fail too; we'll report below.
-            pass
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        # IMPORTANT: Never break the request flow, but record the failure for investigation.
-        try:
-            logging.getLogger(__name__).warning(
-                "[debug_ndjson] write failed",
-                extra={
-                    "debug_log_path": DEBUG_LOG_PATH,
-                    "hypothesisId": hypothesis_id,
-                    "location": location,
-                },
-            )
-        except Exception:
-            pass
-        return
 
 # AI Agent 路由（依赖可选）
 try:
@@ -83,7 +37,6 @@ from api.models.user import User
 
 # 配置日志到项目目录
 import os
-from pathlib import Path
 
 # 创建日志目录
 log_dir = Path(__file__).parent / "logs"
@@ -293,20 +246,7 @@ async def debug_systematic_debugging_404_middleware(request: Request, call_next)
                     "hasToken": "token" in request.query_params,
                 },
             )
-            # Avoid logging token values (may be sensitive). Record only key existence.
-            q = dict(request.query_params)
-            _debug_append_ndjson(
-                hypothesis_id="H2_fastapi_returns_404_for_systematic_debugging",
-                location="backend/main.py:middleware/systematic-debugging:404",
-                message="FastAPI returned 404 for systematic-debugging path",
-                data={
-                    "path": path,
-                    "uid": q.get("uid"),
-                    "t": q.get("t"),
-                    "hasToken": "token" in q,
-                },
-                run_id="pre-fix",
-            )
+
     except Exception:
         # Debug logging must not break the API.
         pass

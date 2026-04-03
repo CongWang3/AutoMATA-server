@@ -345,10 +345,17 @@ if __name__ == '__main__':
     X_train, Y_train, feature_indices = load_data("train", jobID=jobID, feature_method=feature_method)
     
     # 自动检测实际类别数量，覆盖命令行参数
+    # actual_num_classes = len(torch.unique(Y_train))
+    # if actual_num_classes != output_size:
+    #     print(f"警告：用户设置的类别数 ({output_size}) 与数据实际类别数 ({actual_num_classes}) 不一致")
+    #     print(f"自动使用实际类别数：{actual_num_classes}")
+    #     output_size = actual_num_classes
+
     actual_num_classes = len(torch.unique(Y_train))
     if actual_num_classes != output_size:
-        print(f"警告：用户设置的类别数 ({output_size}) 与数据实际类别数 ({actual_num_classes}) 不一致")
-        print(f"自动使用实际类别数：{actual_num_classes}")
+        # print(f"警告：用户设置的类别数 ({out_dim}) 与数据实际类别数 ({actual_num_classes}) 不一致")
+        print(f"Warning: The number of classes set by the user ({output_size}) does not match the actual number of classes in the data ({actual_num_classes})")
+        print(f"Automatically use the actual number of classes: {actual_num_classes}")
         output_size = actual_num_classes
     '''训练模型参数'''
     input_dim = X_train.shape[1]

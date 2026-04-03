@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Q
 from sqlalchemy.orm import Session
 
 from config.database import get_db
+from config.settings import settings
 from api.dependencies.auth import get_current_active_user
 from api.models.user import User
 from api.models.job import Job, JobType, JobStatus
@@ -385,17 +386,14 @@ async def get_training_download_url(
     if not job.result_file:
         raise HTTPException(status_code=404, detail="Result file does not exist")
 
-    from config.settings import settings
-
     timestamp = int(time.time())
     uid = current_user.id
     secret = settings.SECRET_KEY.encode()
     message = f"{job_id}:{uid}:{timestamp}".encode()
     token = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
 
-    download_url = (
-        f"http://localhost:8001/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
-    )
+    base = settings.download_public_base()
+    download_url = f"{base}/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
 
     return TrainingDownloadUrlResponse(download_url=download_url, expires_in=300)
 

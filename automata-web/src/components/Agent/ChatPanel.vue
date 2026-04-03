@@ -6,7 +6,7 @@
       class="chat-fab" 
       :class="{ 'chat-fab--open': agentStore.isOpen }"
       @click="agentStore.togglePanel"
-      :title="agentStore.isOpen ? '关闭聊天' : '打开 AI 助手'"
+      :title="agentStore.isOpen ? 'Chat off' : 'Open the AI assistant'"
     >
       <span class="fab-icon">
         <svg v-if="!agentStore.isOpen" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
@@ -16,11 +16,11 @@
           <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
         </svg>
       </span>
-      <!-- 连接状态指示器 -->
+      
       <span 
         class="connection-indicator" 
         :class="agentStore.isConnected ? 'connected' : 'disconnected'"
-        :title="agentStore.isConnected ? '已连接' : '未连接'"
+        :title="agentStore.isConnected ? 'Connected' : 'Disconnected'"
       ></span>
     </button>
 
@@ -30,9 +30,9 @@
         <!-- 顶部栏 -->
         <div class="panel-header">
           <div class="header-left">
-            <span class="header-title">AI 助手</span>
+            <span class="header-title">AI Assistant</span>
             <span class="connection-status" :class="agentStore.isConnected ? 'online' : 'offline'">
-              {{ agentStore.isConnected ? '在线' : '离线' }}
+              {{ agentStore.isConnected ? 'Online' : 'Offline' }}
             </span>
           </div>
           
@@ -59,7 +59,7 @@
               v-if="agentStore.hasMessages"
               class="header-btn" 
               @click="onClearHistory"
-              title="清空聊天记录"
+              title="Clear chat history"
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -67,7 +67,7 @@
             </button>
             
             <!-- 关闭按钮 -->
-            <button class="header-btn close-btn" @click="agentStore.closePanel" title="关闭">
+            <button class="header-btn close-btn" @click="agentStore.closePanel" title="Close">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                 <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
               </svg>
@@ -80,10 +80,10 @@
           <!-- 空状态 -->
           <div v-if="!agentStore.hasMessages" class="empty-state">
             <div class="empty-icon">🤖</div>
-            <div class="empty-title">你好！我是 AI 助手</div>
+            <div class="empty-title">Hello! I am the AI Assistant</div>
             <div class="empty-desc">
-              我可以帮助你进行数据分析、解答问题。<br>
-              试试问我任何关于生物信息学的问题吧！
+              I can help you with data analysis and answer questions.<br>
+              Try asking me any questions about bioinformatics!
             </div>
           </div>
 
@@ -108,7 +108,7 @@
               ref="inputRef"
               v-model="inputMessage"
               @keydown="onKeyDown"
-              placeholder="输入消息，Shift+Enter 换行..."
+              placeholder="Enter message, Shift+Enter to newline..."
               class="message-input"
               :disabled="agentStore.isSending"
               rows="1"
@@ -117,7 +117,7 @@
               class="send-btn" 
               @click="onSend"
               :disabled="!inputMessage.trim() || agentStore.isSending"
-              :title="agentStore.isSending ? '发送中...' : '发送消息'"
+              :title="agentStore.isSending ? 'Sending...' : 'Send message'"
             >
               <svg v-if="!agentStore.isSending" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -186,7 +186,7 @@ function onProviderChange(): void {
  * 清空聊天记录
  */
 function onClearHistory(): void {
-  if (confirm('确定要清空所有聊天记录吗？')) {
+  if (confirm('Are you sure you want to clear all chat history?')) {
     agentStore.clearHistory()
   }
 }

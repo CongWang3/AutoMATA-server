@@ -814,23 +814,9 @@ def get_direct_download_link(
     message = f"{file_id}:{uid}:{timestamp}".encode()
     signature = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
     
-    # 确定基础URL - 根据请求来源动态选择
-    # 如果是远程访问（非 localhost），使用服务器公网 IP
-    host = request.headers.get("host", "localhost")
-    origin = request.headers.get("origin", "")
-    
-    # 检查是否是远程访问
-    is_remote = not any(x in host for x in ["localhost", "127.0.0.1"]) or \
-                not any(x in origin for x in ["localhost", "127.0.0.1", ""])
-    
-    if is_remote or "1.95.52.33" in origin:
-        # 远程访问：使用公网 IP
-        base_url = "http://1.95.52.33:8001"
-        logger.info(f"[DIRECT_LINK] 远程访问，使用公网下载服务器: {base_url}")
-    else:
-        # 本地访问：使用 localhost
-        base_url = "http://localhost:8001"
-        logger.info(f"[DIRECT_LINK] 本地访问，使用本地下载服务器: {base_url}")
+    # 下载服务根 URL：统一由环境变量 DOWNLOAD_PUBLIC_BASE_URL 配置（参见 config/settings.py）
+    base_url = settings.download_public_base()
+    logger.info(f"[DIRECT_LINK] 使用配置的下载服务根: {base_url}")
     
     # 构建下载URL - 指向独立下载服务器
     encoded_filename = urllib.parse.quote(db_file.original_name, safe='')

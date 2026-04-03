@@ -12,7 +12,7 @@
     example-data-url="/example/draw_example/dumbbell_example.txt"
     example-file-name="dumbbell_example.txt"
     second-example-url="/example/draw_example/dumbbell_barplot_example.txt"
-    second-example-file-name="dumbbell_barplot_example.txt"
+    second-example-file-name="barplot_example.txt"
     example-note="Please make sure that the first clumn of the bar data set is the same as the first column of the dumbbell data set"
     example-image-url="/images/dumbbell_bar_example.png"
   />

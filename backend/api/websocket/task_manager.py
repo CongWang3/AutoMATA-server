@@ -5,11 +5,40 @@
 import json
 import asyncio
 import logging
+import time
 from collections import defaultdict
 from typing import Dict, Set, Optional
 from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
+
+# #region debug ndjson logging
+DEBUG_LOG_PATH = "/xp/www/.cursor/debug-7c3296.log"
+DEBUG_SESSION_ID = "7c3296"
+
+def _dbg_append_ndjson(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: Optional[Dict] = None,
+    run_id: str = "pre-fix",
+) -> None:
+    payload = {
+        "sessionId": DEBUG_SESSION_ID,
+        "runId": run_id,
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data or {},
+        "timestamp": int(time.time() * 1000),
+        "id": f"log_{int(time.time() * 1000)}_{hypothesis_id}",
+    }
+    try:
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+# #endregion
 
 class TaskStatusManager:
     """任务状态 WebSocket 连接管理器"""
@@ -74,7 +103,25 @@ class TaskStatusManager:
         # -->
         
         async with self.lock:
+            status = (task_data or {}).get("status")
+            should_log = status in ("Completed", "Failed")
+            if should_log:
+                _dbg_append_ndjson(
+                    hypothesis_id="H3_ws_send_completed_or_failed",
+                    location="task_manager.py:send_task_status:entry",
+                    message="send_task_status called",
+                    data={"user_id": user_id, "job_id": (task_data or {}).get("job_id"), "status": status},
+                    run_id="pre-fix",
+                )
             if user_id not in self.task_connections or not self.task_connections[user_id]:
+                if should_log:
+                    _dbg_append_ndjson(
+                        hypothesis_id="H3_ws_send_completed_or_failed",
+                        location="task_manager.py:send_task_status:no_connections",
+                        message="no active WS connections for user",
+                        data={"user_id": user_id, "job_id": (task_data or {}).get("job_id"), "status": status},
+                        run_id="pre-fix",
+                    )
                 logger.debug(f"[Task WS] 用户 {user_id} 没有活跃的任务状态连接")
                 return
             
@@ -130,6 +177,22 @@ class TaskStatusManager:
                     
                     if failed_count > 0:
                         logger.debug(f"[Task WS] 部分发送失败: {failed_count}/{len(send_tasks)}, user_id={user_id}")
+                    
+                    if should_log:
+                        _dbg_append_ndjson(
+                            hypothesis_id="H3_ws_send_completed_or_failed",
+                            location="task_manager.py:send_task_status:after_send",
+                            message="WS batch send finished",
+                            data={
+                                "user_id": user_id,
+                                "job_id": (task_data or {}).get("job_id"),
+                                "status": status,
+                                "active_connections_count": len(active_connections),
+                                "failed_count": failed_count,
+                                "send_tasks_count": len(send_tasks),
+                            },
+                            run_id="pre-fix",
+                        )
                         
                 except Exception as e:
                     logger.error(f"[Task WS] 批量发送时发生严重错误: {e}")

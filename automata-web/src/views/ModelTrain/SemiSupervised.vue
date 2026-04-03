@@ -820,6 +820,9 @@ const handleTaskStatusUpdate = (data: any) => {
   if (data.status) {
     refreshUnifiedJobDetailIfTerminal(String(currentJob.value.id), String(data.status))
   }
+  if (data.status === 'Completed') {
+    void ensureDownloadReady(String(currentJob.value.id))
+  }
 }
 
 const connectWebSocket = async () => {

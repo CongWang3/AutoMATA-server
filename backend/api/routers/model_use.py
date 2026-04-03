@@ -22,6 +22,7 @@ from api.services.email_service import email_service
 from api.utils.security import security_validator
 from api.websocket.task_manager import task_status_manager
 from config.database import SessionLocal, get_db
+from config.settings import settings
 
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ async def predict(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="model_type can not be empty")
 
     # 统一 Jobs 目录（与训练/数据处理 PHP 版保持一致）
-    jobs_root = Path("/xp/www/AutoMATA/download_data/Jobs")
+    jobs_root = settings.path_jobs
 
     test_data_path = _validate_path_required(
         payload.test_data_path,
@@ -215,7 +216,7 @@ async def _execute_model_use_background(
         if not bg_user:
             raise RuntimeError(f"Background model application not found user: {user_id}")
 
-        jobs_root = Path("/xp/www/AutoMATA/download_data/Jobs")
+        jobs_root = settings.path_jobs
         jobs_dir = jobs_root / job_id
         result_dir = jobs_dir / "result"
         jobs_dir.mkdir(parents=True, exist_ok=True)
@@ -266,7 +267,7 @@ async def _execute_model_use_background(
 
         # 选择推理脚本并拼参数
         terminal_log = result_dir / "terminal.log"
-        cwd = "/xp/www/AutoMATA"
+        cwd = str(settings.path_repo)
 
         supervised_model_map = {
             "cnn": "CNN",
@@ -280,7 +281,7 @@ async def _execute_model_use_background(
         python_exec = "/opt/anaconda/envs/automata/bin/python"
 
         if model_type in supervised_model_map:
-            script_path = "/xp/www/AutoMATA/code/use_model/general.py"
+            script_path = str(settings.path_code / "use_model" / "general.py")
             cmd = [
                 python_exec,
                 script_path,
@@ -290,7 +291,7 @@ async def _execute_model_use_background(
                 supervised_model_map[model_type],
             ]
         elif model_type == "som":
-            script_path = "/xp/www/AutoMATA/code/use_model/som.py"
+            script_path = str(settings.path_code / "use_model" / "som.py")
             cmd = [
                 python_exec,
                 script_path,
@@ -302,10 +303,10 @@ async def _execute_model_use_background(
         else:
             # 无监督/半监督模型
             script_map = {
-                "vae": "/xp/www/AutoMATA/code/use_model/predict_vae.py",
-                "deepcluster": "/xp/www/AutoMATA/code/use_model/predict_deepcluster.py",
-                "ladder": "/xp/www/AutoMATA/code/use_model/predict_ladder.py",
-                "pseudo": "/xp/www/AutoMATA/code/use_model/predict_pseudo.py",
+                "vae": str(settings.path_code / "use_model" / "predict_vae.py"),
+                "deepcluster": str(settings.path_code / "use_model" / "predict_deepcluster.py"),
+                "ladder": str(settings.path_code / "use_model" / "predict_ladder.py"),
+                "pseudo": str(settings.path_code / "use_model" / "predict_pseudo.py"),
             }
             if model_type not in script_map:
                 raise RuntimeError(f"Unsupported model_type: {model_type}")

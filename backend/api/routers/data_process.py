@@ -12,6 +12,7 @@ import os
 from pathlib import Path as FilePath
 
 from config.database import get_db
+from config.settings import settings
 from api.dependencies.auth import get_current_active_user
 from api.services.data_process_service import DataProcessService
 from api.models.user import User
@@ -540,7 +541,7 @@ async def download_result(
         # 放宽条件：
         # 1) 若状态已 Completed → 正常放行
         # 2) 若状态尚未标记为 Completed，但 Jobs/<id>/ 下已存在 processed.txt 或其它可下载结果 → 也允许下载
-        jobs_root = Path("/xp/www/AutoMATA/download_data/Jobs")
+        jobs_root = settings.path_jobs
         job_dir = jobs_root / job_id
         processed_txt = job_dir / "processed.txt"
         has_db_result = bool(job.result_file and str(job.result_file).strip())
@@ -612,7 +613,7 @@ async def get_download_url(
             raise HTTPException(status_code=404, detail="The task does not exist")
 
         status_text = job.status.value if hasattr(job.status, "value") else str(job.status)
-        jobs_root = FilePath("/xp/www/AutoMATA/download_data/Jobs")
+        jobs_root = FilePath(settings.path_jobs)
         job_dir = jobs_root / job_id
         processed_txt = job_dir / "processed.txt"
         # Integration 任务的默认输出位置：Jobs/<id>/result/<id>_result.txt
@@ -643,7 +644,6 @@ async def get_download_url(
                 db.rollback()
         
         # 生成签名
-        from config.settings import settings
         timestamp = int(time.time())
         uid = current_user.id
         secret = settings.SECRET_KEY.encode()
@@ -651,11 +651,12 @@ async def get_download_url(
         token = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
         
         # 构建下载链接
-        download_url = f"http://localhost:8001/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
+        base = settings.download_public_base()
+        download_url = f"{base}/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
         
         return DownloadUrlResponse(
             download_url=download_url,
-            expires_in=300  # 5分钟有效期
+            expires_in=600  # 10分钟有效期
         )
         
     except HTTPException:
@@ -720,7 +721,7 @@ async def download_draw_example(analysis_type: str):
     - dumbbell_bar      -> dumbbell_bar_example.txt
     - ppi               -> ppi_example.txt
     """
-    base_dir = FilePath("/xp/www/AutoMATA/example/draw_example")
+    base_dir = FilePath(settings.path_repo / "example" / "draw_example")
     
     # 示例文件映射
     example_files = {

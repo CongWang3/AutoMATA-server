@@ -541,8 +541,10 @@ const uploadForm = reactive({
   description: ''
 })
 
+// ===== Tasks 页面状态兜底轮询已移除（以免掩盖后端状态问题）=====
+
 // ===== 任务类型映射 =====
-const JOB_TYPE_MAP: Record<string, { display: string; tagType: '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' }> = {
+const JOB_TYPE_MAP: Record<string, { display: string; tagType: 'success' | 'warning' | 'danger' | 'info' | 'primary' }> = {
   genome_process: { display: 'Genome Processing', tagType: 'success' },
   transcriptome_process: { display: 'Transcriptome Processing', tagType: 'success' },
   protein_process: { display: 'Protein Processing', tagType: 'success' },
@@ -554,7 +556,7 @@ const JOB_TYPE_MAP: Record<string, { display: string; tagType: '' | 'success' | 
 }
 
 // ===== 状态映射 =====
-const STATUS_MAP: Record<string, { display: string; tagType: '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' }> = {
+const STATUS_MAP: Record<string, { display: string; tagType: 'success' | 'warning' | 'danger' | 'info' | 'primary' }> = {
   Submitted: { display: 'Submitted', tagType: 'info' },
   Processing: { display: 'Processing', tagType: 'primary' },
   Completed: { display: 'Completed', tagType: 'success' },
@@ -568,7 +570,7 @@ function getJobTypeDisplay(jobType: string): string {
   return JOB_TYPE_MAP[jobType]?.display || jobType
 }
 
-function getJobTypeTagType(jobType: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' {
+function getJobTypeTagType(jobType: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
   return JOB_TYPE_MAP[jobType]?.tagType || 'info'
 }
 
@@ -576,7 +578,7 @@ function getStatusDisplay(status: string): string {
   return STATUS_MAP[status]?.display || status
 }
 
-function getStatusTagType(status: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' {
+function getStatusTagType(status: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
   return STATUS_MAP[status]?.tagType || 'info'
 }
 
@@ -841,7 +843,7 @@ function formatFileSize(bytes: number): string {
   return FileService.formatFileSize(bytes)
 }
 
-function getFileTypeTagType(fileType: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' {
+function getFileTypeTagType(fileType: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
   const typeMap: Record<string, any> = {
     'dataset': 'primary',
     'train': 'success',
@@ -863,7 +865,7 @@ function getFileTypeText(fileType: string): string {
   return textMap[fileType] || fileType
 }
 
-function getUploadStatusTagType(status: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' {
+function getUploadStatusTagType(status: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
   const typeMap: Record<string, any> = {
     'pending': 'info',
     'uploading': 'warning',

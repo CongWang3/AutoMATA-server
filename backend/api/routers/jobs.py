@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # 与 download_server 中任务产物目录一致（须用 pathlib.Path，勿与 fastapi.Path 混淆）
-_JOBS_DOWNLOAD_ROOT = pathlib.Path("/xp/www/AutoMATA/download_data/Jobs")
+_JOBS_DOWNLOAD_ROOT = settings.path_jobs
 
 
 def _has_result_zip_or_folder(job_id: str) -> bool:
@@ -53,15 +53,22 @@ def _result_file_points_to_downloadable(job: Job) -> bool:
     return p.is_file() or p.is_dir()
 
 
-def _user_job_has_downloadable_result(job_id: str, result_file: Optional[str]) -> bool:
+def _user_job_has_downloadable_result(
+    job_id: str,
+    result_file: Optional[str],
+    allow_standard_disk_products: bool = False,
+) -> bool:
     """
     是否具备可下载结果：DB 中 result_file 指向存在的文件/目录，
-    或磁盘上已有 Jobs/{job_id}/model_result.zip、result.zip 或 result/（与 download_server 一致）。
+    或磁盘上已有 Jobs/{job_id}/model_result.zip、result.zip 或 result/（仅允许在模型训练任务中使用）。
     """
     if result_file and str(result_file).strip():
         p = pathlib.Path(result_file)
         if p.is_file() or p.is_dir():
             return True
+    if not allow_standard_disk_products:
+        return False
+
     jd = _JOBS_DOWNLOAD_ROOT / job_id
     return (
         (jd / "model_result.zip").is_file()
@@ -349,8 +356,18 @@ async def get_job_download_url(
         if current_status != JobStatus.COMPLETED.value and not zip_ready:
             raise HTTPException(status_code=400, detail="任务尚未完成，无法下载结果")
         
-        # 检查结果文件（允许仅有 result 目录或 result.zip 而无 DB 字段）
-        if not _user_job_has_downloadable_result(job_id, job.result_file):
+        # 检查结果文件：
+        # - 数据处理/数据分析：不参与“标准磁盘产物存在即可下载”的宽松条件
+        # - 模型训练：允许 job-result 在 DB 写入滞后时，基于磁盘标准产物兜底可下载
+        allow_standard_disk_products = job.job_type in {
+            JobType.MODEL_TRAIN,
+            JobType.ANALYSIS_TRAIN,
+        }
+        if not _user_job_has_downloadable_result(
+            job_id,
+            job.result_file,
+            allow_standard_disk_products=allow_standard_disk_products,
+        ):
             raise HTTPException(status_code=404, detail="结果文件不存在")
         
         # 生成 HMAC 签名
@@ -361,7 +378,8 @@ async def get_job_download_url(
         token = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
         
         # 构建下载链接
-        download_url = f"http://localhost:8001/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
+        base = settings.download_public_base()
+        download_url = f"{base}/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
         
         return DownloadUrlResponse(
             download_url=download_url,

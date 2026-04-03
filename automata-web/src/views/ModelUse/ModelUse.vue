@@ -641,7 +641,11 @@ const ensureDownloadReady = async (jobId: string) => {
       return
     } catch (error: any) {
       const detail: string = error?.response?.data?.detail || ''
-      const canRetry = /任务尚未完成|结果文件不存在/.test(detail) || !detail
+      const statusCode: number | undefined = error?.response?.status
+      const retryableDetail =
+        /任务尚未完成|结果文件不存在|not completed|not ready|does not exist|Result file/i.test(detail)
+      const retryableCode = statusCode === 400 || statusCode === 404 || statusCode === 409
+      const canRetry = retryableDetail || retryableCode || !detail
       if (!canRetry && i === 0) {
         console.warn('准备下载链接失败，将不再自动重试:', error)
         break

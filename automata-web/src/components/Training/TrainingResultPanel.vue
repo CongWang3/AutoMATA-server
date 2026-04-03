@@ -4,7 +4,10 @@
     <div v-if="phase === 'waiting'" class="phase waiting">
       <div class="banner">
         <h2 class="banner-title">Data training task</h2>
-        <p class="hint">Trainings is in progress, please wait</p>
+        <p v-if="statusUpper === 'COMPLETED' && downloadReady === false" class="hint">
+          Training finished. Preparing a secure download link…
+        </p>
+        <p v-else class="hint">Trainings is in progress, please wait</p>
       </div>
 
       <table class="info-table">
@@ -30,7 +33,11 @@
                 alt=""
                 class="progress-gif"
               >
-              <span v-else>Submitted</span>
+              <span v-else-if="statusUpper === 'COMPLETED' && downloadReady === false">
+                Completed (preparing download…)
+              </span>
+              <span v-else-if="statusUpper === 'SUBMITTED'">Submitted</span>
+              <span v-else>{{ status || '—' }}</span>
             </td>
           </tr>
         </tbody>

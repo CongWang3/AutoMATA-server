@@ -1211,14 +1211,25 @@ async function ensureDownloadReady(id: string) {
 
     for (let i = 0; i < maxAttempts; i++) {
         try {
-            const url = await jobsApi.getDownloadUrl(id)
-            preparedDownloadUrl.value = url
+            // Prefer unified jobs download-url; fallback to training-specific endpoint.
+            try {
+                const url = await jobsApi.getDownloadUrl(id)
+                preparedDownloadUrl.value = url
+            } catch (e1: any) {
+                const r = await trainingApi.getDownloadUrl(id)
+                preparedDownloadUrl.value = r?.download_url || null
+            }
             downloadReady.value = true
             return
         } catch (error: any) {
             const detail: string = error?.response?.data?.detail || ''
+            const statusCode: number | undefined = error?.response?.status
+
             // 任务未完成 / 结果文件不存在时可以重试，其它错误直接放弃重试
-            const canRetry = /任务尚未完成|结果文件不存在/.test(detail) || !detail
+            const retryableDetail =
+                /任务尚未完成|结果文件不存在|not completed|not ready|does not exist|Result file/i.test(detail)
+            const retryableCode = statusCode === 400 || statusCode === 404 || statusCode === 409
+            const canRetry = retryableDetail || retryableCode || !detail
             if (!canRetry && i === 0) {
                 console.warn('准备下载链接失败，将不再自动重试:', error)
                 break
@@ -1284,10 +1295,13 @@ const setupWebSocket = async () => {
                 statusText.value = message.current_step || `Status: ${message.status}`
                 
                 // 处理完成或失败状态（匹配后端新状态枚举值）
+                // 注意：轮询路径在 Completed 时会调用 ensureDownloadReady；若 WS 先到并 stopPolling，
+                // 必须同样拉取签名下载链接，否则 TrainingResultPanel 会因 downloadReady=false 一直停在等待页。
                 if (message.status === 'Completed') {
                     ElMessage.success('Training finished')
                     stopPolling() // 停止轮询
-                    refreshUnifiedJobDetailIfTerminal(currentJob.value.id, message.status)
+                    void refreshUnifiedJobDetailIfTerminal(currentJob.value.id, message.status)
+                    void ensureDownloadReady(currentJob.value.id)
                 } else if (message.status === 'Failed') {
                     ElMessage.error(message.error_message || 'Training failed')
                     stopPolling() // 停止轮询

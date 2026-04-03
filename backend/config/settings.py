@@ -1,6 +1,8 @@
 """
 应用配置模块
 """
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import List, Optional
@@ -36,6 +38,15 @@ class Settings(BaseSettings):
     # 服务器配置
     HOST: str = "0.0.0.0"
     PORT: int = 8005
+
+    # 仓库根目录（code、download_data、example、automata-web 的父目录）。生产可通过环境变量 REPO_ROOT 覆盖。
+    REPO_ROOT: str = "/xp/www/AutoMATA"
+
+    # 独立下载服务（download_server.py）：绑定地址/端口，以及返回给浏览器/邮件的下载根 URL（无尾斜杠，如 https://example.com 或 http://host:8001）
+    DOWNLOAD_SERVER_HOST: str = "0.0.0.0"
+    DOWNLOAD_SERVER_PORT: int = 8001
+    # 公网下载设置为 "http://1.95.52.33:8001" 。部署时把 DOWNLOAD_PUBLIC_BASE_URL 设成真实对外地址即可。
+    DOWNLOAD_PUBLIC_BASE_URL: str = "http://localhost:8001"
     
     # 数据库配置 - 支持真实环境连接
     DB_USER: str = "automata"
@@ -87,6 +98,8 @@ class Settings(BaseSettings):
     
     # CORS 配置 - 开发环境允许所有来源（支持本地前端直连）
     CORS_ORIGINS: List[str] = ["*"]
+    # 旧代码设置的CORS_ORIGINS
+    # CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
     
     # Email 配置
     EMAIL_ENABLED: bool = False
@@ -126,7 +139,37 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """判断是否为生产环境"""
         return not self.DEBUG
-    
+
+    @property
+    def path_repo(self) -> Path:
+        return Path(self.REPO_ROOT)
+
+    @property
+    def path_jobs(self) -> Path:
+        return self.path_repo / "download_data" / "Jobs"
+
+    @property
+    def path_code(self) -> Path:
+        return self.path_repo / "code"
+
+    @property
+    def path_download_data(self) -> Path:
+        return self.path_repo / "download_data"
+
+    @property
+    def path_process_config(self) -> Path:
+        return self.path_repo / "download_data" / "Config"
+
+    @property
+    def path_data_analysis_plot(self) -> Path:
+        return self.path_repo / "code" / "data_analysis_plot"
+
+    def download_public_base(self) -> str:
+        """下载服务对外 base，已去除尾斜杠。"""
+        return (self.DOWNLOAD_PUBLIC_BASE_URL or "").rstrip("/")
+
+
+
     def validate_cors_config(self) -> None:
         """验证 CORS 配置"""
         if self.is_production and "*" in self.CORS_ORIGINS:

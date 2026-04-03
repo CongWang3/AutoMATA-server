@@ -11,23 +11,29 @@ import json
 import logging
 import shutil
 import uuid
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import asyncio
 import subprocess
+from contextlib import asynccontextmanager
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from api.models.user import User
 from api.models.job import Job, JobType, JobStatus
+from api.services.concurrency import GLOBAL_TASK_SEM, next_server_seq
+from api.utils.subprocess_utils import run_subprocess
 from api.websocket.task_manager import task_status_manager
 from api.utils.security import security_validator
 from api.services.email_service import email_service
 from config.database import SessionLocal
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
 
 # ============================================================
 # 损失函数与优化器映射配置
@@ -216,7 +222,51 @@ class TrainingService:
         self.db = db
         self.user = user
         # 与 PHP 版保持一致的 Jobs 目录
-        self.jobs_root = Path("/xp/www/AutoMATA/download_data/Jobs")
+        self.jobs_root = settings.path_jobs
+
+    @asynccontextmanager
+    async def _global_script_slot(self, job_id: str):
+        """
+        Global (all-job-types) concurrency gate for external script execution.
+
+        Queued semantics:
+        - Keep status as Submitted
+        - Write current_step='排队中（等待资源）' at most once while waiting
+        """
+        acquired_immediately = False
+        try:
+            await asyncio.wait_for(GLOBAL_TASK_SEM.acquire(), timeout=0)
+            acquired_immediately = True
+        except Exception:
+            acquired_immediately = False
+
+        if not acquired_immediately:
+            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            if job and job.status == JobStatus.SUBMITTED and (job.current_step or "") != "排队中（等待资源）":
+                job.current_step = "排队中（等待资源）"
+                job.updated_at = datetime.now()
+                self.db.commit()
+                try:
+                    await task_status_manager.send_task_status(
+                        str(self.user.id),
+                        {
+                            "job_id": job_id,
+                            "status": JobStatus.SUBMITTED.value,
+                            "progress": job.progress or 0,
+                            "current_step": job.current_step,
+                            "message": "排队中（等待资源）",
+                            "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                            "server_seq": next_server_seq(),
+                        },
+                    )
+                except Exception:
+                    pass
+            await GLOBAL_TASK_SEM.acquire()
+
+        try:
+            yield
+        finally:
+            GLOBAL_TASK_SEM.release()
 
     def _validate_dataset_path(self, dataset_path: str) -> Path:
         """
@@ -838,22 +888,28 @@ class TrainingService:
             for m_type, code_type in base_code_map.items():
                 sub_result_dir = result_dir / code_type
                 sub_result_dir.mkdir(parents=True, exist_ok=True)
-                script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
+                script_path = str(settings.path_code / "train_model" / f"{code_type}.py")
                 
                 cmd = build_supervised_cmd(script_path, "all", m_type)
                 terminal_log = sub_result_dir / "terminal.log"
 
                 logger.info(f"[TRAIN][SUPERVISED][ALL] 开始执行训练脚本({m_type}): {' '.join(cmd)}")
-                with open(terminal_log, "w", encoding="utf-8") as log_fp:
-                    result = subprocess.run(
-                        cmd,
-                        capture_output=True,
-                        text=True,
-                        cwd="/xp/www/AutoMATA",
-                        shell=False,
-                        timeout=3600
-                    )
-                    stdout_all.append(result.stdout or "")
+                async with self._global_script_slot(job_id):
+                    with open(terminal_log, "w", encoding="utf-8") as log_fp:
+                        result = await run_subprocess(
+                            cmd,
+                            cwd=str(settings.path_repo),
+                            shell=False,
+                            timeout=3600,
+                            stdout=None,
+                            stderr=None,
+                            text=True,
+                        )
+                        log_fp.write(result.stdout or "")
+                        if result.stderr:
+                            log_fp.write("\n[stderr]\n")
+                            log_fp.write(result.stderr)
+                        stdout_all.append(result.stdout or "")
                 if result.returncode != 0:
                     raise RuntimeError(f"{m_type} training failed: {result.stderr}")
         else:
@@ -861,22 +917,24 @@ class TrainingService:
             if not code_type:
                 raise RuntimeError(f"Unsupported supervised learning model type: {normalized_model_type}")
 
-            script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
+            script_path = str(settings.path_code / "train_model" / f"{code_type}.py")
             
             cmd = build_supervised_cmd(script_path, "single", normalized_model_type)
             terminal_log = result_dir / "terminal.log"
 
             logger.info(f"[TRAIN][SUPERVISED] 开始执行训练脚本: {' '.join(cmd)}")
-            with open(terminal_log, "w", encoding="utf-8") as log_fp:
-                result = subprocess.run(
-                    cmd,
-                    stdout=log_fp,
-                    stderr=subprocess.STDOUT,
-                    cwd="/xp/www/AutoMATA",
-                    shell=False,
-                    timeout=3600
-                )
-                stdout_all.append(result.stdout or "")
+            async with self._global_script_slot(job_id):
+                with open(terminal_log, "w", encoding="utf-8") as log_fp:
+                    result = await run_subprocess(
+                        cmd,
+                        cwd=str(settings.path_repo),
+                        shell=False,
+                        timeout=3600,
+                        stdout=log_fp,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                    )
+                    stdout_all.append(getattr(result, "stdout", None) or "")
             if result.returncode != 0:
                 raise RuntimeError(result.stderr or "Supervised learning training execution failed")
                 # raise RuntimeError(
@@ -963,7 +1021,7 @@ class TrainingService:
         evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.png")
 
         python_exec = "/opt/anaconda/envs/automata/bin/python"
-        script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
+        script_path = str(settings.path_code / "train_model" / f"{code_type}.py")
 
         # 构建无监督学习命令 - 注意参数名称！
         cmd = [
@@ -986,19 +1044,21 @@ class TrainingService:
 
         logger.info(f"[TRAIN][UNSUPERVISED] 开始执行训练脚本: {' '.join(cmd)}")
         terminal_log = result_dir / "terminal.log"
-        with open(terminal_log, "w", encoding="utf-8") as log_fp:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd="/xp/www/AutoMATA",
-                shell=False,
-                timeout=3600
-            )
-            log_fp.write(result.stdout or "")
-            if result.stderr:
-                log_fp.write("\n[stderr]\n")
-                log_fp.write(result.stderr)
+        async with self._global_script_slot(job_id):
+            with open(terminal_log, "w", encoding="utf-8") as log_fp:
+                result = await run_subprocess(
+                    cmd,
+                    cwd=str(settings.path_repo),
+                    shell=False,
+                    timeout=3600,
+                    stdout=None,
+                    stderr=None,
+                    text=True,
+                )
+                log_fp.write(result.stdout or "")
+                if result.stderr:
+                    log_fp.write("\n[stderr]\n")
+                    log_fp.write(result.stderr)
         
         if result.returncode != 0:
             raise RuntimeError(result.stderr or "Unsupervised learning training execution failed")
@@ -1084,7 +1144,7 @@ class TrainingService:
         evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.png")
 
         python_exec = "/opt/anaconda/envs/automata/bin/python"
-        script_path = f"/xp/www/AutoMATA/code/train_model/{code_type}.py"
+        script_path = str(settings.path_code / "train_model" / f"{code_type}.py")
 
         # 构建半监督学习命令 - 与无监督类似的参数命名
         cmd = [
@@ -1125,19 +1185,21 @@ class TrainingService:
 
         logger.info(f"[TRAIN][SEMI-SUPERVISED] 开始执行训练脚本: {' '.join(cmd)}")
         terminal_log = result_dir / "terminal.log"
-        with open(terminal_log, "w", encoding="utf-8") as log_fp:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd="/xp/www/AutoMATA",
-                shell=False,
-                timeout=3600
-            )
-            log_fp.write(result.stdout or "")
-            if result.stderr:
-                log_fp.write("\n[stderr]\n")
-                log_fp.write(result.stderr)
+        async with self._global_script_slot(job_id):
+            with open(terminal_log, "w", encoding="utf-8") as log_fp:
+                result = await run_subprocess(
+                    cmd,
+                    cwd=str(settings.path_repo),
+                    shell=False,
+                    timeout=3600,
+                    stdout=None,
+                    stderr=None,
+                    text=True,
+                )
+                log_fp.write(result.stdout or "")
+                if result.stderr:
+                    log_fp.write("\n[stderr]\n")
+                    log_fp.write(result.stderr)
         
         if result.returncode != 0:
             raise RuntimeError(result.stderr or "Semi-supervised learning training execution failed")

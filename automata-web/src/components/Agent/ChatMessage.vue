@@ -15,7 +15,7 @@
           <span class="dot"></span>
           <span class="dot"></span>
         </span>
-        <span class="thinking-text">正在思考</span>
+        <span class="thinking-text">Thinking...</span>
       </div>
       
       <!-- 消息内容 -->
@@ -31,9 +31,9 @@
     <div v-else-if="message.role === 'tool'" class="tool-card">
       <div class="tool-header" @click="toggleToolExpand">
         <span class="tool-icon">🔧</span>
-        <span class="tool-name">{{ message.toolCall?.tool || '工具调用' }}</span>
+        <span class="tool-name">{{ message.toolCall?.tool || 'Tool call' }}</span>
         <span class="tool-status" :class="message.toolResult ? 'completed' : 'running'">
-          {{ message.toolResult ? '✓ 完成' : '运行中...' }}
+          {{ message.toolResult ? 'Completed' : 'Running...' }}
         </span>
         <span class="expand-icon">{{ isExpanded ? '▼' : '▶' }}</span>
       </div>
@@ -41,11 +41,11 @@
       <!-- 展开的详情 -->
       <div v-if="isExpanded" class="tool-details">
         <div v-if="message.toolCall?.args" class="tool-args">
-          <div class="detail-label">参数:</div>
+          <div class="detail-label">Parameters:</div>
           <pre class="detail-content">{{ formatArgs(message.toolCall.args) }}</pre>
         </div>
         <div v-if="message.toolResult" class="tool-result">
-          <div class="detail-label">结果:</div>
+          <div class="detail-label">Result:</div>
           <pre class="detail-content">{{ truncateResult(message.toolResult.result) }}</pre>
         </div>
       </div>
@@ -99,7 +99,7 @@ function formatArgs(args: any): string {
  */
 function truncateResult(result: string, maxLength: number = 500): string {
   if (result.length <= maxLength) return result
-  return result.slice(0, maxLength) + '...(已截断)'
+  return result.slice(0, maxLength) + '...(truncated)'
 }
 
 /**

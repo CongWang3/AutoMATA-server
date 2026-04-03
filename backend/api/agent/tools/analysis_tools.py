@@ -13,6 +13,7 @@ from langchain_core.tools import tool, InjectedToolArg
 from langchain_core.runnables import RunnableConfig
 
 from config.database import SessionLocal
+from config.settings import settings
 from api.models.job import Job, JobType, JobStatus
 from api.models.file import File
 
@@ -21,8 +22,8 @@ logger = logging.getLogger(__name__)
 # 路径配置（与 analysis_service.py 保持一致）
 RSCRIPT_PATH = "/opt/anaconda/envs/R_442/bin/Rscript"
 RSCRIPT_OPTIONS = "--no-save"
-R_SCRIPTS_DIR = Path("/xp/www/AutoMATA/code/data_analysis_plot")
-JOBS_BASE_DIR = Path("/xp/www/AutoMATA/download_data/Jobs")
+R_SCRIPTS_DIR = settings.path_data_analysis_plot
+JOBS_BASE_DIR = settings.path_jobs
 
 
 def _generate_job_id() -> str:
@@ -501,7 +502,7 @@ def run_diff_expression(
             f"-e {correction}"
         ]
         
-        r_script_path = f"/xp/www/AutoMATA/code/{r_script}"
+        r_script_path = str(settings.path_code / r_script)
         cmd = f"{RSCRIPT_PATH} {RSCRIPT_OPTIONS} {r_script_path} {' '.join(cmd_args)}"
         
         # 保存命令到 config 文件

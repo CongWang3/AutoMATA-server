@@ -11,9 +11,9 @@
     file-label="1. Upload expression data file"
     second-file-label="2. Upload sample data file"
     example-data-url="/example/draw_example/read_count.txt"
-    example-file-name="read_count.txt"
+    example-file-name="expression_read_count.txt"
     second-example-url="/example/draw_example/group_info.txt"
-    second-example-file-name="group_info.txt"
+    second-example-file-name="sample_group_info.txt"
   />
 </template>
 

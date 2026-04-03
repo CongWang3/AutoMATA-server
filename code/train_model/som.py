@@ -239,8 +239,10 @@ if __name__ == '__main__':
         # 自动检测实际类别数量，覆盖命令行参数
         actual_num_classes = len(torch.unique(torch.LongTensor(Y_train_total)))
         if actual_num_classes != output_size:
-            print(f"警告：用户设置的类别数 ({output_size}) 与数据实际类别数 ({actual_num_classes}) 不一致")
-            print(f"自动使用实际类别数：{actual_num_classes}")
+            # print(f"警告：用户设置的类别数 ({output_size}) 与数据实际类别数 ({actual_num_classes}) 不一致")
+            # print(f"自动使用实际类别数：{actual_num_classes}")
+            print(f"Warning: The number of classes set by the user ({output_size}) does not match the actual number of classes in the data ({actual_num_classes})")
+            print(f"Automatically use the actual number of classes: {actual_num_classes}")
             output_size = actual_num_classes
 
         for i, (train_idx, val_idx) in enumerate(skf.split(X_train_total, Y_train_total)):

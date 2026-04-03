@@ -807,6 +807,10 @@ const handleTaskStatusUpdate = (data: any) => {
   if (data.status) {
     refreshUnifiedJobDetailIfTerminal(String(currentJob.value.id), String(data.status))
   }
+  // 与 Supervised 一致：WS 可能先于轮询把状态推到 Completed；TrainingResultPanel 在 downloadReady=false 时会一直停在等待态
+  if (data.status === 'Completed') {
+    void ensureDownloadReady(String(currentJob.value.id))
+  }
 }
 
 const connectWebSocket = async () => {

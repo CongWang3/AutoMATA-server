@@ -10,6 +10,8 @@ from typing import Optional
 from pathlib import Path
 import asyncio
 import math
+import time
+from contextlib import asynccontextmanager
 from fastapi import UploadFile, HTTPException
 
 from sqlalchemy.orm import Session
@@ -26,8 +28,13 @@ from api.schemas.data_process import (
 from api.utils.file_utils import save_uploaded_file
 from api.websocket.task_manager import task_status_manager
 from api.services.email_service import email_service
+from api.services.concurrency import GLOBAL_TASK_SEM, next_server_seq
+from api.utils.subprocess_utils import run_subprocess
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
 
 class DataProcessService:
     """数据处理服务类"""
@@ -36,9 +43,53 @@ class DataProcessService:
         self.db = db
         self.user = user
         self.upload_dir = Path("uploaded_files")
-        self.process_dir = Path("/xp/www/AutoMATA/download_data/Config")  # 使用绝对路径
+        self.process_dir = settings.path_process_config
         self.upload_dir.mkdir(exist_ok=True)
         self.process_dir.mkdir(parents=True, exist_ok=True)
+
+    @asynccontextmanager
+    async def _global_script_slot(self, job_id: str):
+        """
+        Global (all-job-types) concurrency gate for external script execution.
+
+        Queued semantics:
+        - Keep status as Submitted
+        - Write current_step='排队中（等待资源）' at most once while waiting
+        """
+        acquired_immediately = False
+        try:
+            await asyncio.wait_for(GLOBAL_TASK_SEM.acquire(), timeout=0)
+            acquired_immediately = True
+        except Exception:
+            acquired_immediately = False
+
+        if not acquired_immediately:
+            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            if job and job.status == JobStatus.SUBMITTED and (job.current_step or "") != "排队中（等待资源）":
+                job.current_step = "排队中（等待资源）"
+                job.updated_at = datetime.now()
+                self.db.commit()
+                try:
+                    await task_status_manager.send_task_status(
+                        str(self.user.id),
+                        {
+                            "job_id": job_id,
+                            "status": JobStatus.SUBMITTED.value,
+                            "progress": job.progress or 0,
+                            "current_step": job.current_step,
+                            "message": "排队中（等待资源）",
+                            "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                            "server_seq": next_server_seq(),
+                        },
+                    )
+                except Exception:
+                    pass
+            await GLOBAL_TASK_SEM.acquire()
+
+        try:
+            yield
+        finally:
+            GLOBAL_TASK_SEM.release()
     
     # <!-- 
     # 审查上下文：
@@ -396,29 +447,31 @@ class DataProcessService:
     ):
         """执行基因组数据处理"""
         try:
-            # 更新任务状态
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.PROCESSING
-                job.updated_at = datetime.now()
-                self.db.commit()
-                
-                # 通过 WebSocket 推送状态更新
-                try:
-                    await task_status_manager.send_task_status(
-                        str(self.user.id),
-                        {
-                            "job_id": job_id,
-                            "status": "Processing",
-                            "progress": 0,
-                            "message": "开始处理基因组数据"
-                        }
-                    )
-                except Exception as e:
-                    logger.debug(f"WebSocket 状态推送失败: {e}")
-                
+            async with self._global_script_slot(job_id):
+                # 更新任务状态：拿到 slot 后才进入 Processing（排队时仍为 Submitted）
+                job = self.db.query(Job).filter(Job.job_id == job_id).first()
+                if job:
+                    job.status = JobStatus.PROCESSING
+                    job.current_step = "开始处理基因组数据"
+                    job.updated_at = datetime.now()
+                    self.db.commit()
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(self.user.id),
+                            {
+                                "job_id": job_id,
+                                "status": JobStatus.PROCESSING.value,
+                                "progress": 0,
+                                "message": "开始处理基因组数据",
+                                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                                "server_seq": next_server_seq(),
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket 状态推送失败: {e}")
+
             # 准备 Jobs 目录的输入文件（与原 PHP 实现兼容）
-            jobs_dir = Path("/xp/www/AutoMATA/download_data/Jobs") / job_id
+            jobs_dir = settings.path_jobs / job_id
             jobs_dir.mkdir(parents=True, exist_ok=True)
             jobs_input_file = jobs_dir / "origin.txt"
                 
@@ -427,12 +480,12 @@ class DataProcessService:
             shutil.copy2(str(file_path), str(jobs_input_file))
                 
             # 构建 R脚本命令（使用绝对路径）
-            r_script = "/xp/www/AutoMATA/code/mysql2TPM.R"
+            r_script = str(settings.path_code / "mysql2TPM.R")
             output_dir = self.process_dir / job_id
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # 使用绝对路径确保 R 脚本能正确访问文件
-            output_file =  "/xp/www/AutoMATA/download_data/Jobs/" + job_id + "/processed.txt"
+            output_file = str(settings.path_jobs / job_id / "processed.txt")
                 
             # 参数映射
             nomenclature_map = {"GeneID": "GeneID", "EnsemblID": "EnsemblID", "Symbol": "Symbol"}
@@ -457,18 +510,29 @@ class DataProcessService:
             ]
             
             # 执行 R脚本（使用完整的R环境路径）
-            import subprocess
             rscript_path = "/opt/anaconda/envs/R_442/bin/Rscript"
             cmd[0] = rscript_path  # 替换第一个参数为完整路径
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.getcwd())
+            result = await run_subprocess(
+                cmd,
+                cwd=os.getcwd(),
+                shell=False,
+                timeout=None,
+                stdout=None,
+                stderr=None,
+                text=True,
+            )
                         
             # 更新任务结果
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
                 if result.returncode == 0:
                     job.status = JobStatus.COMPLETED
+                    job.current_step = "已完成"
                     job.result_file = output_file  # 使用绝对路径
                     job.output_params = json.dumps({"stdout": result.stdout}, ensure_ascii=False)
+                    job.updated_at = datetime.now()
+                    self.db.commit()  # 自己改
+
                                 
                     # 推送完成状态
                     try:
@@ -487,8 +551,10 @@ class DataProcessService:
                                     
                 else:
                     job.status = JobStatus.FAILED
+                    job.current_step = "处理失败"
                     job.error_message = result.stderr or "R 脚本执行失败"
-                                
+                    
+
                     # 推送失败状态
                     try:
                         await task_status_manager.send_task_status(
@@ -503,8 +569,11 @@ class DataProcessService:
                         )
                     except Exception as e:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
-                job.updated_at = datetime.now()
-                self.db.commit()
+                
+                # try:
+                #     self.db.commit()  # 自己改
+                # except Exception as e:
+                #     raise
                             
                 logger.info(f"基因组处理完成：job_id={job_id}, status={job.status}")
                 
@@ -528,7 +597,11 @@ class DataProcessService:
                 job.status = "Failed"
                 job.error_message = str(e)
                 job.updated_at = datetime.now()
-                self.db.commit()
+                try:
+                    self.db.commit()
+                except Exception:
+                    # If even the failure commit fails, the status can remain stale (Processing).
+                    pass
     
     async def _execute_transcriptome_processing(
         self,
@@ -541,29 +614,31 @@ class DataProcessService:
     ):
         """执行转录组数据处理"""
         try:
-            # 更新任务状态
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = "Processing"
-                job.updated_at = datetime.now()
-                self.db.commit()
-                
-                # 通过 WebSocket 推送状态更新
-                try:
-                    await task_status_manager.send_task_status(
-                        str(self.user.id),
-                        {
-                            "job_id": job_id,
-                            "status": "Processing",
-                            "progress": 0,
-                            "message": "开始处理转录组数据"
-                        }
-                    )
-                except Exception as e:
-                    logger.debug(f"WebSocket 状态推送失败: {e}")
-                
+            async with self._global_script_slot(job_id):
+                # 更新任务状态：拿到 slot 后才进入 Processing（排队时仍为 Submitted）
+                job = self.db.query(Job).filter(Job.job_id == job_id).first()
+                if job:
+                    job.status = JobStatus.PROCESSING
+                    job.current_step = "开始处理转录组数据"
+                    job.updated_at = datetime.now()
+                    self.db.commit()
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(self.user.id),
+                            {
+                                "job_id": job_id,
+                                "status": JobStatus.PROCESSING.value,
+                                "progress": 0,
+                                "message": "开始处理转录组数据",
+                                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                                "server_seq": next_server_seq(),
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket 状态推送失败: {e}")
+
             # 准备 Jobs 目录的输入文件（与原 PHP 实现兼容）
-            jobs_dir = Path("/xp/www/AutoMATA/download_data/Jobs") / job_id
+            jobs_dir = settings.path_jobs / job_id
             jobs_dir.mkdir(parents=True, exist_ok=True)
             jobs_input_file = jobs_dir / "origin.txt"
                 
@@ -572,12 +647,12 @@ class DataProcessService:
             shutil.copy2(str(file_path), str(jobs_input_file))
                 
             # 构建 R脚本命令（使用绝对路径）
-            r_script = "/xp/www/AutoMATA/code/mrna_mysql2TPM.R"
+            r_script = str(settings.path_code / "mrna_mysql2TPM.R")
             output_dir = self.process_dir / job_id
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # 使用绝对路径确保 R 脚本能正确访问文件
-            output_file =  "/xp/www/AutoMATA/download_data/Jobs/" + job_id + "/processed.txt"
+            output_file = str(settings.path_jobs / job_id / "processed.txt")
                 
             # 参数映射
             nomenclature_map = {"Refseq": "Refseq", "EnsemblID": "EnsemblID", "Transcript_name": "Transcript_name"}
@@ -600,18 +675,28 @@ class DataProcessService:
             ]
             
             # 执行 R脚本（使用完整的R环境路径）
-            import subprocess
             rscript_path = "/opt/anaconda/envs/R_442/bin/Rscript"
             cmd[0] = rscript_path  # 替换第一个参数为完整路径
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.getcwd())
+            result = await run_subprocess(
+                cmd,
+                cwd=os.getcwd(),
+                shell=False,
+                timeout=None,
+                stdout=None,
+                stderr=None,
+                text=True,
+            )
                         
             # 更新任务结果
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
                 if result.returncode == 0:
-                    job.status = "Completed"
+                    job.status = JobStatus.COMPLETED
+                    job.current_step = "已完成"
                     job.result_file = output_file  # 使用绝对路径
                     job.output_params = json.dumps({"stdout": result.stdout}, ensure_ascii=False)
+                    job.updated_at = datetime.now()
+                    self.db.commit()  # 自己改
                                 
                     # 推送完成状态
                     try:
@@ -629,7 +714,8 @@ class DataProcessService:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
                                     
                 else:
-                    job.status = "Failed"
+                    job.status = JobStatus.FAILED
+                    job.current_step = "处理失败"
                     job.error_message = result.stderr or "R 脚本执行失败"
                                 
                     # 推送失败状态
@@ -646,8 +732,7 @@ class DataProcessService:
                         )
                     except Exception as e:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
-                job.updated_at = datetime.now()
-                self.db.commit()
+                
                             
                 logger.info(f"转录组处理完成：job_id={job_id}, status={job.status}")
                 
@@ -671,7 +756,7 @@ class DataProcessService:
                 job.status = "Failed"
                 job.error_message = str(e)
                 job.updated_at = datetime.now()
-                self.db.commit()
+                self.db.commit()  # 自己改
     async def _execute_protein_processing(
         self,
         job_id: str,
@@ -808,7 +893,7 @@ class DataProcessService:
                         processed_clean[cleaned] = symbol
 
             # 生成输出内容：命名ID, Symbol, log2(value+1)
-            jobs_dir = Path("/xp/www/AutoMATA/download_data/Jobs") / job_id
+            jobs_dir = settings.path_jobs / job_id
             jobs_dir.mkdir(parents=True, exist_ok=True)
             output_file = jobs_dir / "processed.txt"
 
@@ -932,7 +1017,7 @@ class DataProcessService:
                     logger.debug(f"WebSocket 状态推送失败: {e}")
             
             # 准备 Jobs 目录及输入文件（与原 PHP 实现保持一致）
-            jobs_dir = Path("/xp/www/AutoMATA/download_data/Jobs") / job_id
+            jobs_dir = settings.path_jobs / job_id
             jobs_dir.mkdir(parents=True, exist_ok=True)
             result_dir = jobs_dir / "result"
             result_dir.mkdir(parents=True, exist_ok=True)
@@ -954,7 +1039,7 @@ class DataProcessService:
             
             # 构建 Python 脚本命令（与 integration.php 保持一致）
             python_exec = "/opt/anaconda/envs/automata/bin/python"
-            script_path = "/xp/www/AutoMATA/code/train_model/integration.py"
+            script_path = str(settings.path_code / "train_model" / "integration.py")
             
             cmd = [
                 python_exec,
@@ -973,24 +1058,30 @@ class DataProcessService:
                 str(output_file),
             ]
             
-            import subprocess
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=os.getcwd(),
-            )
+            async with self._global_script_slot(job_id):
+                result = await run_subprocess(
+                    cmd,
+                    cwd=os.getcwd(),
+                    shell=False,
+                    timeout=None,
+                    stdout=None,
+                    stderr=None,
+                    text=True,
+                )
             
             # 更新任务结果
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
                 if result.returncode == 0:
                     job.status = JobStatus.COMPLETED
+                    job.current_step = "已完成"
                     job.result_file = str(output_file)
                     job.output_params = json.dumps(
                         {"stdout": result.stdout}, ensure_ascii=False
                     )
+                    job.updated_at = datetime.now()
+                    self.db.commit()  # 自己改
+
                     
                     # 推送完成状态
                     try:
@@ -1008,6 +1099,7 @@ class DataProcessService:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
                 else:
                     job.status = JobStatus.FAILED
+                    job.current_step = "处理失败"
                     job.error_message = result.stderr or "Integration 脚本执行失败"
                     
                     # 推送失败状态
@@ -1025,8 +1117,8 @@ class DataProcessService:
                     except Exception as e:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
                 
-                job.updated_at = datetime.now()
-                self.db.commit()
+                
+                # self.db.commit()
                 logger.info(f"多组学数据整合完成：job_id={job_id}, status={job.status}")
                 
                 # 如果任务成功且提供了邮箱，发送结果邮件
@@ -1085,14 +1177,14 @@ class DataProcessService:
                     logger.debug(f"WebSocket 状态推送失败: {e}")
 
             # 准备 Jobs 目录及输出文件
-            jobs_dir = Path("/xp/www/AutoMATA/download_data/Jobs") / job_id
+            jobs_dir = settings.path_jobs / job_id
             jobs_dir.mkdir(parents=True, exist_ok=True)
             result_dir = jobs_dir / "result"
             result_dir.mkdir(parents=True, exist_ok=True)
             output_file = result_dir / f"{job_id}_result.txt"
 
             # 构建 R 脚本命令
-            r_script = "/xp/www/AutoMATA/code/integration_pvalue.R"
+            r_script = str(settings.path_code / "integration_pvalue.R")
             rscript_path = "/opt/anaconda/envs/R_442/bin/Rscript"
 
             cmd = [
@@ -1112,24 +1204,30 @@ class DataProcessService:
                 str(output_file),
             ]
 
-            import subprocess
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=os.getcwd(),
-            )
+            async with self._global_script_slot(job_id):
+                result = await run_subprocess(
+                    cmd,
+                    cwd=os.getcwd(),
+                    shell=False,
+                    timeout=None,
+                    stdout=None,
+                    stderr=None,
+                    text=True,
+                )
 
             # 更新任务结果
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
                 if result.returncode == 0:
                     job.status = JobStatus.COMPLETED
+                    job.current_step = "已完成"
                     job.result_file = str(output_file)
                     job.output_params = json.dumps(
                         {"stdout": result.stdout}, ensure_ascii=False
                     )
+                    job.updated_at = datetime.now()
+                    self.db.commit()  # 自己改
+
 
                     # 推送完成状态
                     try:
@@ -1147,6 +1245,7 @@ class DataProcessService:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
                 else:
                     job.status = JobStatus.FAILED
+                    job.current_step = "处理失败"
                     job.error_message = result.stderr or "integration_pvalue.R 脚本执行失败"
 
                     # 推送失败状态
@@ -1164,8 +1263,8 @@ class DataProcessService:
                     except Exception as e:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
 
-                job.updated_at = datetime.now()
-                self.db.commit()
+                # job.updated_at = datetime.now()
+                # self.db.commit()
                 logger.info(f"pvalue 多组学整合完成：job_id={job_id}, status={job.status}")
                 
                 # 如果任务成功且提供了邮箱，发送结果邮件

@@ -33,14 +33,9 @@ logger = logging.getLogger(__name__)
 class AnalysisService:
     """数据分析服务类"""
 
-    # 与 training / analysis_train 一致的 Jobs 根目录
-    _JOBS_ROOT = Path("/xp/www/AutoMATA/download_data/Jobs")
-
     # 路径配置
     RSCRIPT_PATH = "/opt/anaconda/envs/R_442/bin/Rscript"
     RSCRIPT_OPTIONS = "--no-save"
-    R_SCRIPTS_DIR = Path("/xp/www/AutoMATA/code/data_analysis_plot")
-    JOBS_BASE_DIR = Path("/xp/www/AutoMATA/download_data/Jobs")
     
     def __init__(self, db: Session, user: User):
         self.db = db
@@ -54,7 +49,7 @@ class AnalysisService:
     
     def _create_job_dirs(self, job_id: str) -> tuple[Path, Path]:
         """创建任务目录和结果目录"""
-        job_dir = self.JOBS_BASE_DIR / job_id
+        job_dir = settings.path_jobs / job_id
         result_dir = job_dir / "result"
         job_dir.mkdir(parents=True, exist_ok=True)
         result_dir.mkdir(parents=True, exist_ok=True)
@@ -131,7 +126,7 @@ class AnalysisService:
                     logger.debug(f"WebSocket状态推送失败: {e}")
             
             # 构建完整命令
-            r_script_path = str(self.R_SCRIPTS_DIR / r_script)
+            r_script_path = str(settings.path_data_analysis_plot / r_script)
             cmd = f"{self.RSCRIPT_PATH} {self.RSCRIPT_OPTIONS} {r_script_path} {' '.join(cmd_args)}"
             
             # 保存命令到config文件
@@ -244,7 +239,7 @@ class AnalysisService:
         Returns:
             进程退出码
         """
-        r_script_path = str(self.R_SCRIPTS_DIR / r_script)
+        r_script_path = str(settings.path_data_analysis_plot / r_script)
         cmd = f"{self.RSCRIPT_PATH} {self.RSCRIPT_OPTIONS} {r_script_path} {' '.join(cmd_args)}"
 
         if config_file is not None:
@@ -1108,7 +1103,7 @@ class AnalysisService:
         ]
         
         # 使用绝对路径执行
-        r_script_path = f"/xp/www/AutoMATA/code/{r_script.replace('../', '')}"
+        r_script_path = str(settings.path_code / r_script.replace("../", ""))
         
         try:
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
@@ -1261,7 +1256,7 @@ class AnalysisService:
             if not job:
                 raise HTTPException(status_code=404, detail="Task does not exist")
 
-            base_dir = Path("/xp/www/AutoMATA/download_data/Jobs")
+            base_dir = settings.path_jobs
             job_dir = base_dir / job_id
             result_dir = job_dir / "result"
             if not result_dir.exists():
@@ -1504,7 +1499,7 @@ class AnalysisService:
     # ==================== 获取分析结果 ====================
     
     def _analysis_train_result_dir(self, job_id: str) -> Path:
-        return (self._JOBS_ROOT / job_id / "result").resolve()
+        return (settings.path_jobs / job_id / "result").resolve()
 
     def get_analysis_result(self, job_id: str) -> AnalysisResultResponse:
         """获取分析结果（含 data_analysis 与 analysis_train）"""
