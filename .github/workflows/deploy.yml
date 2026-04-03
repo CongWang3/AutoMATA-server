@@ -181,7 +181,7 @@ jobs:
               export BACKEND_IMAGE_TAG="${{ github.sha }}"
             fi
             # 登录阿里云 ACR
-            echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login ${{ env.ALIYUN_REGISTRY }} -u "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin
+            echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login --username "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin ${{ env.ALIYUN_REGISTRY }}
             echo "[info] Starting deployment (using Aliyun ACR)..."
             
             # Detect docker compose command
@@ -231,7 +231,7 @@ jobs:
               export BACKEND_IMAGE_TAG="${{ github.sha }}"
             fi
             # 登录阿里云 ACR
-            echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login ${{ env.ALIYUN_REGISTRY }} -u "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin
+            echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login --username "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin ${{ env.ALIYUN_REGISTRY }}
             echo "[info] Starting deployment (using Aliyun ACR)..."
             
             # Detect docker compose command
