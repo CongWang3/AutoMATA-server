@@ -166,16 +166,29 @@ jobs:
               export BACKEND_IMAGE_TAG="${{ github.sha }}"
             fi
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            echo "[info] Starting deployment..."
+            
+            # Detect docker compose command
+            DOCKER_COMPOSE_CMD="docker compose"
+            if ! $DOCKER_COMPOSE_CMD version >/dev/null 2>&1; then
+              DOCKER_COMPOSE_CMD="docker-compose"
+            fi
+            echo "[info] Using: $DOCKER_COMPOSE_CMD"
+            
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head 2>/dev/null || docker-compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
+              echo "[info] Running database migration..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml pull frontend 2>/dev/null || docker-compose -f docker-compose.prod.yml pull frontend
+              echo "[info] Pulling frontend image..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull frontend
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml pull backend 2>/dev/null || docker-compose -f docker-compose.prod.yml pull backend
+              echo "[info] Pulling backend image..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull backend
             fi
-            docker compose -f docker-compose.prod.yml up -d 2>/dev/null || docker-compose -f docker-compose.prod.yml up -d
+            echo "[info] Starting services..."
+            $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
             curl -fsS "http://127.0.0.1:18001/health" >/dev/null || echo "[warn] download health failed"
@@ -201,16 +214,29 @@ jobs:
               export BACKEND_IMAGE_TAG="${{ github.sha }}"
             fi
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            echo "[info] Starting deployment..."
+            
+            # Detect docker compose command
+            DOCKER_COMPOSE_CMD="docker compose"
+            if ! $DOCKER_COMPOSE_CMD version >/dev/null 2>&1; then
+              DOCKER_COMPOSE_CMD="docker-compose"
+            fi
+            echo "[info] Using: $DOCKER_COMPOSE_CMD"
+            
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head 2>/dev/null || docker-compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
+              echo "[info] Running database migration..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml pull frontend 2>/dev/null || docker-compose -f docker-compose.prod.yml pull frontend
+              echo "[info] Pulling frontend image..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull frontend
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              docker compose -f docker-compose.prod.yml pull backend 2>/dev/null || docker-compose -f docker-compose.prod.yml pull backend
+              echo "[info] Pulling backend image..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull backend
             fi
-            docker compose -f docker-compose.prod.yml up -d 2>/dev/null || docker-compose -f docker-compose.prod.yml up -d
+            echo "[info] Starting services..."
+            $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
             curl -fsS "http://127.0.0.1:18001/health" >/dev/null || echo "[warn] download health failed"
