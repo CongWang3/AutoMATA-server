@@ -92,7 +92,62 @@ jobs:
     needs: [changes, build-and-push]
     if: always() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
     steps:
-      - name: Deploy via SSH
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # 部署目录优先级：Repository Variable DEPLOY_PATH > 仓库内 deploy/DEPLOY_PATH > 默认
+      - name: Resolve DEPLOY_PATH
+        env:
+          DEPLOY_PATH_VAR: ${{ vars.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          DEFAULT="/xp/www/AutoMATA-prod"
+          from_file=""
+          if [ -f deploy/DEPLOY_PATH ]; then
+            from_file="$(tr -d '\r\n' < deploy/DEPLOY_PATH | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          fi
+          if [ -n "${DEPLOY_PATH_VAR:-}" ]; then
+            chosen="${DEPLOY_PATH_VAR}"
+          elif [ -n "${from_file:-}" ]; then
+            chosen="${from_file}"
+          else
+            chosen="${DEFAULT}"
+          fi
+          echo "DEPLOY_PATH=${chosen}" >> "$GITHUB_ENV"
+          echo "Using DEPLOY_PATH=${chosen}"
+
+      - name: Validate required deploy secrets
+        id: deploy_auth
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for v in SSH_HOST SSH_USER GHCR_USERNAME GHCR_READ_TOKEN; do
+            if [ -z "${!v:-}" ]; then
+              missing="$missing $v"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required GitHub Secrets:$missing"
+            exit 1
+          fi
+          if [ -n "${SSH_KEY:-}" ]; then
+            echo "method=key" >> "$GITHUB_OUTPUT"
+          elif [ -n "${SSH_PASSWORD:-}" ]; then
+            echo "method=password" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Set either SSH_KEY (recommended) or SSH_PASSWORD"
+            exit 1
+          fi
+
+      - name: Deploy via SSH (private key)
+        if: steps.deploy_auth.outputs.method == 'key'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -101,7 +156,42 @@ jobs:
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
             set -euo pipefail
-            cd "${{ secrets.DEPLOY_PATH }}"
+            cd "${{ env.DEPLOY_PATH }}"
+            export GHCR_OWNER="${{ github.repository_owner }}"
+            export GHCR_OWNER="${GHCR_OWNER,,}"
+            if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+              export FRONTEND_IMAGE_TAG="${{ github.sha }}"
+            fi
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+              export BACKEND_IMAGE_TAG="${{ github.sha }}"
+            fi
+            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+              docker compose -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
+            fi
+            if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+              docker compose -f docker-compose.prod.yml pull frontend
+            fi
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+              docker compose -f docker-compose.prod.yml pull backend
+            fi
+            docker compose -f docker-compose.prod.yml up -d
+            curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
+            curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
+            curl -fsS "http://127.0.0.1:18001/health" >/dev/null || echo "[warn] download health failed"
+            docker image prune -f
+
+      - name: Deploy via SSH (password)
+        if: steps.deploy_auth.outputs.method == 'password'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          script: |
+            set -euo pipefail
+            cd "${{ env.DEPLOY_PATH }}"
             export GHCR_OWNER="${{ github.repository_owner }}"
             export GHCR_OWNER="${GHCR_OWNER,,}"
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
