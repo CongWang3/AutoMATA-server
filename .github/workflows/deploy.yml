@@ -172,8 +172,8 @@ jobs:
             set -euo pipefail
             cd "${{ env.DEPLOY_PATH }}"
             # 使用阿里云 ACR 镜像（国内访问更快）
-            export ALIYUN_REGISTRY="${{ env.ALIYUN_REGISTRY }}"
-            export ALIYUN_NAMESPACE="${{ env.ALIYUN_NAMESPACE }}"
+            export ALIYUN_REGISTRY="crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com"
+            export ALIYUN_NAMESPACE="automata-bio"
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
               export FRONTEND_IMAGE_TAG="${{ github.sha }}"
             fi
@@ -222,8 +222,8 @@ jobs:
             set -euo pipefail
             cd "${{ env.DEPLOY_PATH }}"
             # 使用阿里云 ACR 镜像（国内访问更快）
-            export ALIYUN_REGISTRY="${{ env.ALIYUN_REGISTRY }}"
-            export ALIYUN_NAMESPACE="${{ env.ALIYUN_NAMESPACE }}"
+            export ALIYUN_REGISTRY="crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com"
+            export ALIYUN_NAMESPACE="automata-bio"
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
               export FRONTEND_IMAGE_TAG="${{ github.sha }}"
             fi
