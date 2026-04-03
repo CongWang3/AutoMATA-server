@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 JOBS_ROOT = settings.path_jobs
 REPO_ROOT = settings.path_repo
-RSCRIPT = "/opt/anaconda/envs/R_442/bin/Rscript"
+RSCRIPT = settings.RSCRIPT_PATH
 
 
 def _organism_to_mysql2tpm_r(organism: str) -> str:

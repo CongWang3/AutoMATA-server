@@ -20,7 +20,7 @@ from api.models.file import File
 logger = logging.getLogger(__name__)
 
 # 路径配置（与 analysis_service.py 保持一致）
-RSCRIPT_PATH = "/opt/anaconda/envs/R_442/bin/Rscript"
+RSCRIPT_PATH = settings.RSCRIPT_PATH
 RSCRIPT_OPTIONS = "--no-save"
 R_SCRIPTS_DIR = settings.path_data_analysis_plot
 JOBS_BASE_DIR = settings.path_jobs

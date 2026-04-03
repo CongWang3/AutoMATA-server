@@ -499,7 +499,7 @@ class DataProcessService:
             }
                 
             cmd = [
-                "Rscript", r_script,
+                settings.RSCRIPT_PATH, r_script,
                 "-g", nomenclature_map[gene_nomenclature],
                 "-d", type_map[data_type],
                 "-r", organism_map[organism],
@@ -509,9 +509,6 @@ class DataProcessService:
                 "-a", job_id  # 关键：传递 jobID 参数
             ]
             
-            # 执行 R脚本（使用完整的R环境路径）
-            rscript_path = "/opt/anaconda/envs/R_442/bin/Rscript"
-            cmd[0] = rscript_path  # 替换第一个参数为完整路径
             result = await run_subprocess(
                 cmd,
                 cwd=os.getcwd(),
@@ -665,7 +662,7 @@ class DataProcessService:
             }
                 
             cmd = [
-                "Rscript", r_script,
+                settings.RSCRIPT_PATH, r_script,
                 "-g", nomenclature_map[mrna_nomenclature],  # 修正为 -g（与 R脚本定义一致）
                 "-d", type_map[data_type],
                 "-r", organism_map[organism],
@@ -674,9 +671,6 @@ class DataProcessService:
                 "-a", job_id  # 关键：传递 jobID 参数
             ]
             
-            # 执行 R脚本（使用完整的R环境路径）
-            rscript_path = "/opt/anaconda/envs/R_442/bin/Rscript"
-            cmd[0] = rscript_path  # 替换第一个参数为完整路径
             result = await run_subprocess(
                 cmd,
                 cwd=os.getcwd(),
@@ -1038,7 +1032,7 @@ class DataProcessService:
             shutil.copy2(str(file3_path), str(omics3_file))
             
             # 构建 Python 脚本命令（与 integration.php 保持一致）
-            python_exec = "/opt/anaconda/envs/automata/bin/python"
+            python_exec = settings.PYTHON_EXEC_PATH
             script_path = str(settings.path_code / "train_model" / "integration.py")
             
             cmd = [
@@ -1185,7 +1179,7 @@ class DataProcessService:
 
             # 构建 R 脚本命令
             r_script = str(settings.path_code / "integration_pvalue.R")
-            rscript_path = "/opt/anaconda/envs/R_442/bin/Rscript"
+            rscript_path = settings.RSCRIPT_PATH
 
             cmd = [
                 rscript_path,

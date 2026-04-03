@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     DOWNLOAD_SERVER_PORT: int = 8001
     # 公网下载设置为 "http://1.95.52.33:8001" 。部署时把 DOWNLOAD_PUBLIC_BASE_URL 设成真实对外地址即可。
     DOWNLOAD_PUBLIC_BASE_URL: str = "http://localhost:8001"
+
+    # 脚本执行器路径（默认兼容现有本地 conda 环境；Docker 内可通过环境变量覆盖）
+    PYTHON_EXEC_PATH: str = "/opt/anaconda/envs/automata/bin/python"
+    RSCRIPT_PATH: str = "/opt/anaconda/envs/R_442/bin/Rscript"
     
     # 数据库配置 - 支持真实环境连接
     DB_USER: str = "automata"

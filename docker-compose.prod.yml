@@ -22,6 +22,8 @@ services:
       - .env.prod
     environment:
       DOWNLOAD_PUBLIC_BASE_URL: ${DOWNLOAD_PUBLIC_BASE_URL:-https://your-domain.com/download}
+      PYTHON_EXEC_PATH: ${PYTHON_EXEC_PATH:-python}
+      RSCRIPT_PATH: ${RSCRIPT_PATH:-/usr/bin/Rscript}
     depends_on:
       mysql:
         condition: service_healthy
@@ -47,6 +49,9 @@ services:
     restart: unless-stopped
     env_file:
       - .env.prod
+    environment:
+      PYTHON_EXEC_PATH: ${PYTHON_EXEC_PATH:-python}
+      RSCRIPT_PATH: ${RSCRIPT_PATH:-/usr/bin/Rscript}
     command: ["python", "download_server.py"]
     depends_on:
       mysql:

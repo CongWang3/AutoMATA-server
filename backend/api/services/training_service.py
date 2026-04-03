@@ -859,7 +859,7 @@ class TrainingService:
             "rbfn": "rbfn",
         }
 
-        python_exec = "/opt/anaconda/envs/automata/bin/python"
+        python_exec = settings.PYTHON_EXEC_PATH
         stdout_all: list[str] = []
 
         def build_supervised_cmd(script_path: str, train_type: str, extras_for: str) -> list:
@@ -1020,7 +1020,7 @@ class TrainingService:
         # 再在脚本内部将 .png 派生为 .json 结果文件路径。
         evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.png")
 
-        python_exec = "/opt/anaconda/envs/automata/bin/python"
+        python_exec = settings.PYTHON_EXEC_PATH
         script_path = str(settings.path_code / "train_model" / f"{code_type}.py")
 
         # 构建无监督学习命令 - 注意参数名称！
@@ -1143,7 +1143,7 @@ class TrainingService:
         scaler_path = str(result_dir / f"{job_id}_{code_type}_scaler.pkl")
         evaluation_path = str(result_dir / f"{job_id}_{code_type}_evaluation.png")
 
-        python_exec = "/opt/anaconda/envs/automata/bin/python"
+        python_exec = settings.PYTHON_EXEC_PATH
         script_path = str(settings.path_code / "train_model" / f"{code_type}.py")
 
         # 构建半监督学习命令 - 与无监督类似的参数命名

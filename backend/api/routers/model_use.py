@@ -278,7 +278,7 @@ async def _execute_model_use_background(
             "transformer": "Transformer",
             "rbfn": "RBFN",
         }
-        python_exec = "/opt/anaconda/envs/automata/bin/python"
+        python_exec = settings.PYTHON_EXEC_PATH
 
         if model_type in supervised_model_map:
             script_path = str(settings.path_code / "use_model" / "general.py")

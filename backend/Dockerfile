@@ -8,7 +8,23 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     default-libmysqlclient-dev \
+    r-base \
+    r-base-dev \
+    libxml2-dev \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libfontconfig1-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    libtiff5-dev \
+    libjpeg-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install R package manager first, then core CRAN/Bioconductor packages
+RUN R -e "install.packages(c('BiocManager','optparse','dplyr','tidyr','ggplot2','ggrepel','ggpubr','patchwork','VennDiagram','UpSetR','RMySQL','igraph','ggraph','pheatmap','vegan','RColorBrewer','ggnewscale','GOplot'), repos='https://cloud.r-project.org')" \
+    && R -e "BiocManager::install(c('DESeq2','ComplexHeatmap','clusterProfiler','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','KEGG.db','ActivePathways','DEFormats','yulab.utils'), ask=FALSE, update=FALSE)"
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt

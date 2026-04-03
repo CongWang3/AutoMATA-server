@@ -1111,3 +1111,6 @@ automata-api/nohup.out
 .qoder/
 backend/manual_tests/
 .env.prod
+deploy/conda-automata-dev.yml
+deploy/conda-automata.yml
+deploy/conda-r442.yml

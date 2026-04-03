@@ -34,7 +34,7 @@ class AnalysisService:
     """数据分析服务类"""
 
     # 路径配置
-    RSCRIPT_PATH = "/opt/anaconda/envs/R_442/bin/Rscript"
+    RSCRIPT_PATH = settings.RSCRIPT_PATH
     RSCRIPT_OPTIONS = "--no-save"
     
     def __init__(self, db: Session, user: User):
