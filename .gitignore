@@ -29,6 +29,9 @@ example/draw_example/volcano_example.txt
 !backend/requirements.txt
 icomoon
 assets
+# 前端 Vite 资源目录必须纳入版本控制（用于生产构建）
+!automata-web/src/assets/
+!automata-web/src/assets/**
 
 # Python 环境配置
 # Conda 环境导出文件（用于环境复现，可以提交）
