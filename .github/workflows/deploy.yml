@@ -10,6 +10,9 @@ env:
   REGISTRY: ghcr.io
   IMAGE_BACKEND: automata-backend
   IMAGE_FRONTEND: automata-frontend
+  # 阿里云 ACR 配置
+  ALIYUN_REGISTRY: registry.cn-hangzhou.aliyuncs.com
+  ALIYUN_NAMESPACE: automata
 
 jobs:
   changes:
@@ -54,6 +57,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to Aliyun ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ALIYUN_REGISTRY }}
+          username: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -71,6 +81,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ env.IMAGE_BACKEND }}:latest
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ env.IMAGE_BACKEND }}:${{ github.sha }}
+            ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.IMAGE_BACKEND }}:latest
+            ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.IMAGE_BACKEND }}:${{ github.sha }}
           cache-from: type=gha,scope=automata-backend
           cache-to: type=gha,mode=max,scope=automata-backend
 
@@ -84,6 +96,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ env.IMAGE_FRONTEND }}:latest
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
+            ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.IMAGE_FRONTEND }}:latest
+            ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
           cache-from: type=gha,scope=automata-frontend
           cache-to: type=gha,mode=max,scope=automata-frontend
 
@@ -157,16 +171,18 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ env.DEPLOY_PATH }}"
-            export GHCR_OWNER="${{ github.repository_owner }}"
-            export GHCR_OWNER="${GHCR_OWNER,,}"
+            # 使用阿里云 ACR 镜像（国内访问更快）
+            export ALIYUN_REGISTRY="${{ env.ALIYUN_REGISTRY }}"
+            export ALIYUN_NAMESPACE="${{ env.ALIYUN_NAMESPACE }}"
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
               export FRONTEND_IMAGE_TAG="${{ github.sha }}"
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
               export BACKEND_IMAGE_TAG="${{ github.sha }}"
             fi
-            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            echo "[info] Starting deployment..."
+            # 登录阿里云 ACR
+            echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login ${{ env.ALIYUN_REGISTRY }} -u "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin
+            echo "[info] Starting deployment (using Aliyun ACR)..."
             
             # Detect docker compose command
             DOCKER_COMPOSE_CMD="docker compose"
@@ -180,12 +196,12 @@ jobs:
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
-              echo "[info] Pulling frontend image..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull frontend
+              echo "[info] Pulling frontend image (this may take a while)..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet frontend && echo "[info] Frontend image pulled successfully"
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              echo "[info] Pulling backend image..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull backend
+              echo "[info] Pulling backend image (this may take a while)..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet backend && echo "[info] Backend image pulled successfully"
             fi
             echo "[info] Starting services..."
             $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
@@ -205,16 +221,18 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ env.DEPLOY_PATH }}"
-            export GHCR_OWNER="${{ github.repository_owner }}"
-            export GHCR_OWNER="${GHCR_OWNER,,}"
+            # 使用阿里云 ACR 镜像（国内访问更快）
+            export ALIYUN_REGISTRY="${{ env.ALIYUN_REGISTRY }}"
+            export ALIYUN_NAMESPACE="${{ env.ALIYUN_NAMESPACE }}"
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
               export FRONTEND_IMAGE_TAG="${{ github.sha }}"
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
               export BACKEND_IMAGE_TAG="${{ github.sha }}"
             fi
-            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            echo "[info] Starting deployment..."
+            # 登录阿里云 ACR
+            echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login ${{ env.ALIYUN_REGISTRY }} -u "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin
+            echo "[info] Starting deployment (using Aliyun ACR)..."
             
             # Detect docker compose command
             DOCKER_COMPOSE_CMD="docker compose"
@@ -228,12 +246,12 @@ jobs:
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
-              echo "[info] Pulling frontend image..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull frontend
+              echo "[info] Pulling frontend image (this may take a while)..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet frontend && echo "[info] Frontend image pulled successfully"
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-              echo "[info] Pulling backend image..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull backend
+              echo "[info] Pulling backend image (this may take a while)..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet backend && echo "[info] Backend image pulled successfully"
             fi
             echo "[info] Starting services..."
             $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
