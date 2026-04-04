@@ -1,6 +1,32 @@
 # This code is used to generate correlation heatmap for multi-omics data.
 # https://mp.weixin.qq.com/s/LxfqLZ7423nl5kIPApNr0g
 # 使用devtool安装github的包时，需要设置代理，重新开启一个R terminal，安装完成后再取消代理：https://zhuanlan.zhihu.com/p/636418854
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
 rm(list=ls())
 # 安装包的方法
 # 1. install.packages("pkgload",type="binary")
@@ -8,7 +34,7 @@ rm(list=ls())
 # 3. 下载source文件，在Rstudio中的GUI安装（没成功）
 
 # “可修改”表示：用户可以根据自己的实际情况自己设置。
-setwd("/xp/www/AutoMATA/code/data_analysis_plot")
+setwd(automata_path_data_analysis_plot())
 library(linkET)
 library(ggplot2)
 library(RColorBrewer)
@@ -20,7 +46,7 @@ option_list <- list(
   make_option(c("-j", "--jobID"), type="character", action="store", help="This argument is jobID")
 )
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw correlation heatmap!"))
-opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "")
+opt$input <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt"))
 
 # 加载数据
 data <- read.table(opt$input, header = TRUE, sep = "\t", check.names = FALSE)
@@ -92,7 +118,7 @@ p1 <- p1 +
 
 # 终端输入p1查看图片
 
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/Corr_heatmap", sep="")
+result_path <- automata_job_file(opt$jobID, "result/Corr_heatmap")
 for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){  # 
   ggsave(paste(result_path, dev, sep = "."), plot=last_plot(), device = dev, width = 8.8, height = 6)
 

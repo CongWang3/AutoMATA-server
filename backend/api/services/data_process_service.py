@@ -5,12 +5,12 @@ import os
 import uuid
 import logging
 import json
+import subprocess
 from datetime import datetime
 from typing import Optional
 from pathlib import Path
 import asyncio
 import math
-import time
 from contextlib import asynccontextmanager
 from fastapi import UploadFile, HTTPException
 
@@ -34,6 +34,16 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _r_mysql_subprocess_env() -> dict[str, str]:
+    """与 FastAPI settings 一致的数据库环境变量，供 R 子进程读取（避免缺省 localhost 走 Unix socket）。"""
+    return {
+        "DB_HOST": settings.DB_HOST,
+        "DB_USER": settings.DB_USER,
+        "DB_PASSWORD": settings.DB_PASSWORD,
+        "DB_NAME": settings.DB_NAME,
+        "DB_PORT": str(settings.DB_PORT),
+    }
 
 
 class DataProcessService:
@@ -508,17 +518,18 @@ class DataProcessService:
                 "-h", "none",
                 "-a", job_id  # 关键：传递 jobID 参数
             ]
-            
+
             result = await run_subprocess(
                 cmd,
                 cwd=os.getcwd(),
                 shell=False,
                 timeout=None,
-                stdout=None,
-                stderr=None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
+                env=_r_mysql_subprocess_env(),
             )
-                        
+
             # 更新任务结果
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
@@ -549,8 +560,12 @@ class DataProcessService:
                 else:
                     job.status = JobStatus.FAILED
                     job.current_step = "处理失败"
-                    job.error_message = result.stderr or "R 脚本执行失败"
-                    
+                    _err = (result.stderr or "").strip()
+                    if not _err:
+                        _err = (result.stdout or "").strip()
+                    job.error_message = _err or "R 脚本执行失败"
+                    job.updated_at = datetime.now()
+                    self.db.commit()
 
                     # 推送失败状态
                     try:
@@ -566,12 +581,7 @@ class DataProcessService:
                         )
                     except Exception as e:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
-                
-                # try:
-                #     self.db.commit()  # 自己改
-                # except Exception as e:
-                #     raise
-                            
+
                 logger.info(f"基因组处理完成：job_id={job_id}, status={job.status}")
                 
                 # 如果任务成功且提供了邮箱，发送结果邮件
@@ -591,7 +601,7 @@ class DataProcessService:
             # 更新失败状态
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
-                job.status = "Failed"
+                job.status = JobStatus.FAILED
                 job.error_message = str(e)
                 job.updated_at = datetime.now()
                 try:
@@ -676,9 +686,10 @@ class DataProcessService:
                 cwd=os.getcwd(),
                 shell=False,
                 timeout=None,
-                stdout=None,
-                stderr=None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
+                env=_r_mysql_subprocess_env(),
             )
                         
             # 更新任务结果
@@ -710,8 +721,13 @@ class DataProcessService:
                 else:
                     job.status = JobStatus.FAILED
                     job.current_step = "处理失败"
-                    job.error_message = result.stderr or "R 脚本执行失败"
-                                
+                    _err_tx = (result.stderr or "").strip()
+                    if not _err_tx:
+                        _err_tx = (result.stdout or "").strip()
+                    job.error_message = _err_tx or "R 脚本执行失败"
+                    job.updated_at = datetime.now()
+                    self.db.commit()
+
                     # 推送失败状态
                     try:
                         await task_status_manager.send_task_status(
@@ -726,8 +742,7 @@ class DataProcessService:
                         )
                     except Exception as e:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
-                
-                            
+
                 logger.info(f"转录组处理完成：job_id={job_id}, status={job.status}")
                 
                 # 如果任务成功且提供了邮箱，发送结果邮件
@@ -747,7 +762,7 @@ class DataProcessService:
             # 更新失败状态
             job = self.db.query(Job).filter(Job.job_id == job_id).first()
             if job:
-                job.status = "Failed"
+                job.status = JobStatus.FAILED
                 job.error_message = str(e)
                 job.updated_at = datetime.now()
                 self.db.commit()  # 自己改
@@ -1095,7 +1110,9 @@ class DataProcessService:
                     job.status = JobStatus.FAILED
                     job.current_step = "处理失败"
                     job.error_message = result.stderr or "Integration 脚本执行失败"
-                    
+                    job.updated_at = datetime.now()
+                    self.db.commit()
+
                     # 推送失败状态
                     try:
                         await task_status_manager.send_task_status(
@@ -1110,9 +1127,7 @@ class DataProcessService:
                         )
                     except Exception as e:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
-                
-                
-                # self.db.commit()
+
                 logger.info(f"多组学数据整合完成：job_id={job_id}, status={job.status}")
                 
                 # 如果任务成功且提供了邮箱，发送结果邮件
@@ -1241,6 +1256,8 @@ class DataProcessService:
                     job.status = JobStatus.FAILED
                     job.current_step = "处理失败"
                     job.error_message = result.stderr or "integration_pvalue.R 脚本执行失败"
+                    job.updated_at = datetime.now()
+                    self.db.commit()
 
                     # 推送失败状态
                     try:
@@ -1257,8 +1274,6 @@ class DataProcessService:
                     except Exception as e:
                         logger.debug(f"WebSocket 状态推送失败: {e}")
 
-                # job.updated_at = datetime.now()
-                # self.db.commit()
                 logger.info(f"pvalue 多组学整合完成：job_id={job_id}, status={job.status}")
                 
                 # 如果任务成功且提供了邮箱，发送结果邮件

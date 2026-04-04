@@ -17,6 +17,12 @@ from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import pandas as pd
 import sys
+
+from pathlib import Path as _Path
+_code_dir = _Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
 sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 
 import warnings
@@ -889,19 +895,19 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
     if ratio == "0" and kfold == 0:
         scaler = StandardScaler()
         # 直接加载训练-验证-测试集文件
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt",sep="\t")   # the path of training dataset
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"),sep="\t")   # the path of training dataset
         data = data.dropna().values.astype(float)
         data = scaler.fit_transform(data)
         data = torch.FloatTensor(data)
         train_loader = DataLoader(TensorDataset(data), batch_size=batch_size, shuffle=True)
         
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_val.txt",sep="\t")  # the path of validation dataset
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_val.txt"),sep="\t")  # the path of validation dataset
         data = data.dropna().values.astype(float) 
         data = scaler.transform(data)
         data = torch.FloatTensor(data)
         val_loader = DataLoader(TensorDataset(data), batch_size=batch_size, shuffle=True)
 
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_test.txt",sep="\t")   # the path of testing dataset
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_test.txt"),sep="\t")   # the path of testing dataset
         data = data.dropna().values.astype(float)
         data = scaler.transform(data)
         data = torch.FloatTensor(data)
@@ -910,7 +916,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
         
     elif ratio != "0" and kfold == 0:
         # 分割训练-验证-测试集
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt",sep="\t")   # the path of training dataset
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"),sep="\t")   # the path of training dataset
         data = data.dropna().values.astype(float)
         scaler = StandardScaler()
         data = scaler.fit_transform(data)
@@ -935,14 +941,14 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
         scaler = StandardScaler()
         # Directly load training-validation-test set file
         # data = pd.read_csv("D:\\wamp\www\\multi_omics_own\\download_data\\Jobs\\"+jobid+"\\"+jobid+"_data.txt",sep="\t")   # the path of training dataset
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")   # the path of training dataset
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")   # the path of training dataset
         data = data.dropna().values.astype(float)
         data = scaler.fit_transform(data)
         data = torch.FloatTensor(data)
         train_loader = DataLoader(TensorDataset(data), batch_size=batch_size, shuffle=True)
 
         val_loader = 0
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_test.txt",sep="\t")   # the path of testing dataset
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_test.txt"),sep="\t")   # the path of testing dataset
         data = data.dropna().values.astype(float)
         data = scaler.transform(data)
         data = torch.FloatTensor(data)

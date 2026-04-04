@@ -1,12 +1,40 @@
 # 打不开mysql的解决方法链接
 # https://blog.csdn.net/m0_60721514/article/details/123676327?spm=1001.2101.3001.6650.5&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7Ebaidujs_utm_term%7ECtr-5-123676327-blog-122294814.235%5Ev43%5Epc_blog_bottom_relevance_base3&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7Ebaidujs_utm_term%7ECtr-5-123676327-blog-122294814.235%5Ev43%5Epc_blog_bottom_relevance_base3&utm_relevant_index=8
 # 运行此脚本前需要先打开mysql：命令行终端用管理员打开 连接mysql：net start mysql，端口占用：netstat -ano，关闭连接：net stop mysql
+# 加载 code/automata_paths.R（须先于 rm；附着 automata:paths）
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT 或从仓库内用 Rscript 调用。", call. = FALSE)
+  }
+}))
 rm(list = ls())
+repo_root <- automata_repo_root()
+setwd(automata_path_code())
 library("RMySQL")
 getOption('timeout')  # 解决超时
 options(timeout=100000)
 library(optparse)  # 命令行
-setwd("/xp/www/AutoMATA/code")
 countToTpm <- function(counts, effLen){
   # # print(counts)
   # # print(effLen)
@@ -527,20 +555,25 @@ searchLengthFromSymbol <- function(symbolNames, sqlconnection, table){
 # ID, dataType, organism, inputfile, outputfile, 
 
 
-mysqlconnection = dbConnect(MySQL(), user = 'automata', password = '123456', dbname = 'automata', host = 'localhost')
+db_user <- Sys.getenv("DB_USER", unset = "automata")
+db_pass <- Sys.getenv("DB_PASSWORD", unset = "123456")
+db_name <- Sys.getenv("DB_NAME", unset = "automata")
+db_host <- Sys.getenv("DB_HOST", unset = "localhost")
+db_port <- as.integer(Sys.getenv("DB_PORT", unset = "3306"))
+mysqlconnection <- dbConnect(MySQL(), user = db_user, password = db_pass, dbname = db_name, host = db_host, port = db_port)
 # dbListTables(mysqlconnection)  # 列出当前数据库中所有表
 
 option_list <- list(
   make_option(c("-g", "--mrna_nomenclature"), type="character", default="EnsemblID", action="store", help="This argument is mRNA nomenclature, which can be Refseq, EnsemblID or Transcript_name"),
   make_option(c("-d", "--data_type"), type="character", default="FPKM", action="store", help="This argument is the type of input data, which can be FPKM, RPM, RPKM, ReadCounts or TPM"),
   make_option(c("-r", "--organism"), type="character", default="homo_sapiens", action="store", help="This argument is the organism of the input data, which can be homo_sapiens, bos_taurus, mus_musculus or drosophila_melanogaster"),
-  make_option(c("-i", "--input"), type="character", default="/xp/www/AutoMATA/code/test_fpkm_mrna.txt", action="store", help="This argument is input path"),
-  make_option(c("-o", "--output"), type="character", default="/xp/www/AutoMATA/code/combined_test_mrna.txt", action="store", help="This argument is output path"),
+  make_option(c("-i", "--input"), type="character", default=file.path(repo_root, "code", "test_fpkm_mrna.txt"), action="store", help="This argument is input path"),
+  make_option(c("-o", "--output"), type="character", default=file.path(repo_root, "code", "combined_test_mrna.txt"), action="store", help="This argument is output path"),
   make_option(c("-a", "--jobID"), type="character", default="20250424170634_6q6Iq1v7", action="store", help="This argument is jobID")
 )
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is for gene data process!"))
 
-opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", "origin.txt", sep="")
+# FastAPI 已通过 -i/-o 传入绝对路径，勿再用固定仓库路径覆盖
 
 # 改变数据库表名
 if (opt$organism == "homo_sapiens"){

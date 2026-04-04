@@ -7,6 +7,13 @@
 import shutup  # 控制台输出 忽略 warning
 shutup.please()
 
+import sys
+from pathlib import Path
+_code_dir = Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
+
 """
 Much of the code is modified from:
 - https://codesachin.wordpress.com/2015/11/28/self-organizing-maps-with-googles-tensorflow/
@@ -351,9 +358,9 @@ if __name__ == '__main__':
 
     # 保存模型
     if (type == "all"):
-        result_path = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/result/som/'
+        result_path = str(path_jobs() / jobID / "result" / "som") + "/"
     else:
-        result_path = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/result/'
+        result_path = str(path_jobs() / jobID / "result") + "/"
 
     if not os.path.exists(result_path):
         os.makedirs(result_path)

@@ -1,7 +1,32 @@
 # B站：https://www.bilibili.com/video/BV1T1421274d/?spm_id_from=333.788&vd_source=057f1ccccc12750f57f6d28b9c852bbd
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
 rm(list=ls())
-# 工作目录
-setwd("/xp/www/AutoMATA/code/data_analysis_plot")
+setwd(automata_path_data_analysis_plot())
 
 library(clusterProfiler)
 library(org.Hs.eg.db)  # 人类的包 待修改为其他物种的包 下载链接：https://www.bioconductor.org/packages/release/BiocViews.html#___OrgDb
@@ -67,11 +92,11 @@ adjust <- opt$adjust  # 调整方法，默认使用BH  一审
 
 # read data
 if (opt$type_analysis == "none"){
-    opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "")
+    opt$input <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt"))
     table_data <- read.table(opt$input, header = TRUE, sep = "\t", check.names = FALSE)  # 不检查列名是否存在 \t
 }else{
     # 读取up, down, all数据
-    table_data <- read.table(paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/result/select_", opt$type_analysis, ".txt", sep = ""), header = TRUE, sep = "\t", check.names = FALSE)  # 不检查列名是否存在 \t
+    table_data <- read.table(automata_job_file(opt$jobID, paste0("result/select_", opt$type_analysis, ".txt")), header = TRUE, sep = "\t", check.names = FALSE)  # 不检查列名是否存在 \t
 }
 
 # 提取表格第一列，即基因名称列
@@ -132,7 +157,7 @@ GO <- enrichGO(gene = gene,
 # 根据pvalue和adjusted pvalue过滤GO结果
 # GO_filtered <- GO[(GO$p.adjust < adj) & (GO$pvalue < pval), ]
 # 将富集结果写入GO.txt文件，制表符分隔，输出行名
-filename <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/result/GO_enrichment_result.txt", sep="")
+filename <- automata_job_file(opt$jobID, "result/GO_enrichment_result.txt")
 write.table(GO, file = filename, sep = "\t", row.names = FALSE)
 
 
@@ -143,7 +168,7 @@ write.table(GO, file = filename, sep = "\t", row.names = FALSE)
 #     GO@result <- selected_GO
 # }
 # 保存图片
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/go_enrichment", sep="")
+result_path <- automata_job_file(opt$jobID, "result/go_enrichment")
 
 
 # 气泡图

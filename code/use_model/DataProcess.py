@@ -1,6 +1,13 @@
 import shutup  # 控制台输出 忽略 warning
 shutup.please()
 
+import sys
+from pathlib import Path
+_code_dir = Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
+
 from sklearn.utils import shuffle
 from sklearn.preprocessing import LabelEncoder
 import torch.optim
@@ -23,13 +30,13 @@ def load_data(
 ):  # train, val, test
 
     if state == "train":
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")
         # data = pd.read_csv("D:\\wamp\www\\multi_omics_own\\download_data\\Jobs\\"+jobID+"\\"+jobID+"_data.txt", sep="\t")  # train 改为 data，为了train+analysis流程
     elif state == "test":
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_test.txt", sep="\t")
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_test.txt"), sep="\t")
         # data = pd.read_csv("D:\\wamp\www\\multi_omics_own\\download_data\\Jobs\\"+jobID+"\\"+jobID+"_test.txt", sep="\t")
     else:  
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_val.txt", sep="\t")
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_val.txt"), sep="\t")
         # data = pd.read_csv("D:\\wamp\www\\multi_omics_own\\download_data\\Jobs\\"+jobID+"\\"+jobID+"_val.txt", sep="\t")
 
     # 获取每条数据的名称 GeneID

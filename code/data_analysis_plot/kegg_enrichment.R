@@ -1,7 +1,33 @@
 # https://www.bilibili.com/video/BV1T1421274d/?spm_id_from=333.788&vd_source=057f1ccccc12750f57f6d28b9c852bbd
 # https://www.xiaohongshu.com/explore/64304200000000001203f68b?xsec_token=ABu9DTNwBViFC9nBMEouhsRYUsZzcXyqfcAprfi6LglTY=&xsec_source=pc_search&source=web_search_result_notes
 # 工作目录
-setwd("/xp/www/AutoMATA/code/data_analysis_plot")
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
+setwd(automata_path_data_analysis_plot())
 
 # ===== KEGG 联网说明（默认 enrichKEGG use_internal_data=FALSE）=====
 # clusterProfiler 通过 KEGGREST 访问 https://rest.kegg.jp ，典型包括：
@@ -85,11 +111,11 @@ adjust <- opt$adjust  # 调整方法，默认使用BH 一审
 # opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "")
 # table_data <- read.table(opt$input, header = TRUE, sep = ",", check.names = FALSE)  # 不检查列名是否存在  \t
 if (opt$type_analysis == "none"){
-    opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "")
+    opt$input <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt"))
     table_data <- read.table(opt$input, header = TRUE, sep = "\t", check.names = FALSE)  # 不检查列名是否存在 \t
 }else{
     # 读取up, down, all数据
-    table_data <- read.table(paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/result/select_", opt$type_analysis, ".txt", sep = ""), header = TRUE, sep = "\t", check.names = FALSE)  # 不检查列名是否存在 \t
+    table_data <- read.table(automata_job_file(opt$jobID, paste0("result/select_", opt$type_analysis, ".txt")), header = TRUE, sep = "\t", check.names = FALSE)  # 不检查列名是否存在 \t
 }
 # 提取表格第一列，即基因名称列
 gene_column <- table_data[[1]]
@@ -176,7 +202,7 @@ KEGG$geneID <- as.character(sapply(KEGG$geneID, function(x) {
 }))
 
 # 写入文件
-filename <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/result/KEGG_enrichment_result.txt", sep="")
+filename <- automata_job_file(opt$jobID, "result/KEGG_enrichment_result.txt")
 write.table(KEGG, file = filename, sep = "\t", row.names = FALSE, quote = FALSE)
 
 # 若没有任何富集结果，后续绘图/表格构建会报错（长度不一致）。
@@ -219,7 +245,7 @@ termNum <- ifelse(nrow(kegg) < termNum, nrow(kegg), termNum)
 geneNum <- nrow(genelist)
 
 # 保存图片
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/kegg_enrichment", sep="")
+result_path <- automata_job_file(opt$jobID, "result/kegg_enrichment")
 
 # 和弦图chord
 # 绘制和弦图

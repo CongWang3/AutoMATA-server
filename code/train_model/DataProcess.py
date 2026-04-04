@@ -1,6 +1,13 @@
 import shutup  # 控制台输出 忽略 warning
 shutup.please()
 
+import sys
+from pathlib import Path
+_code_dir = Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
+
 from sklearn.utils import shuffle
 from sklearn.preprocessing import LabelEncoder
 import torch.optim
@@ -114,17 +121,17 @@ def load_data(state="train", jobID="20240808232043_OtJF37SH", feature_method=Non
     """
     if state == "train":
         data = pd.read_csv(
-            "/xp/www/AutoMATA/download_data/Jobs/" + jobID + "/" + jobID + "_data.txt",
+            str(path_jobs() / jobID / f"{jobID}_data.txt"),
             sep="\t",
         )
     elif state == "test":
         data = pd.read_csv(
-            "/xp/www/AutoMATA/download_data/Jobs/" + jobID + "/" + jobID + "_test.txt",
+            str(path_jobs() / jobID / f"{jobID}_test.txt"),
             sep="\t",
         )
     else:
         data = pd.read_csv(
-            "/xp/www/AutoMATA/download_data/Jobs/" + jobID + "/" + jobID + "_val.txt",
+            str(path_jobs() / jobID / f"{jobID}_val.txt"),
             sep="\t",
         )
 
@@ -161,7 +168,7 @@ def load_data(state="train", jobID="20240808232043_OtJF37SH", feature_method=Non
 
 def process(jobID="20240808232043_OtJF37SH", ratio="8:1:1"):
 
-    data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")
+    data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")
 
     ratio_str = ratio.split(":")
     ratio_num = list(map(int, ratio_str))  # [8, 1, 1]
@@ -176,7 +183,7 @@ def process(jobID="20240808232043_OtJF37SH", ratio="8:1:1"):
 
 
     # save
-    train_data.to_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t", index=False)
-    test_data.to_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_test.txt", sep="\t", index=False)
-    val_data.to_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_val.txt", sep="\t", index=False)
+    train_data.to_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t", index=False)
+    test_data.to_csv(str(path_jobs() / jobID / f"{jobID}_test.txt"), sep="\t", index=False)
+    val_data.to_csv(str(path_jobs() / jobID / f"{jobID}_val.txt"), sep="\t", index=False)
 

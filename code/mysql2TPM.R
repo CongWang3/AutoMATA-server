@@ -1,8 +1,36 @@
 # 打不开mysql的解决方法链接
 # https://blog.csdn.net/m0_60721514/article/details/123676327?spm=1001.2101.3001.6650.5&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7Ebaidujs_utm_term%7ECtr-5-123676327-blog-122294814.235%5Ev43%5Epc_blog_bottom_relevance_base3&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7Ebaidujs_utm_term%7ECtr-5-123676327-blog-122294814.235%5Ev43%5Epc_blog_bottom_relevance_base3&utm_relevant_index=8
 # 运行此脚本前需要先打开mysql：命令行终端用管理员打开 连接mysql：net start mysql，端口占用：netstat -ano，关闭连接：net stop mysql
+# 加载 code/automata_paths.R（须先于 rm；附着 automata:paths）
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT 或从仓库内用 Rscript 调用。", call. = FALSE)
+  }
+}))
 rm(list = ls())
-setwd("/xp/www/AutoMATA/code")
+repo_root <- automata_repo_root()
+setwd(automata_path_code())
 library("RMySQL")
 getOption('timeout')  # 解决超时
 options(timeout=100000)
@@ -399,14 +427,19 @@ searchLengthFromSymbol_batch <- function(symbolNames, sqlconnection, table){
 # ID, dataType, organism, inputfile, outputfile, 
 
 
-mysqlconnection = dbConnect(MySQL(), user = 'automata', password = '123456', dbname = 'automata', host = 'localhost')
+db_user <- Sys.getenv("DB_USER", unset = "automata")
+db_pass <- Sys.getenv("DB_PASSWORD", unset = "123456")
+db_name <- Sys.getenv("DB_NAME", unset = "automata")
+db_host <- Sys.getenv("DB_HOST", unset = "localhost")
+db_port <- as.integer(Sys.getenv("DB_PORT", unset = "3306"))
+mysqlconnection <- dbConnect(MySQL(), user = db_user, password = db_pass, dbname = db_name, host = db_host, port = db_port)
 
 option_list <- list(
   make_option(c("-g", "--gene_nomenclature"), type="character", default="GeneID", action="store", help="This argument is gene nomenclature, which can be GeneID, EnsemblID or Symbol"),
   make_option(c("-d", "--data_type"), type="character", default="FPKM", action="store", help="This argument is the type of input data, which can be FPKM, RPM, RPKM, ReadCounts or TPM"),
   make_option(c("-r", "--organism"), type="character", default="homo_sapiens", action="store", help="This argument is the organism of the input data, which can be homo_sapiens, bos_taurus, mus_musculus, or drosophila_melanogaster"),
-  make_option(c("-i", "--input"), type="character", default="/xp/www/AutoMATA/code/test_fpkm_gene.txt", action="store", help="This argument is input path"),
-  make_option(c("-o", "--output"), type="character", default="/xp/www/AutoMATA/code/combined_test_1.txt", action="store", help="This argument is output path"),
+  make_option(c("-i", "--input"), type="character", default=file.path(repo_root, "code", "test_fpkm_gene.txt"), action="store", help="This argument is input path"),
+  make_option(c("-o", "--output"), type="character", default=file.path(repo_root, "code", "combined_test_1.txt"), action="store", help="This argument is output path"),
   make_option(c("-h", "--type"), type="character", default="none", action="store", help="none for ID conversion and log transformation, GeneID just for GeneID to Symbol conversion, EnsemblID just for EnsemblID to Symbol conversion"),
   make_option(c("-a", "--jobID"), type="character", default="20250424170634_6q6Iq1v7", action="store", help="This argument is jobID")
 )
@@ -430,7 +463,7 @@ if (opt$organism == "homo_sapiens"){
 
 
 if (opt$type != "none"){
-  opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/",opt$jobID, "_data.txt", sep="")
+  opt$input <- file.path(repo_root, "download_data", "Jobs", opt$jobID, paste0(opt$jobID, "_data.txt"))
   data <- read.table(opt$input, sep = "\t", header = FALSE)
   file.remove(opt$input)  # 因为analysis_train_2.php中的输入和输出文件名称相同，为了确定输出文件到磁盘中，先删除输入文件
   subset_data <- data[1, 2:(ncol(data) - 1)]
@@ -456,7 +489,7 @@ if (opt$type != "none"){
   print('ID conversion finish')
   
 }else{
-  opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", "origin.txt", sep="")
+  # FastAPI 已通过 -i/-o 传入绝对路径，勿再用固定仓库路径覆盖
   # 提取文件表达矩阵
   # 某些输入包含未成对的引号会触发 scan 警告并导致列错位；这里禁用引号解析并允许不齐列填充
   file_matrix <- read.table(opt$input, header = T, sep = "\t", check.names=F, quote = "", comment.char = "", fill = TRUE)
@@ -483,7 +516,7 @@ if (opt$type != "none"){
   # Symbol 分支：数据库找不到的 symbol 行直接丢弃；用找到的 found_symbols + lengths 继续做 TPM 与 log 转换
   # 同时把 missing_symbols 写入 Jobs/<jobID>/missing_symbols.txt 便于追溯
   if (opt$gene_nomenclature == "Symbol") {
-    jobs_dir <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, sep = "")
+    jobs_dir <- file.path(repo_root, "download_data", "Jobs", opt$jobID)
     missing_path <- paste(jobs_dir, "/missing_symbols.txt", sep = "")
     if (!is.null(out$missing_symbols) && length(out$missing_symbols) > 0) {
       writeLines(as.character(out$missing_symbols), con = missing_path, sep = "\n")

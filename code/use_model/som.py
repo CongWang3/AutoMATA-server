@@ -7,6 +7,13 @@
 import shutup  # 控制台输出 忽略 warning
 shutup.please()
 
+import sys
+from pathlib import Path
+_code_dir = Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
+
 """
 Much of the code is modified from:
 - https://codesachin.wordpress.com/2015/11/28/self-organizing-maps-with-googles-tensorflow/
@@ -125,7 +132,7 @@ if __name__ == '__main__':
 
     print('jobID =',jobID)
     print('model_type = SOM')
-    savename = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/model.pth'
+    savename = str(path_jobs() / jobID / "model.pth")
 
     # 保存模型
     # savename = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/model.pth'
@@ -154,7 +161,7 @@ if __name__ == '__main__':
 
     '''保存使用本模型测试结果指标'''
     # with open("D:\\wamp\\www\\multi_omics_own\\model\\result\\"+jobID+"_result.txt", mode="w") as f:
-    with open("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/result/test_metrics_result.txt", mode="w") as f:
+    with open(str(path_jobs() / jobID / "result" / "test_metrics_result.txt"), mode="w") as f:
         f.write("test result: \n")
         f.write("acc = " + str(acc) + "\n")
         f.write("precision = " + str(precision) + "\n")
@@ -163,7 +170,7 @@ if __name__ == '__main__':
 
 
     '''保存使用本模型的测试结果'''
-    with open("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/result/test_result.txt", mode="w") as f:
+    with open(str(path_jobs() / jobID / "result" / "test_result.txt"), mode="w") as f:
         # f.write("name" + "\t" + "Prediction label" + "\n")
         f.write("name" + "\t" + "probability" + "\n")
         for i in range(len(name)):

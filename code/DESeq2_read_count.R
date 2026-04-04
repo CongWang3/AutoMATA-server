@@ -1,4 +1,30 @@
-setwd("/xp/www/AutoMATA/code")
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
+setwd(automata_path_code())
 library(DESeq2)
 library(dplyr)
 getOption('timeout')  # 解决超时
@@ -29,7 +55,7 @@ padj_thr <- opt$padj_thr
 # counts <- read.table("../example/read_count.txt", row.names = 1, header = TRUE, sep = "\t", check.names = FALSE)
 # group_info <- read.table("../example/group_info.txt", header = TRUE, sep = "\t", check.names = FALSE)
 counts <- read.table(
-  paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = ""),
+  automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt")),
   header = TRUE,
   sep = "\t",
   check.names = FALSE,
@@ -38,7 +64,7 @@ counts <- read.table(
   comment.char = "",
   quote = ""
 )
-group_info <- read.table(paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_info.txt", sep = ""), header = TRUE, sep = "\t", check.names = FALSE, fill = TRUE, comment.char = "")
+group_info <- read.table(automata_job_file(opt$jobID, paste0(opt$jobID, "_info.txt")), header = TRUE, sep = "\t", check.names = FALSE, fill = TRUE, comment.char = "")
 groups <- factor(group_info$Group, levels = c("Control", "Treatment"))
 
 # 先读取首列为普通列，再进行基因名清洗与去重（避免 read.table(row.names=1) 因重复行名直接报错）
@@ -125,16 +151,16 @@ DESeq2_results[which(abs(DESeq2_results$logFC) <= fc_thr | DESeq2_results$padj >
 
 #输出选择的差异基因总表
 res1_select <- subset(DESeq2_results, sig %in% c('up', 'down'))
-filename <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/result/select_all.txt", sep="")
+filename <- automata_job_file(opt$jobID, "result/select_all.txt")
 write.table(res1_select, file = filename, row.names = FALSE, sep='\t', quote = FALSE)  # 所有上下调差异基因。能不能实现根据条件筛选？下拉框up down all
 
 #根据 up 和 down 分开输出
 res1_up <- subset(DESeq2_results, sig == 'up')
 res1_down <- subset(DESeq2_results, sig == 'down')
 
-filename <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/result/select_up.txt", sep="")
+filename <- automata_job_file(opt$jobID, "result/select_up.txt")
 write.table(res1_up, file = filename, row.names = FALSE, sep='\t', quote = FALSE)  # 所有显著上调差异基因
-filename <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/result/select_down.txt", sep="")
+filename <- automata_job_file(opt$jobID, "result/select_down.txt")
 write.table(res1_down, file = filename,  row.names = FALSE, sep='\t', quote = FALSE)  # 所有显著下调差异基因
 
 
@@ -163,7 +189,7 @@ p1 <- ggplot(DESeq2_results, aes(x = logFC, y = -log10(padj))) +
   theme_classic(base_size = 15) + 
   theme (legend.position = "none")
 
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/volcano", sep="")
+result_path <- automata_job_file(opt$jobID, "result/volcano")
 for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
   ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width = 7.5, height = 6)
 }
@@ -199,7 +225,7 @@ p1 <- pheatmap(df2,
                                             legend_width = 0.2),  # 设置图例宽度
                 scale = "row")  # 已进行了标准化，所以这里不再缩放
 p1 <- as.ggplot(p1)
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/df_cluster_heatmap", sep="")
+result_path <- automata_job_file(opt$jobID, "result/df_cluster_heatmap")
 for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
   ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width=20, height=20)
 }

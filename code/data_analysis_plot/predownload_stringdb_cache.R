@@ -3,16 +3,42 @@
 ## Target versions (per user): R 4.4.2, STRINGdb 2.18.0
 ##
 ## It will populate the cache directory used by ppi.R:
-##   file.path("/xp/www/AutoMATA/code/data_analysis_plot", "stringdb_cache")
+##   file.path(automata_path_data_analysis_plot(), "stringdb_cache")
 ##
 ## After this cache is populated, ppi.R's:
 ##   - string_db$map(...)
 ##   - string_db$get_interactions(hit)
 ## should run offline (no downloads), as long as the cache directory is present.
 ##
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
 suppressPackageStartupMessages(library(STRINGdb))
 
-cache_dir <- file.path("/xp/www/AutoMATA/code/data_analysis_plot", "stringdb_cache")
+cache_dir <- file.path(automata_path_data_analysis_plot(), "stringdb_cache")
 dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
 
 options(timeout = 300000)

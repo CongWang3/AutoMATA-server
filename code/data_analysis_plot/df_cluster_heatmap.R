@@ -1,8 +1,34 @@
 # https://mp.weixin.qq.com/s/lz5tiBJ0GDs-t8htfdZFKg
 # https://www.bilibili.com/video/BV16D421W7YF/?spm_id_from=333.337.search-card.all.click&vd_source=057f1ccccc12750f57f6d28b9c852bbd
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
 rm(list=ls())
 # 工作目录
-setwd("/xp/www/AutoMATA/code/data_analysis_plot")
+setwd(automata_path_data_analysis_plot())
 
 # library(pheatmap)
 library(ComplexHeatmap) 
@@ -44,9 +70,9 @@ clustering_dis_col <- opt$clustering_dis_col # 聚类距离，可选"correlation
 scal <- opt$scal # 标准化 "row", "column" and "none". # 已进行了标准化，所以这里不再缩放
 group <- opt$group # 按照组别分开显示（type = data_with_col_annotation、data_with_row_col需要用到这个参数）（Tumor vs Normal，要求列注释文件的组别列名为group）
 
-opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "")
-opt$annotation_col_file <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_col.txt", sep = "")
-opt$annotation_row_file <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_row.txt", sep = "")
+opt$input <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt"))
+opt$annotation_col_file <- automata_job_file(opt$jobID, paste0(opt$jobID, "_col.txt"))
+opt$annotation_row_file <- automata_job_file(opt$jobID, paste0(opt$jobID, "_row.txt"))
 
 if (type == "only_data") {
     # 读取表达矩阵
@@ -190,7 +216,7 @@ if (type == "data_with_row_col") {
 }
 
 # 保存图片
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/df_cluster_heatmap", sep="")
+result_path <- automata_job_file(opt$jobID, "result/df_cluster_heatmap")
 for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
   ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width=20, height=20)  # 20, 20
 

@@ -17,6 +17,12 @@ import seaborn as sns
 # from scipy import stats
 import pandas as pd
 import sys
+
+from pathlib import Path as _Path
+_code_dir = _Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
 sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 
 import warnings
@@ -432,7 +438,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="example_pseudo", use_un
         # 直接加载训练-验证-测试集文件
         # train_data = pd.read_csv(f"./train_example/{jobid}_data.txt", sep="\t")
         # train_data = pd.read_csv("D:\\wamp\www\\multi_omics_own\\download_data\\Jobs\\"+jobid+"\\"+jobid+"_data.txt", sep="\t")
-        train_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")
+        train_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")
         train_data = train_data.dropna()
         train_features = train_data.iloc[:, 1:-1].values.astype(float)  # 中间列是特征
         train_labels = train_data.iloc[:, -1].values  # 最后一列是标签
@@ -481,7 +487,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="example_pseudo", use_un
         # 验证和测试数据
         # val_data = pd.read_csv(f"./train_example/{jobid}_val.txt", sep="\t")
         # val_data = pd.read_csv("D:\\wamp\www\\multi_omics_own\\download_data\\Jobs\\"+jobid+"\\"+jobid+"_val.txt", sep="\t")
-        val_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_val.txt", sep="\t")
+        val_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_val.txt"), sep="\t")
         val_data = val_data.dropna()
         val_features = val_data.iloc[:, 1:-1].values.astype(float)
         val_labels = val_data.iloc[:, -1].values
@@ -506,7 +512,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="example_pseudo", use_un
 
         # test_data = pd.read_csv(f"./train_example/{jobid}_test.txt", sep="\t")
         # test_data = pd.read_csv("D:\\wamp\www\\multi_omics_own\\download_data\\Jobs\\"+jobid+"\\"+jobid+"_test.txt", sep="\t")
-        test_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_test.txt", sep="\t")
+        test_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_test.txt"), sep="\t")
         test_data = test_data.dropna()
         test_features = test_data.iloc[:, 1:-1].values.astype(float)
         test_labels = test_data.iloc[:, -1].values
@@ -533,7 +539,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="example_pseudo", use_un
     elif ratio != "0" and kfold == 0:
         # 分割训练-验证-测试集
         # data = pd.read_csv(f"./train_example/{jobid}_data.txt", sep="\t")
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")
         sample_names = data.iloc[:, 0].values  # 第一列是样本名称
         features = data.iloc[:, 1:-1].values.astype(float)  # 中间列是特征
         labels = data.iloc[:, -1].values  # 最后一列是标签
@@ -642,7 +648,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="example_pseudo", use_un
         # Directly load training-validation-test set file
         # train_data = pd.read_csv(f"./train_example/{jobid}_data.txt", sep="\t")
         # train_data = pd.read_csv("D:\\wamp\www\\multi_omics_own\\download_data\\Jobs\\"+jobid+"\\"+jobid+"_data.txt", sep="\t")
-        train_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")
+        train_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")
         train_data = train_data.dropna()
         train_features = train_data.iloc[:, 1:-1].values.astype(float)  # the middle columns are features
         train_labels = train_data.iloc[:, -1].values  # the last column is label
@@ -689,7 +695,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="example_pseudo", use_un
             train_loader = labeled_loader
 
         val_loader = 0
-        test_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_test.txt", sep="\t")
+        test_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_test.txt"), sep="\t")
         test_data = test_data.dropna()
         test_features = test_data.iloc[:, 1:-1].values.astype(float)
         test_labels = test_data.iloc[:, -1].values

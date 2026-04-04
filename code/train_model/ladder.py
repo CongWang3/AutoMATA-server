@@ -17,6 +17,12 @@ import seaborn as sns
 # from scipy import stats
 import pandas as pd
 import sys
+
+from pathlib import Path as _Path
+_code_dir = _Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
 sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 
 import warnings
@@ -629,7 +635,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
         label_encoder = LabelEncoder()
         
         # 直接加载训练-验证-测试集文件
-        train_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")   # the path of training dataset
+        train_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")   # the path of training dataset
 
         train_data = train_data.dropna()
         train_features = train_data.iloc[:, 1:-1].values.astype(float)  # 中间列是特征
@@ -678,7 +684,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
         
         # 验证和测试数据
         # val_data = pd.read_csv(f"./train_example/{jobid}_val.txt", sep="\t")
-        val_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_val.txt", sep="\t")
+        val_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_val.txt"), sep="\t")
         val_data = val_data.dropna()
         val_features = val_data.iloc[:, 1:-1].values.astype(float)
         val_labels = val_data.iloc[:, -1].values
@@ -706,7 +712,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
                               batch_size=batch_size, shuffle=False)
 
         # test_data = pd.read_csv(f"./train_example/{jobid}_test.txt", sep="\t")
-        test_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_test.txt", sep="\t")
+        test_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_test.txt"), sep="\t")
         test_data = test_data.dropna()
         test_features = test_data.iloc[:, 1:-1].values.astype(float)
         test_labels = test_data.iloc[:, -1].values
@@ -736,7 +742,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
         input_dim = train_features.shape[1]
     elif ratio != "0" and kfold == 0:
         # 分割训练-验证-测试集
-        data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")
+        data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")
         data = data.dropna()
         # sample_names = data.iloc[:, 0].values  # 第一列是样本名称
         features = data.iloc[:, 1:-1].values.astype(float)  # 中间列是特征
@@ -846,7 +852,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
         label_encoder = LabelEncoder()
         
         # Directly load training-validation-test set file
-        train_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_data.txt", sep="\t")
+        train_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_data.txt"), sep="\t")
         train_data = train_data.dropna()
         train_features = train_data.iloc[:, 1:-1].values.astype(float)  # the middle columns are features
         train_labels = train_data.iloc[:, -1].values  # the last column is label
@@ -893,7 +899,7 @@ def prepare_data(seed, batch_size, ratio="8:1:1", jobID="20240808232043_OtJF37SH
             train_loader = labeled_loader
         val_loader = 0
         # test_data = pd.read_csv(f"./train_example/{jobid}_test.txt", sep="\t")
-        test_data = pd.read_csv("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/"+jobID+"_test.txt", sep="\t")
+        test_data = pd.read_csv(str(path_jobs() / jobID / f"{jobID}_test.txt"), sep="\t")
         test_data = test_data.dropna()
         test_features = test_data.iloc[:, 1:-1].values.astype(float)
         test_labels = test_data.iloc[:, -1].values

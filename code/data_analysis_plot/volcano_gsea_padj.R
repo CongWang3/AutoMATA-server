@@ -1,3 +1,29 @@
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
 rm(list=ls())
 # 百度云存了此文件
 # Load necessary libraries
@@ -7,7 +33,7 @@ library(ggrepel)
 getOption('timeout')  # 解决超时
 options(timeout=100000)
 library(optparse)  # 命令行
-setwd("/xp/www/AutoMATA/code/data_analysis_plot")
+setwd(automata_path_data_analysis_plot())
 
 # Note: 把-log10(padj)作为了-log10(adj.p-value), 我们进行了这个操作。保持dataset的logFC, padj,external_gene_name列名一致
 # 虚线框内是top200的基因，蓝紫框内是筛选后的基因
@@ -34,7 +60,7 @@ option_list <- list(
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw volcano with or without GSEA plot!"))
 print("opt done")
 # for webserver
-opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "")
+opt$input <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt"))
 print("read data done")
 # 读取数据
 data <- read.table(opt$input,header = TRUE, sep = "\t", check.names = FALSE)  # "\t"   ,
@@ -65,7 +91,7 @@ if (top != 0){
 
 # Extract gene sets
 if (opt$gmt != "none"){
-  opt$gmt <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data2.gmt", sep = "")
+  opt$gmt <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data2.gmt"))
   gmt <- readLines(opt$gmt)
   gene_set1 <- strsplit(gmt[1], "\t")[[1]][-c(1,2)]  # 取出行所在的元素，不要第一和第二个元素
   gene_set2 <- strsplit(gmt[2], "\t")[[1]][-c(1,2)]
@@ -156,7 +182,7 @@ p1 <- ggplot(data, aes(x = logFC, y = -log10(padj))) +
 
 if (opt$gmt == "none"){
   # 保存图片
-  result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/volcano", sep="")
+  result_path <- automata_job_file(opt$jobID, "result/volcano")
   for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
     ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width = 7.5, height = 6)
   }
@@ -174,7 +200,7 @@ p2 <- p1 +
 
 
 # 保存图片labelfdr
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/volcano", sep="")
+result_path <- automata_job_file(opt$jobID, "result/volcano")
 for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
   ggsave(paste(result_path, dev, sep = "."), p2, device = dev, width = 7.5, height = 6)
 }

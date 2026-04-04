@@ -66,39 +66,6 @@ export class ApiClient {
         return response
       },
       (error) => {
-        // #region agent log
-        const res = error.response
-        if (res && res.status >= 502) {
-          const body = res.data
-          const bodyStr = typeof body === 'string' ? body.slice(0, 400) : ''
-          fetch('http://localhost:14040/ingest/6dc962d8-64eb-484b-bfba-ea5fdfdb97f2', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Debug-Session-Id': '474929',
-            },
-            body: JSON.stringify({
-              sessionId: '474929',
-              location: 'automata-web/src/api/client.ts:response-error',
-              message: 'API 5xx response',
-              data: {
-                status: res.status,
-                contentType: res.headers?.['content-type'],
-                serverHeader: res.headers?.['server'],
-                apache503Html:
-                  typeof body === 'string' &&
-                  (body.includes('Apache Server') || body.includes('503 Service Unavailable')),
-                bodyPrefix: bodyStr,
-                reqBaseURL: String(error.config?.baseURL ?? ''),
-                reqPath: String(error.config?.url ?? ''),
-                hypothesisA_apacheNoUpstream: res.status === 503 && res.headers?.['server'] === 'Apache',
-                hypothesisB_appJsonError: typeof body === 'object' && body !== null,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {})
-        }
-        // #endregion
         const errorMessage = this.handleError(error)
         console.error('❌ API Error:', errorMessage)
 

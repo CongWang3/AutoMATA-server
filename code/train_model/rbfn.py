@@ -2,6 +2,14 @@
 # https://blog.csdn.net/m0_71838992/article/details/141106662
 import shutup  # 控制台输出 忽略 warning
 shutup.please()
+
+import sys
+from pathlib import Path
+_code_dir = Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
+
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -254,9 +262,9 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if (type == "all"):
-        result_path = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/result/rbfn/'
+        result_path = str(path_jobs() / jobID / "result" / "rbfn") + "/"
     else:
-        result_path = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/result/'
+        result_path = str(path_jobs() / jobID / "result") + "/"
     
     if not os.path.exists(result_path):
         os.makedirs(result_path)

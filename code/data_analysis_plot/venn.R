@@ -1,5 +1,31 @@
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
 rm(list=ls())
-setwd("/xp/www/AutoMATA/code/data_analysis_plot")
+setwd(automata_path_data_analysis_plot())
 library(VennDetail)
 library(ggplot2)
 library(dplyr)
@@ -21,7 +47,7 @@ option_list <- list(
   make_option(c("-t", "--type"), type="character", default="venn", action="store", help="This argument is type of plot")
 )
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw Venn Plot!"))
-opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "")
+opt$input <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt"))
 
 
 type <- opt$type # 可选"venn", "vennpie", 这俩不行！"upset", "barplot"
@@ -69,7 +95,7 @@ ven <- venndetail(final_list)
 # }
 
 
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/venn", sep="")
+result_path <- automata_job_file(opt$jobID, "result/venn")
 
 if (type=="venn"){
     # 传统venn图

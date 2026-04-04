@@ -1,8 +1,33 @@
 # https://mp.weixin.qq.com/s/1XJ61hv0IilKcHdyp0VX7w
 # 数据来源：https://onlinelibrary.wiley.com/doi/10.1002/imt2.187
+invisible(local({
+  if (!"automata:paths" %in% search()) {
+    ca <- commandArgs(trailingOnly = FALSE)
+    ff <- ca[grepl("^--file=", ca)]
+    ap <- NA_character_
+    if (length(ff)) {
+      sp <- suppressWarnings(tryCatch(
+        normalizePath(sub("^--file=", "", ff[1]), winslash = "/", mustWork = TRUE),
+        error = function(e) NA_character_))
+      if (!is.na(sp) && nzchar(sp)) {
+        d <- dirname(sp)
+        for (i in 1:16) {
+          cand <- file.path(d, "automata_paths.R")
+          if (file.exists(cand)) { ap <- cand; break }
+          p <- dirname(d)
+          if (p == d) break
+          d <- p
+        }
+      }
+    }
+    if ((is.na(ap) || !nzchar(ap)) && nzchar(Sys.getenv("AUTOMATA_REPO_ROOT", unset = "")))
+      ap <- file.path(Sys.getenv("AUTOMATA_REPO_ROOT"), "code", "automata_paths.R")
+    if (!is.na(ap) && nzchar(ap) && file.exists(ap)) source(ap, local = FALSE) else
+      stop("找不到 code/automata_paths.R；请设置 AUTOMATA_REPO_ROOT。", call. = FALSE)
+  }
+}))
 rm(list=ls())
-# 工作目录
-setwd("/xp/www/AutoMATA/code/data_analysis_plot")
+setwd(automata_path_data_analysis_plot())
 
 library(ggplot2)    # 加载 ggplot2，用于绘图
 library(vegan)      # 加载 vegan，用于生态学数据分析
@@ -23,7 +48,7 @@ option_list <- list(
 )
 print("This Script is to draw PCA!")
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw PCA!"))
-opt$input <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID, "/", opt$jobID, "_data.txt", sep = "")
+opt$input <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt"))
 
 
 # 参数
@@ -290,7 +315,7 @@ if (boundary){
 
 
 # 保存图片
-result_path <- paste("/xp/www/AutoMATA/download_data/Jobs/", opt$jobID,"/result/result", sep="")
+result_path <- automata_job_file(opt$jobID, "result/result")
 for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
   ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width = 8.8, height = 6)
 

@@ -1,6 +1,13 @@
 import shutup 
 shutup.please()
 
+import sys
+from pathlib import Path
+_code_dir = Path(__file__).resolve().parents[1]
+if str(_code_dir) not in sys.path:
+    sys.path.insert(0, str(_code_dir))
+from automata_paths import path_jobs
+
 import math
 import warnings
 import numpy as np
@@ -587,9 +594,9 @@ if __name__ == "__main__":
 
     '''加载模型'''
     # "CNN", "LSTM", "RNN", "MLP", "AutoEncoder", "Transformer", "SOM", "RBFN")
-    savename = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/model.pth'
+    savename = str(path_jobs() / jobID / "model.pth")
     if (model_type == 'AutoEncoder'):
-        savename = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/model_autoencoder.pth'
+        savename = str(path_jobs() / jobID / "model_autoencoder.pth")
         checkpoint = torch.load(savename)
         input_dim = checkpoint['input_dim']
         hidden_size_1 = checkpoint['hidden_size_1']
@@ -600,7 +607,7 @@ if __name__ == "__main__":
         encoder = Autoencoder(input_dim, hidden_size_1, hidden_size_2, hidden_size_3, lr, dropout_rate)
         encoder.load_state_dict(checkpoint['model_state_dict'])
 
-        savename_cls = '/xp/www/AutoMATA/download_data/Jobs/'+jobID+'/model_cls.pth'
+        savename_cls = str(path_jobs() / jobID / "model_cls.pth")
         checkpoint_cls = torch.load(savename_cls)
         cls_hidden_size = checkpoint_cls['cls_hidden_size']
         output_size = checkpoint_cls['output_size']
@@ -723,7 +730,7 @@ if __name__ == "__main__":
     print("test acc = {}, precision = {}, recall = {}, f1 = {}".format(acc, precision, recall, f1))
 
     '''保存使用本模型测试结果指标'''
-    with open("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/result/test_metrics_result.txt", mode="w") as f:
+    with open(str(path_jobs() / jobID / "result" / "test_metrics_result.txt"), mode="w") as f:
         f.write("test result: \n")
         f.write("acc = " + str(acc) + "\n")
         f.write("precision = " + str(precision) + "\n")
@@ -732,7 +739,7 @@ if __name__ == "__main__":
 
 
     '''保存使用本模型的测试结果'''
-    with open("/xp/www/AutoMATA/download_data/Jobs/"+jobID+"/result/test_result.txt", mode="w") as f:
+    with open(str(path_jobs() / jobID / "result" / "test_result.txt"), mode="w") as f:
         # 一审
         f.write("name" + "\t" + "max_probability" + "\t" + "predicted_label" + "\n")
         for i in range(len(name)):
