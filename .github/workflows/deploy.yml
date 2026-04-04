@@ -268,6 +268,11 @@ jobs:
             if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] infra 变更：compose down（--remove-orphans）后整栈 up"
               $DOCKER_COMPOSE_PROD down --remove-orphans
+              # compose 使用固定 container_name；若历史曾在其他目录/COMPOSE_PROJECT_NAME 下 up，down 可能删不到，up 会报 name already in use
+              echo "[info] 清理可能遗留的同名容器（数据卷未删，仅删容器）"
+              for c in automata-frontend automata-backend automata-download-server automata-mysql automata-redis; do
+                docker rm -f "$c" 2>/dev/null || true
+              done
               $DOCKER_COMPOSE_PROD up -d
             else
               RECREATE_SERVICES=""
@@ -402,6 +407,11 @@ jobs:
             if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] infra 变更：compose down（--remove-orphans）后整栈 up"
               $DOCKER_COMPOSE_PROD down --remove-orphans
+              # compose 使用固定 container_name；若历史曾在其他目录/COMPOSE_PROJECT_NAME 下 up，down 可能删不到，up 会报 name already in use
+              echo "[info] 清理可能遗留的同名容器（数据卷未删，仅删容器）"
+              for c in automata-frontend automata-backend automata-download-server automata-mysql automata-redis; do
+                docker rm -f "$c" 2>/dev/null || true
+              done
               $DOCKER_COMPOSE_PROD up -d
             else
               RECREATE_SERVICES=""
