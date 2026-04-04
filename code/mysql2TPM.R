@@ -428,7 +428,11 @@ searchLengthFromSymbol_batch <- function(symbolNames, sqlconnection, table){
 
 
 db_user <- Sys.getenv("DB_USER", unset = "automata")
-db_pass <- Sys.getenv("DB_PASSWORD", unset = "123456")
+# 密码仅来自环境变量（后端子进程会注入 backend/.env 中的 DB_*；独立调试请先 export 或加载 .env）
+db_pass <- Sys.getenv("DB_PASSWORD", unset = "")
+if (!nzchar(db_pass)) {
+  stop("未设置 DB_PASSWORD：与后端一致在 backend/.env 中配置，或由调用方注入环境变量。", call. = FALSE)
+}
 db_name <- Sys.getenv("DB_NAME", unset = "automata")
 db_host <- Sys.getenv("DB_HOST", unset = "localhost")
 db_port <- as.integer(Sys.getenv("DB_PORT", unset = "3306"))

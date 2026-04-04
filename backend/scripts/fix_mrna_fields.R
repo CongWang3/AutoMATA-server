@@ -6,8 +6,14 @@
 library(RMySQL)
 library(optparse)
 
-# 设置工作目录
-setwd("/xp/www/AutoMATA/code")
+# 工作目录：与仓库根一致（可选 REPO_ROOT / AUTOMATA_REPO_ROOT）
+_repo <- Sys.getenv("AUTOMATA_REPO_ROOT", Sys.getenv("REPO_ROOT", unset = ""))
+if (nzchar(_repo)) setwd(file.path(_repo, "code"))
+_default_input <- if (nzchar(_repo)) {
+  file.path(_repo, "download_data", "Jobs", "test", "origin.txt")
+} else {
+  ""
+}
 
 # 解析命令行参数
 option_list <- list(
@@ -19,8 +25,8 @@ option_list <- list(
               help="Data type: FPKM, TPM, ReadCounts, RPKM, or RPM"),
   make_option(c("-r", "--organism"), type="character", default="homo_sapiens", action="store", 
               help="Organism: homo_sapiens, bos_taurus, mus_musculus or drosophila_melanogaster"),
-  make_option(c("-i", "--input"), type="character", default="/xp/www/AutoMATA/download_data/Jobs/test/origin.txt", action="store", 
-              help="Input file path"),
+  make_option(c("-i", "--input"), type="character", default=_default_input, action="store", 
+              help="Input file path（未设 REPO_ROOT 时须用 -i 指定）"),
   make_option(c("-o", "--output"), type="character", default="/tmp/processed.txt", action="store", 
               help="Output file path")
 )
@@ -28,8 +34,14 @@ option_list <- list(
 opt_parser <- OptionParser(option_list=option_list)
 opt <- parse_args(opt_parser)
 
-# 建立数据库连接
-mysqlconnection <- dbConnect(MySQL(), user='automata', password='123456', dbname='automata', host='localhost')
+# 建立数据库连接（与后端 DB_* 环境变量一致）
+_db_user <- Sys.getenv("DB_USER", unset = "automata")
+_db_pass <- Sys.getenv("DB_PASSWORD", unset = "")
+if (!nzchar(_db_pass)) stop("未设置 DB_PASSWORD：请在 backend/.env 配置或导出环境变量", call. = FALSE)
+_db_name <- Sys.getenv("DB_NAME", unset = "automata")
+_db_host <- Sys.getenv("DB_HOST", unset = "localhost")
+_db_port <- as.integer(Sys.getenv("DB_PORT", unset = "3306"))
+mysqlconnection <- dbConnect(MySQL(), user = _db_user, password = _db_pass, dbname = _db_name, host = _db_host, port = _db_port)
 
 # 处理mus_musculus的特殊情况
 if (opt$organism == "mus_musculus") {

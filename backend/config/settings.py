@@ -26,6 +26,10 @@ def _generate_warning_key() -> str:
     return "DEVELOPMENT_KEY_DO_NOT_USE_IN_PRODUCTION_" + secrets.token_urlsafe(16)
 
 
+# 固定为 backend/.env，避免从仓库根或其它目录启动时读错路径；生产以容器/compose 注入的环境变量为准（优先级高于文件）
+_BACKEND_ENV = Path(__file__).resolve().parent.parent / ".env"
+
+
 class Settings(BaseSettings):
     """应用配置"""
     
@@ -54,9 +58,10 @@ class Settings(BaseSettings):
     PYTHON_EXEC_PATH: str = "/opt/anaconda/envs/automata/bin/python"
     RSCRIPT_PATH: str = "/opt/anaconda/envs/R_442/bin/Rscript"
     
-    # 数据库配置 - 支持真实环境连接
+    # 数据库配置：不在代码中写密码。本地复制 backend/.env.example 为 backend/.env 并填写（示例中为 123456）；
+    # 生产使用独立配置文件（如 deploy/.env.prod），由 compose / 环境变量注入。
     DB_USER: str = "automata"
-    DB_PASSWORD: str = "123456"
+    DB_PASSWORD: str = ""
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306
     DB_NAME: str = "automata"
@@ -134,7 +139,7 @@ class Settings(BaseSettings):
     AGENT_MAX_TURNS: int = 10
     
     class Config:
-        env_file = ".env"
+        env_file = str(_BACKEND_ENV)
         
         @classmethod
         def parse_env_var(cls, value: str):
