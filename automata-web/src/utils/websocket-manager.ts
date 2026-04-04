@@ -19,7 +19,9 @@ export class WebSocketManager {
   private lastCheckTime = 0
   private readonly CHECK_DEBOUNCE_DELAY = 2000 // 2秒防抖延迟，减少频繁检查
   private statusChangeListeners: Set<() => void> = new Set()
-  
+  /** 合并并发 connect（如 App mount 与路由守卫各调一次 initializeFromStorage） */
+  private connectInFlight: Promise<void> | null = null
+
   // 需要实时功能的路由
   private readonly REALTIME_ROUTES = [
     '/dashboard',
@@ -154,24 +156,42 @@ export class WebSocketManager {
    * 建立WebSocket连接
    */
   private async connect(): Promise<void> {
+    if (this.isActive && webSocketService.isConnected()) {
+      return
+    }
+    if (this.connectInFlight) {
+      await this.connectInFlight
+      return
+    }
+
+    // 同步占位，避免两次 initializeFromStorage 在同一事件循环 tick 内重复建连
+    this.connectInFlight = (async () => {
+      try {
+        await this.runConnect()
+      } finally {
+        this.connectInFlight = null
+      }
+    })()
+
+    await this.connectInFlight
+  }
+
+  private async runConnect(): Promise<void> {
     try {
-      console.log('🔌 建立WebSocket连接...')
+      if (import.meta.env.DEV) console.log('🔌 建立WebSocket连接...')
       await webSocketService.connect()
-      
-      // 设置文件上传进度回调
+
       const filesStore = useFilesStore()
       webSocketService.setOnProgress((message) => {
-        console.log('📥 收到实时消息:', message)
-        // 处理文件上传进度消息
+        if (import.meta.env.DEV) console.log('📥 收到实时消息:', message)
         if (message.event === 'upload_progress') {
-          // 查找正在上传的文件并更新进度
           this.updateUploadProgressFromWebSocket(filesStore, message)
         }
       })
-      
+
       this.isActive = true
       this.notifyStatusChange()
-      console.log('✅ WebSocket连接建立成功')
+      if (import.meta.env.DEV) console.log('✅ WebSocket连接建立成功')
     } catch (error) {
       console.error('❌ WebSocket连接失败:', error)
       this.isActive = false
