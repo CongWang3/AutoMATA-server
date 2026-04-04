@@ -66,6 +66,39 @@ export class ApiClient {
         return response
       },
       (error) => {
+        // #region agent log
+        const res = error.response
+        if (res && res.status >= 502) {
+          const body = res.data
+          const bodyStr = typeof body === 'string' ? body.slice(0, 400) : ''
+          fetch('http://localhost:14040/ingest/6dc962d8-64eb-484b-bfba-ea5fdfdb97f2', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Debug-Session-Id': '474929',
+            },
+            body: JSON.stringify({
+              sessionId: '474929',
+              location: 'automata-web/src/api/client.ts:response-error',
+              message: 'API 5xx response',
+              data: {
+                status: res.status,
+                contentType: res.headers?.['content-type'],
+                serverHeader: res.headers?.['server'],
+                apache503Html:
+                  typeof body === 'string' &&
+                  (body.includes('Apache Server') || body.includes('503 Service Unavailable')),
+                bodyPrefix: bodyStr,
+                reqBaseURL: String(error.config?.baseURL ?? ''),
+                reqPath: String(error.config?.url ?? ''),
+                hypothesisA_apacheNoUpstream: res.status === 503 && res.headers?.['server'] === 'Apache',
+                hypothesisB_appJsonError: typeof body === 'object' && body !== null,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {})
+        }
+        // #endregion
         const errorMessage = this.handleError(error)
         console.error('❌ API Error:', errorMessage)
 
@@ -98,6 +131,11 @@ export class ApiClient {
             return `无法连接后端（${data.message}）。请确认已在 8005 端口启动 backend。`
           }
           return data?.detail || data?.message || 'Bad gateway'
+        case 503:
+          if (typeof data === 'string' && data.includes('Apache Server')) {
+            return '网关无法连接后端（Apache 503）。请管理员检查 Docker 后端是否运行，以及 Apache 反代端口是否与 BACKEND_HOST_PORT（默认 18005）一致。'
+          }
+          return data?.detail || data?.message || 'Service unavailable'
         default:
           return data?.detail || data?.message || `HTTP ${status} error`
       }

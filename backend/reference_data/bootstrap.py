@@ -88,17 +88,20 @@ def _sync_gene_like_columns(engine: Engine, table: str) -> None:
     if not _table_exists(engine, table):
         return
     have = _existing_mysql_columns(engine, table)
-    adds = [
-        f"ADD COLUMN `{name}` {typ}"
+    # 与 information_schema 大小写差异兼容，避免重复 ADD 同名列
+    have_ci = {c.lower() for c in have}
+    to_add = [
+        (name, typ)
         for name, typ in _GENE_LIKE_COLUMN_DEFS
-        if name not in have
+        if name.lower() not in have_ci
     ]
-    if not adds:
+    if not to_add:
         return
-    stmt = f"ALTER TABLE `{table}` {', '.join(adds)}"
-    logger.info("补齐参考表 `%s` 列（%s 个新列）", table, len(adds))
+    logger.info("补齐参考表 `%s` 列（%s 个新列）", table, len(to_add))
     with engine.begin() as conn:
-        conn.execute(text(stmt))
+        # 单列 ALTER，失败时日志更可读；部分环境对超长多 ADD 单语句不友好
+        for name, typ in to_add:
+            conn.execute(text(f"ALTER TABLE `{table}` ADD COLUMN `{name}` {typ}"))
 
 
 def _mrna_homo_ddl() -> str:
@@ -275,6 +278,8 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
                 continue
             try:
                 logger.info("导入参考数据: %s <- %s", table, sql_file.name)
+                if table.startswith("gene_"):
+                    _sync_gene_like_columns(engine, table)
                 _mysql_cli_import(sql_file)
                 after = _table_row_count(engine, table)
                 logger.info("表 `%s` 导入后行数: %s", table, after)
@@ -286,12 +291,25 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
                 )
                 raise
             except subprocess.CalledProcessError as e:
-                logger.error(
-                    "导入 %s 失败: %s",
-                    sql_file,
-                    (e.stderr or e.stdout or b"").decode("utf-8", errors="replace")[:2000],
-                )
-                raise
+                err_txt = (e.stderr or e.stdout or b"").decode(
+                    "utf-8", errors="replace"
+                )[:4000]
+                if (
+                    table.startswith("gene_")
+                    and "Unknown column" in err_txt
+                    and "42S22" in err_txt
+                ):
+                    logger.warning(
+                        "表 `%s` 导入因列不匹配失败，再次同步列结构后重试一次",
+                        table,
+                    )
+                    _sync_gene_like_columns(engine, table)
+                    _mysql_cli_import(sql_file)
+                    after = _table_row_count(engine, table)
+                    logger.info("表 `%s` 导入后行数: %s", table, after)
+                else:
+                    logger.error("导入 %s 失败: %s", sql_file, err_txt[:2000])
+                    raise
 
     except Exception:
         logger.exception("参考注释表初始化失败")

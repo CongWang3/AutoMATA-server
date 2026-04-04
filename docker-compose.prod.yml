@@ -81,16 +81,15 @@ services:
     image: mysql:8.0
     container_name: automata-mysql
     restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+    # 与 backend 共用 .env.prod；勿在此处写 ${MYSQL_ROOT_PASSWORD}，否则未 --env-file 时会把 env_file 中的值覆盖为空
+    env_file:
+      - .env.prod
     command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
     volumes:
       - ./data/mysql:/var/lib/mysql
+    # $$ 在 compose 中变为 $，由容器内 shell 读取 MYSQL_ROOT_PASSWORD（来自 env_file）
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 10
