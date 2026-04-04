@@ -173,6 +173,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
+          command_timeout: 60m
           script: |
             set -euo pipefail
             cd "${{ env.DEPLOY_PATH }}"
@@ -180,18 +181,32 @@ jobs:
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
-            # 方案 B：从 GitHub Release 拉取参考注释 SQL（附件名写死，与 Release 上传文件名一致）
-            # 私有仓库：与拉 compose 相同，使用 Secret GHCR_READ_TOKEN（须能读私有 Release）；可选 REFERENCE_GITHUB_TOKEN 覆盖
-            export REFERENCE_GITHUB_REPO="${{ github.repository }}"
-            export REFERENCE_RELEASE_TAG="latest"
-            export REFERENCE_ASSET_NAME="automata-reference-sql.tar.gz"
-            export REFERENCE_GITHUB_TOKEN="${{ secrets.REFERENCE_GITHUB_TOKEN || secrets.GHCR_READ_TOKEN }}"
+            # 参考注释 SQL：优先 HTTPS（默认阿里云 OSS）；失败则回退 GitHub Release
+            export REFERENCE_SQL_ARCHIVE_URL="${{ secrets.REFERENCE_SQL_ARCHIVE_URL }}"
+            if [ -z "${REFERENCE_SQL_ARCHIVE_URL}" ]; then
+              export REFERENCE_SQL_ARCHIVE_URL="${{ vars.REFERENCE_SQL_ARCHIVE_URL }}"
+            fi
+            if [ -z "${REFERENCE_SQL_ARCHIVE_URL}" ]; then
+              export REFERENCE_SQL_ARCHIVE_URL="https://xxs-img.oss-cn-hangzhou.aliyuncs.com/automata/automata-reference-sql.tar.gz"
+            fi
+            export REFERENCE_SQL_ARCHIVE_NAME="automata-reference-sql.tar.gz"
             export REFERENCE_SQL_DIR="./data/reference_sql"
+            curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/deploy/fetch-reference-sql-from-url.sh?ref=${{ github.ref_name }}" | \
+              jq -r '.content' | base64 -d > /tmp/fetch-reference-sql-from-url.sh
+            chmod +x /tmp/fetch-reference-sql-from-url.sh
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/contents/deploy/fetch-reference-from-github-release.sh?ref=${{ github.ref_name }}" | \
               jq -r '.content' | base64 -d > /tmp/fetch-reference-from-github-release.sh
             chmod +x /tmp/fetch-reference-from-github-release.sh
-            /tmp/fetch-reference-from-github-release.sh || echo "[warn] reference release fetch failed or skipped"
+            export REFERENCE_GITHUB_REPO="${{ github.repository }}"
+            export REFERENCE_RELEASE_TAG="latest"
+            export REFERENCE_ASSET_NAME="automata-reference-sql.tar.gz"
+            export REFERENCE_GITHUB_TOKEN="${{ secrets.REFERENCE_GITHUB_TOKEN || secrets.GHCR_READ_TOKEN }}"
+            /tmp/fetch-reference-sql-from-url.sh || {
+              echo "[warn] OSS/URL 参考 SQL 下载失败，尝试 GitHub Release"
+              /tmp/fetch-reference-from-github-release.sh || echo "[warn] reference release fetch failed or skipped"
+            }
             # 从 GitHub Secrets 注入 Agent 配置到 .env.prod
             grep -q '^AGENT_ENABLED=' .env.prod && sed -i '/^AGENT_ENABLED=/d' .env.prod
             grep -q '^AGENT_DEFAULT_PROVIDER=' .env.prod && sed -i '/^AGENT_DEFAULT_PROVIDER=/d' .env.prod
@@ -264,6 +279,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT || '22' }}
+          command_timeout: 60m
           script: |
             set -euo pipefail
             cd "${{ env.DEPLOY_PATH }}"
@@ -271,18 +287,32 @@ jobs:
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
-            # 方案 B：从 GitHub Release 拉取参考注释 SQL（附件名写死，与 Release 上传文件名一致）
-            # 私有仓库：与拉 compose 相同，使用 Secret GHCR_READ_TOKEN（须能读私有 Release）；可选 REFERENCE_GITHUB_TOKEN 覆盖
-            export REFERENCE_GITHUB_REPO="${{ github.repository }}"
-            export REFERENCE_RELEASE_TAG="latest"
-            export REFERENCE_ASSET_NAME="automata-reference-sql.tar.gz"
-            export REFERENCE_GITHUB_TOKEN="${{ secrets.REFERENCE_GITHUB_TOKEN || secrets.GHCR_READ_TOKEN }}"
+            # 参考注释 SQL：优先 HTTPS（默认阿里云 OSS）；失败则回退 GitHub Release
+            export REFERENCE_SQL_ARCHIVE_URL="${{ secrets.REFERENCE_SQL_ARCHIVE_URL }}"
+            if [ -z "${REFERENCE_SQL_ARCHIVE_URL}" ]; then
+              export REFERENCE_SQL_ARCHIVE_URL="${{ vars.REFERENCE_SQL_ARCHIVE_URL }}"
+            fi
+            if [ -z "${REFERENCE_SQL_ARCHIVE_URL}" ]; then
+              export REFERENCE_SQL_ARCHIVE_URL="https://xxs-img.oss-cn-hangzhou.aliyuncs.com/automata/automata-reference-sql.tar.gz"
+            fi
+            export REFERENCE_SQL_ARCHIVE_NAME="automata-reference-sql.tar.gz"
             export REFERENCE_SQL_DIR="./data/reference_sql"
+            curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/deploy/fetch-reference-sql-from-url.sh?ref=${{ github.ref_name }}" | \
+              jq -r '.content' | base64 -d > /tmp/fetch-reference-sql-from-url.sh
+            chmod +x /tmp/fetch-reference-sql-from-url.sh
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/contents/deploy/fetch-reference-from-github-release.sh?ref=${{ github.ref_name }}" | \
               jq -r '.content' | base64 -d > /tmp/fetch-reference-from-github-release.sh
             chmod +x /tmp/fetch-reference-from-github-release.sh
-            /tmp/fetch-reference-from-github-release.sh || echo "[warn] reference release fetch failed or skipped"
+            export REFERENCE_GITHUB_REPO="${{ github.repository }}"
+            export REFERENCE_RELEASE_TAG="latest"
+            export REFERENCE_ASSET_NAME="automata-reference-sql.tar.gz"
+            export REFERENCE_GITHUB_TOKEN="${{ secrets.REFERENCE_GITHUB_TOKEN || secrets.GHCR_READ_TOKEN }}"
+            /tmp/fetch-reference-sql-from-url.sh || {
+              echo "[warn] OSS/URL 参考 SQL 下载失败，尝试 GitHub Release"
+              /tmp/fetch-reference-from-github-release.sh || echo "[warn] reference release fetch failed or skipped"
+            }
             # 从 GitHub Secrets 注入 Agent 配置到 .env.prod
             grep -q '^AGENT_ENABLED=' .env.prod && sed -i '/^AGENT_ENABLED=/d' .env.prod
             grep -q '^AGENT_DEFAULT_PROVIDER=' .env.prod && sed -i '/^AGENT_DEFAULT_PROVIDER=/d' .env.prod
