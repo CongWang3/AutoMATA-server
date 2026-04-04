@@ -10,6 +10,7 @@
 import json
 import logging
 import shutil
+import traceback
 import uuid
 import time
 from datetime import datetime
@@ -198,6 +199,50 @@ def _get_kfold_value(params: Dict[str, Any]) -> str:
     if strategy == "kfold":
         return str(params.get("kfold", 5))
     return "0"  # 不使用 kfold
+
+
+# 与 Job.error_message (SQLAlchemy Text) 对齐，避免超过常见 MySQL TEXT 上限
+_MAX_JOB_ERROR_MESSAGE_CHARS = 60000
+
+
+def _truncate_job_error_message(text: str, max_len: int = _MAX_JOB_ERROR_MESSAGE_CHARS) -> str:
+    if len(text) <= max_len:
+        return text
+    return f"…(已截断，保留末尾 {max_len - 30} 字符)\n" + text[-(max_len - 30) :]
+
+
+def _subprocess_failure_detail(
+    result: Any,
+    terminal_log: Optional[Path],
+    fallback: str,
+    max_chars: int = 55000,
+) -> str:
+    """
+    子进程若将 stderr 合并到 stdout 并写入文件，CompletedProcess.stderr 往往为空；
+    此时应从 terminal.log 读取完整输出后再返回给前端。
+    """
+    chunks: list[str] = []
+    err = getattr(result, "stderr", None) or ""
+    if isinstance(err, str) and err.strip():
+        chunks.append(err.strip())
+    out = getattr(result, "stdout", None) or ""
+    if isinstance(out, str) and out.strip():
+        chunks.append(out.strip())
+    if terminal_log is not None and terminal_log.is_file():
+        try:
+            log_txt = terminal_log.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            log_txt = ""
+        if log_txt:
+            if chunks:
+                chunks.append("--- terminal.log ---")
+            chunks.append(log_txt)
+    text = "\n".join(chunks).strip()
+    if not text:
+        return fallback
+    if len(text) > max_chars:
+        text = f"…(已截断，保留末尾 {max_chars} 字符)\n" + text[-max_chars:]
+    return text
 
 
 def _is_zip_deliverable(zip_path: str) -> bool:
@@ -737,7 +782,10 @@ class TrainingService:
 
         except Exception as e:
             logger.exception(f"[TRAIN] 训练执行失败: job_id={job_id}, error={e}")
-            error_msg = f"训练过程发生错误: {str(e)}"
+            error_msg = (
+                f"训练过程发生错误: {str(e)}\n\n"
+                f"--- Python traceback ---\n{traceback.format_exc()}"
+            )
             await self._handle_training_failure(
                 job_id=job_id,
                 error_message=error_msg,
@@ -860,7 +908,6 @@ class TrainingService:
         }
 
         python_exec = settings.PYTHON_EXEC_PATH
-        stdout_all: list[str] = []
 
         def build_supervised_cmd(script_path: str, train_type: str, extras_for: str) -> list:
             """构建监督学习命令行参数"""
@@ -901,17 +948,17 @@ class TrainingService:
                             cwd=str(settings.path_repo),
                             shell=False,
                             timeout=3600,
-                            stdout=None,
-                            stderr=None,
+                            stdout=log_fp,
+                            stderr=subprocess.STDOUT,
                             text=True,
                         )
-                        log_fp.write(result.stdout or "")
-                        if result.stderr:
-                            log_fp.write("\n[stderr]\n")
-                            log_fp.write(result.stderr)
-                        stdout_all.append(result.stdout or "")
                 if result.returncode != 0:
-                    raise RuntimeError(f"{m_type} training failed: {result.stderr}")
+                    detail = _subprocess_failure_detail(
+                        result,
+                        terminal_log,
+                        f"{m_type} training failed (no log captured)",
+                    )
+                    raise RuntimeError(f"{m_type} training failed:\n{detail}")
         else:
             code_type = base_code_map.get(normalized_model_type)
             if not code_type:
@@ -934,12 +981,14 @@ class TrainingService:
                         stderr=subprocess.STDOUT,
                         text=True,
                     )
-                    stdout_all.append(getattr(result, "stdout", None) or "")
             if result.returncode != 0:
-                raise RuntimeError(result.stderr or "Supervised learning training execution failed")
-                # raise RuntimeError(
-                #     f"监督学习训练脚本执行失败（详情见日志: {terminal_log}）"
-                # )
+                raise RuntimeError(
+                    _subprocess_failure_detail(
+                        result,
+                        terminal_log,
+                        "Supervised learning training execution failed",
+                    )
+                )
 
     async def _execute_unsupervised_training_core(
         self,
@@ -1051,17 +1100,19 @@ class TrainingService:
                     cwd=str(settings.path_repo),
                     shell=False,
                     timeout=3600,
-                    stdout=None,
-                    stderr=None,
+                    stdout=log_fp,
+                    stderr=subprocess.STDOUT,
                     text=True,
                 )
-                log_fp.write(result.stdout or "")
-                if result.stderr:
-                    log_fp.write("\n[stderr]\n")
-                    log_fp.write(result.stderr)
         
         if result.returncode != 0:
-            raise RuntimeError(result.stderr or "Unsupervised learning training execution failed")
+            raise RuntimeError(
+                _subprocess_failure_detail(
+                    result,
+                    terminal_log,
+                    "Unsupervised learning training execution failed",
+                )
+            )
 
     async def _execute_semi_supervised_training_core(
         self,
@@ -1192,17 +1243,19 @@ class TrainingService:
                     cwd=str(settings.path_repo),
                     shell=False,
                     timeout=3600,
-                    stdout=None,
-                    stderr=None,
+                    stdout=log_fp,
+                    stderr=subprocess.STDOUT,
                     text=True,
                 )
-                log_fp.write(result.stdout or "")
-                if result.stderr:
-                    log_fp.write("\n[stderr]\n")
-                    log_fp.write(result.stderr)
         
         if result.returncode != 0:
-            raise RuntimeError(result.stderr or "Semi-supervised learning training execution failed")
+            raise RuntimeError(
+                _subprocess_failure_detail(
+                    result,
+                    terminal_log,
+                    "Semi-supervised learning training execution failed",
+                )
+            )
 
     async def _handle_training_failure(
         self,
@@ -1220,10 +1273,11 @@ class TrainingService:
             email: 收件邮箱（可选）
             training_type: 训练类型（用于邮件标题/内容，可选）
         """
+        safe_message = _truncate_job_error_message(error_message)
         job = self.db.query(Job).filter(Job.job_id == job_id).first()
         if job:
             job.status = JobStatus.FAILED
-            job.error_message = error_message
+            job.error_message = safe_message
             job.current_step = "训练失败"
             job.updated_at = datetime.now()
         self.db.commit()
@@ -1237,8 +1291,8 @@ class TrainingService:
                     "status": JobStatus.FAILED.value,
                     "progress": 0,
                     "current_step": "训练失败",
-                    "error_message": error_message,
-                    "message": error_message,
+                    "error_message": safe_message,
+                    "message": safe_message,
                 },
             )
         except Exception as e:
@@ -1251,7 +1305,7 @@ class TrainingService:
                     to_email=email,
                     job_id=job_id,
                     analysis_type=f"{training_type}模型训练" if training_type else "模型训练",
-                    error_message=error_message,
+                    error_message=safe_message,
                 )
             except Exception as e:
                 logger.warning(f"发送失败邮件失败（不影响任务结果）: {e}")
