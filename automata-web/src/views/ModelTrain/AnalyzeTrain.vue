@@ -1331,8 +1331,8 @@ const downloadStrategyExample = () => {
 
 const downloadExample = (filePath: string) => {
     try {
-        // 构建独立下载服务的示例文件下载链接
-        const downloadUrl = `http://localhost:8001/example/${filePath}`
+        const base = import.meta.env.PROD ? window.location.origin : 'http://localhost:8001'
+        const downloadUrl = `${base}/example/${filePath}`
         
         // 获取文件名（从路径中提取）
         const fileName = filePath.split('/').pop() || filePath

@@ -182,12 +182,10 @@ export class DataProcessAPI {
    */
   static getJobResultDownloadUrl(jobId: string, userId: number): string {
     const timestamp = Math.floor(Date.now() / 1000)
-    // 使用与后端相同的签名算法
-    const message = `${jobId}:${userId}:${timestamp}`
-    // 注意：这里需要与后端使用相同的签名算法
-    // 前端无法直接生成HMAC签名，需要通过API获取签名
-    // 返回一个临时URL，实际签名需要后端生成
-    return `http://localhost:8001/job-result/${jobId}?uid=${userId}&t=${timestamp}`
+    const base = import.meta.env.PROD
+      ? `${window.location.origin}`
+      : 'http://localhost:8001'
+    return `${base}/job-result/${jobId}?uid=${userId}&t=${timestamp}`
   }
 
   /**

@@ -183,7 +183,10 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
    */
   static getJobResultDownloadUrl(jobId: string, userId: number): string {
     const timestamp = Math.floor(Date.now() / 1000)
-    return `http://localhost:8001/job-result/${jobId}?uid=${userId}&t=${timestamp}`
+    const base = import.meta.env.PROD
+      ? `${window.location.origin}`
+      : 'http://localhost:8001'
+    return `${base}/job-result/${jobId}?uid=${userId}&t=${timestamp}`
   }
 
   /**
