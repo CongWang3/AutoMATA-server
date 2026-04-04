@@ -1,0 +1,3 @@
+# 大体积压缩包：避免 IDE 反复分析触发多余后台任务
+automata-reference-sql.tar.gz
+*.tar.gz

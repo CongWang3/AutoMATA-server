@@ -1130,3 +1130,4 @@ backend/manual_tests/
 deploy/conda-automata-dev.yml
 deploy/conda-automata.yml
 deploy/conda-r442.yml
+data/reference_sql/*

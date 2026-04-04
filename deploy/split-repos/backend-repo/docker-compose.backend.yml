@@ -8,6 +8,7 @@ services:
     volumes:
       - ./data/uploaded_files:/app/uploaded_files
       - ./data/logs:/app/logs
+      - ./data/reference_sql:/app/reference_sql:ro
     depends_on:
       mysql:
         condition: service_healthy

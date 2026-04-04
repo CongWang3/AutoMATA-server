@@ -23,12 +23,13 @@ class JobLog(Base):
     __tablename__ = "job_logs"
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment="日志 ID")
+    # 必须与 jobs.id（UUID 字符串）类型一致；误用 Integer 会导致 MySQL 下级联删除失败或 500
     job_id = Column(
-        Integer, 
-        ForeignKey("jobs.id", ondelete="CASCADE"), 
-        nullable=False, 
-        index=True, 
-        comment="任务 ID"
+        String(36),
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="任务主键 jobs.id",
     )
     log_level = Column(
         Enum(LogLevel), 

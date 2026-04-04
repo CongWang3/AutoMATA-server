@@ -11,7 +11,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, inspect
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 
@@ -20,6 +20,9 @@ from config.settings import settings
 from api.dependencies.auth import get_current_active_user
 from api.models.user import User
 from api.models.job import Job, JobType, JobStatus
+from api.models.job_file import JobFile
+from api.models.job_log import JobLog
+from api.models.training import TrainingTask
 from api.schemas.jobs import (
     UnifiedJobResponse,
     UnifiedJobListResponse,
@@ -429,8 +432,17 @@ async def delete_job(
                 status_code=400, 
                 detail=f"只能删除 '已完成'、'失败' 或 '已取消' 状态的任务，当前状态: {current_status}"
             )
-        
-        # 物理删除记录
+
+        # 先删子表与历史 training_tasks（部分老库未跑过 create_all，无 job_files/job_logs 表）
+        bind = db.get_bind()
+        insp = inspect(bind)
+        if insp.has_table(JobFile.__tablename__):
+            db.query(JobFile).filter(JobFile.job_id == job.id).delete(synchronize_session=False)
+        if insp.has_table(JobLog.__tablename__):
+            db.query(JobLog).filter(JobLog.job_id == job.id).delete(synchronize_session=False)
+        if insp.has_table(TrainingTask.__tablename__):
+            db.query(TrainingTask).filter(TrainingTask.job_id == job.job_id).delete(synchronize_session=False)
+
         db.delete(job)
         db.commit()
         
@@ -442,7 +454,7 @@ async def delete_job(
         raise
     except SQLAlchemyError as e:
         db.rollback()
-        logger.error(f"数据库错误：{str(e)}")
+        logger.exception("删除任务数据库错误: %s", e)
         raise HTTPException(status_code=500, detail="数据库操作失败")
     except Exception as e:
         db.rollback()

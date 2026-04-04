@@ -706,8 +706,12 @@ def create_app() -> web.Application:
 
 
 if __name__ == '__main__':
+    from config.database import ensure_database_schema
+
+    ensure_database_schema()
+
     app = create_app()
-    
+
     logger.info("=" * 50)
     logger.info("独立下载服务器启动")
     logger.info(f"端口: {settings.DOWNLOAD_SERVER_PORT}")

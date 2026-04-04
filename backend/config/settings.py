@@ -59,7 +59,11 @@ class Settings(BaseSettings):
     DB_PORT: int = 3306
     DB_NAME: str = "automata"
     DB_SOCKET: Optional[str] = None  # Unix socket 路径，如: /var/run/mysqld/mysqld.sock
-    
+
+    # 参考注释库：gene_*/mrna_*/protein_* 的 SQL 数据目录（文件名 表名.sql 或 表名.sql.gz）。
+    # 生产 compose 将宿主机 ./data/reference_sql 挂载到 /app/reference_sql；仅后端主进程启动时导入。
+    REFERENCE_DATA_SQL_DIR: Optional[str] = None
+
     @property
     def DATABASE_URL(self) -> str:
         """构建数据库连接 URL - 支持 Unix socket"""

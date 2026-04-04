@@ -7,6 +7,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    default-mysql-client \
     default-libmysqlclient-dev \
     r-base \
     r-base-dev \

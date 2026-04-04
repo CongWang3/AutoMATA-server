@@ -180,6 +180,17 @@ jobs:
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
+            # 方案 B：从 GitHub Release 拉取参考注释 SQL（附件名写死，与 Release 上传文件名一致）
+            export REFERENCE_GITHUB_REPO="${{ github.repository }}"
+            export REFERENCE_RELEASE_TAG="latest"
+            export REFERENCE_ASSET_NAME="automata-reference-sql.tar.gz"
+            export REFERENCE_GITHUB_TOKEN="${{ secrets.REFERENCE_GITHUB_TOKEN }}"
+            export REFERENCE_SQL_DIR="./data/reference_sql"
+            curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/deploy/fetch-reference-from-github-release.sh?ref=${{ github.ref_name }}" | \
+              jq -r '.content' | base64 -d > /tmp/fetch-reference-from-github-release.sh
+            chmod +x /tmp/fetch-reference-from-github-release.sh
+            /tmp/fetch-reference-from-github-release.sh || echo "[warn] reference release fetch failed or skipped"
             # 从 GitHub Secrets 注入 Agent 配置到 .env.prod
             grep -q '^AGENT_ENABLED=' .env.prod && sed -i '/^AGENT_ENABLED=/d' .env.prod
             grep -q '^AGENT_DEFAULT_PROVIDER=' .env.prod && sed -i '/^AGENT_DEFAULT_PROVIDER=/d' .env.prod
@@ -256,6 +267,17 @@ jobs:
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
+            # 方案 B：从 GitHub Release 拉取参考注释 SQL（附件名写死，与 Release 上传文件名一致）
+            export REFERENCE_GITHUB_REPO="${{ github.repository }}"
+            export REFERENCE_RELEASE_TAG="latest"
+            export REFERENCE_ASSET_NAME="automata-reference-sql.tar.gz"
+            export REFERENCE_GITHUB_TOKEN="${{ secrets.REFERENCE_GITHUB_TOKEN }}"
+            export REFERENCE_SQL_DIR="./data/reference_sql"
+            curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/deploy/fetch-reference-from-github-release.sh?ref=${{ github.ref_name }}" | \
+              jq -r '.content' | base64 -d > /tmp/fetch-reference-from-github-release.sh
+            chmod +x /tmp/fetch-reference-from-github-release.sh
+            /tmp/fetch-reference-from-github-release.sh || echo "[warn] reference release fetch failed or skipped"
             # 从 GitHub Secrets 注入 Agent 配置到 .env.prod
             grep -q '^AGENT_ENABLED=' .env.prod && sed -i '/^AGENT_ENABLED=/d' .env.prod
             grep -q '^AGENT_DEFAULT_PROVIDER=' .env.prod && sed -i '/^AGENT_DEFAULT_PROVIDER=/d' .env.prod

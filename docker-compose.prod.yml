@@ -34,6 +34,8 @@ services:
       - ./data/uploaded_files:/app/uploaded_files
       - ./data/logs:/app/logs
       - ./data/download_data:/app/download_data
+      # Release 解压或手工放置 gene_*/mrna_*/protein_* 到 ./data/reference_sql；.env.prod 设 REFERENCE_DATA_SQL_DIR=/app/reference_sql
+      - ./data/reference_sql:/app/reference_sql:ro
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:-18005}:8005"
     healthcheck:

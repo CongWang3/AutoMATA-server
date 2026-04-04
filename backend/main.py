@@ -152,6 +152,12 @@ def cleanup_marked_files_task():
 @app.on_event("startup")
 async def startup_event():
     """应用启动时执行"""
+    from config.database import ensure_database_schema, engine
+    from reference_data.bootstrap import ensure_reference_annotation_tables
+
+    ensure_database_schema()
+    ensure_reference_annotation_tables(engine)
+
     logger.info("=" * 60)
     logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"环境：{'开发' if settings.DEBUG else '生产'}")
