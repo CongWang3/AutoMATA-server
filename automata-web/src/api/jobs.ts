@@ -93,7 +93,8 @@ class JobsAPI {
     if (filter?.sort_order) params.sort_order = filter.sort_order
     
     try {
-      return await apiClient.get<JobListResponse>('/v1/jobs', params)
+      // 与后端 `/api/v1/jobs/` 对齐，避免无尾斜杠触发 307→http 导致 HTTPS 页 Mixed Content
+      return await apiClient.get<JobListResponse>('/v1/jobs/', params)
     } catch (error) {
       console.error('获取任务列表失败:', error)
       throw error
