@@ -198,6 +198,9 @@ jobs:
             echo 'AGENT_ENABLED=${{ secrets.AGENT_ENABLED }}' >> .env.prod
             echo 'AGENT_DEFAULT_PROVIDER=${{ secrets.AGENT_DEFAULT_PROVIDER }}' >> .env.prod
             echo 'AGENT_DEEPSEEK_API_KEY=${{ secrets.AGENT_DEEPSEEK_API_KEY }}' >> .env.prod
+            # 参考注释 SQL 挂载路径（与 compose 一致）；部署目录不手写，由 CI 每次覆盖写入
+            grep -q '^REFERENCE_DATA_SQL_DIR=' .env.prod && sed -i '/^REFERENCE_DATA_SQL_DIR=/d' .env.prod
+            echo 'REFERENCE_DATA_SQL_DIR=/app/reference_sql' >> .env.prod
             # 加载环境变量
             set -a && source .env.prod && set +a
             # 使用阿里云 ACR 镜像（国内访问更快）
@@ -285,6 +288,9 @@ jobs:
             echo 'AGENT_ENABLED=${{ secrets.AGENT_ENABLED }}' >> .env.prod
             echo 'AGENT_DEFAULT_PROVIDER=${{ secrets.AGENT_DEFAULT_PROVIDER }}' >> .env.prod
             echo 'AGENT_DEEPSEEK_API_KEY=${{ secrets.AGENT_DEEPSEEK_API_KEY }}' >> .env.prod
+            # 参考注释 SQL 挂载路径（与 compose 一致）；部署目录不手写，由 CI 每次覆盖写入
+            grep -q '^REFERENCE_DATA_SQL_DIR=' .env.prod && sed -i '/^REFERENCE_DATA_SQL_DIR=/d' .env.prod
+            echo 'REFERENCE_DATA_SQL_DIR=/app/reference_sql' >> .env.prod
             # 加载环境变量
             set -a && source .env.prod && set +a
             # 使用阿里云 ACR 镜像（国内访问更快）
