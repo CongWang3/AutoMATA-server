@@ -9,6 +9,7 @@ export * from './types'
 export { AuthService } from './auth'
 export { FileService } from './files'
 export { webSocketService, WebSocketService } from './websocket'
+export type { TaskSocketState } from './websocket'
 export { DataProcessAPI } from './data-process'
 export { AnalysisAPI } from './analysis'
 

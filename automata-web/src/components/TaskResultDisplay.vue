@@ -11,6 +11,15 @@
                 Your JobID is {{ jobId }}, please wait a moment.
               </span>
             </nav>
+            <el-alert
+              v-if="showTaskWsHint"
+              type="info"
+              :closable="false"
+              show-icon
+              class="task-ws-hint"
+            >
+              {{ taskWsHintText }}
+            </el-alert>
           </div>
         </div>
       </section>
@@ -189,6 +198,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DataProcessAPI } from '@/api'
 import { webSocketService } from '@/api/websocket'
+import type { TaskSocketState } from '@/api/websocket'
 
 // <!-- 
 // 审查上下文：
@@ -252,8 +262,36 @@ const status = ref<TaskStatus>(props.initialStatus)
 const progress = ref(props.initialProgress)
 const progressMessage = ref('')
 const errorMessage = ref('')
-const pollingTimer = ref<number | null>(null)
 const wsConnected = ref(false)
+const taskSocketState = ref<TaskSocketState>('idle')
+
+const terminalUpper = (s: string) => s.toUpperCase()
+const isTerminalStatus = (s: string) => {
+  const u = terminalUpper(s)
+  return u === 'COMPLETED' || u === 'FAILED'
+}
+
+const showTaskWsHint = computed(() => {
+  if (isTerminalStatus(status.value)) return false
+  return (
+    taskSocketState.value === 'connecting' ||
+    taskSocketState.value === 'reconnecting' ||
+    taskSocketState.value === 'closed'
+  )
+})
+
+const taskWsHintText = computed(() => {
+  switch (taskSocketState.value) {
+    case 'connecting':
+      return 'Connecting for live task updates…'
+    case 'reconnecting':
+      return 'Live connection lost, reconnecting…'
+    case 'closed':
+      return 'Live updates unavailable (reconnect limit reached). Try refreshing the page or submitting again.'
+    default:
+      return ''
+  }
+})
 
 // <!-- 
 // 审查上下文：
@@ -365,6 +403,10 @@ defineExpose({
 // WebSocket连接管理
 const connectTaskWebSocket = async () => {
   try {
+    webSocketService.setOnTaskSocketState((s) => {
+      taskSocketState.value = s
+    })
+
     // 设置任务状态回调
     webSocketService.setOnTaskStatus((data: any) => {
       const { job_id, status: taskStatus, progress: taskProgress, result_file, error_message } = data
@@ -390,49 +432,34 @@ const connectTaskWebSocket = async () => {
     // 连接任务状态WebSocket
     await webSocketService.connectTaskStatus()
     wsConnected.value = true
-    console.log('✅ 任务状态WebSocket连接成功')
-    
+    if (import.meta.env.DEV) console.log('✅ 任务状态WebSocket连接成功')
   } catch (error: any) {
     console.error('WebSocket连接失败:', error)
-    // 连接失败时回退到轮询
-    startPolling()
+    taskSocketState.value = 'closed'
+    ElMessage.warning(
+      'Could not open live task connection. If status does not update, refresh the page or check your network.'
+    )
   }
 }
 
 const disconnectTaskWebSocket = () => {
+  webSocketService.setOnTaskSocketState(null)
   if (wsConnected.value) {
     webSocketService.disconnectTaskStatus()
     wsConnected.value = false
-    console.log('🔌 任务状态WebSocket已断开')
+    if (import.meta.env.DEV) console.log('🔌 任务状态WebSocket已断开')
   }
-}
-
-const startPolling = () => {
-  // 轮询功能已由父组件的WebSocket统一管理
-  console.warn('⚠️ 轮询功能已禁用，使用WebSocket进行状态更新')
-}
-
-const stopPolling = () => {
-  if (pollingTimer.value) {
-    clearTimeout(pollingTimer.value)
-    pollingTimer.value = null
-  }
+  taskSocketState.value = 'idle'
 }
 
 // 生命周期钩子
 onMounted(() => {
-  // 如果有jobId，连接WebSocket
   if (props.jobId) {
     connectTaskWebSocket()
-  }
-  // 如果初始状态不是最终状态，开始轮询作为备用
-  else if (props.initialStatus !== 'COMPLETED' && props.initialStatus !== 'FAILED') {
-    startPolling()
   }
 })
 
 onUnmounted(() => {
-  stopPolling()
   disconnectTaskWebSocket()
 })
 </script>
@@ -461,6 +488,14 @@ onUnmounted(() => {
 .hero-content {
   text-align: center;
   margin-bottom: 15px;  /* 从30px减少到15px */
+}
+
+.task-ws-hint {
+  margin-top: 12px;
+  text-align: left;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .display-2 {

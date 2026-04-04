@@ -1481,7 +1481,7 @@ onUnmounted(() => {
         resultFilesRefreshDebounce = null
     }
     if (wsService) {
-        wsService.disconnect()
+        wsService.disconnectTaskStatus()
         wsService = null
     }
 })

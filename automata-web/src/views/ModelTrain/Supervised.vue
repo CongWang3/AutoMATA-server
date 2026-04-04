@@ -1336,7 +1336,7 @@ onMounted(async () => {
 onUnmounted(() => {
     stopPolling()
     if (wsService) {
-        wsService.disconnect()
+        wsService.disconnectTaskStatus()
         wsService = null
     }
 })

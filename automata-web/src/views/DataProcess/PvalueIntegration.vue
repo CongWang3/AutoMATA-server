@@ -312,7 +312,7 @@ const connectWebSocket = async () => {
 
 const disconnectWebSocket = () => {
   if (taskWsService.value) {
-    taskWsService.value.disconnect()
+    taskWsService.value.disconnectTaskStatus()
     taskWsService.value = null
     wsConnected.value = false
   }
