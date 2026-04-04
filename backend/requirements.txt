@@ -43,3 +43,4 @@ langchain-community==0.3.31
 langchain-text-splitters==0.3.11
 openai==2.29.0
 # Trigger build for ACR
+email-validator
