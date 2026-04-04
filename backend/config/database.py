@@ -10,13 +10,28 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _pymysql_connect_args() -> dict:
+    """长 DDL（create_all）时避免默认短超时导致 Lost connection / 1317 interrupted。"""
+    url = settings.DATABASE_URL
+    if not url.startswith("mysql+pymysql"):
+        return {}
+    return {
+        "connect_timeout": 60,
+        "read_timeout": 600,
+        "write_timeout": 600,
+    }
+
+
 # 创建数据库引擎
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
-    echo=settings.DEBUG
+    pool_recycle=3600,
+    echo=settings.DEBUG,
+    connect_args=_pymysql_connect_args(),
 )
 
 # 创建会话工厂

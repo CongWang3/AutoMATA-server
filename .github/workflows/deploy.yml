@@ -239,10 +239,6 @@ jobs:
             fi
             echo "[info] Using: $DOCKER_COMPOSE_CMD"
             
-            if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] 初始化/校验数据库表结构（python init_db.py）..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend python init_db.py || echo "[warn] db init failed, continue"
-            fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Pulling frontend image (this may take a while)..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet frontend && echo "[info] Frontend image pulled successfully"
@@ -251,10 +247,11 @@ jobs:
               echo "[info] Pulling backend image (this may take a while)..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet backend && echo "[info] Backend image pulled successfully"
             fi
-            # 配置变更：全部重建；仅代码变更：只更新对应服务
+            # 先 up 再 init_db：避免 MySQL 正被 force-recreate 时跑 DDL 导致 2013/1317；infra 用 down+up 消除容器名冲突
             if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] Config changed, force-recreating ALL services..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate
+              echo "[info] infra 变更：compose down（--remove-orphans）后整栈 up"
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml down --remove-orphans
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
             else
               RECREATE_SERVICES=""
               if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
@@ -265,6 +262,22 @@ jobs:
               fi
               echo "[info] Code changed, recreating: $RECREATE_SERVICES"
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate $RECREATE_SERVICES
+            fi
+            echo "[info] 等待 MySQL healthy（最多约 3min）..."
+            for i in $(seq 1 90); do
+              if $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml ps mysql 2>/dev/null | grep -q healthy; then
+                echo "[info] MySQL 已 healthy，再等 10s 后执行 init_db"
+                sleep 10
+                break
+              fi
+              if [ "$i" -eq 90 ]; then
+                echo "[warn] 仍未检测到 MySQL healthy，仍尝试 init_db"
+              fi
+              sleep 2
+            done
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
+              echo "[info] 初始化/校验数据库表结构（python init_db.py）..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm --no-deps backend python init_db.py || echo "[warn] db init failed, continue"
             fi
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
@@ -345,10 +358,6 @@ jobs:
             fi
             echo "[info] Using: $DOCKER_COMPOSE_CMD"
             
-            if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] 初始化/校验数据库表结构（python init_db.py）..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend python init_db.py || echo "[warn] db init failed, continue"
-            fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Pulling frontend image (this may take a while)..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet frontend && echo "[info] Frontend image pulled successfully"
@@ -357,10 +366,11 @@ jobs:
               echo "[info] Pulling backend image (this may take a while)..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet backend && echo "[info] Backend image pulled successfully"
             fi
-            # 配置变更：全部重建；仅代码变更：只更新对应服务
+            # 先 up 再 init_db：避免 MySQL 正被 force-recreate 时跑 DDL 导致 2013/1317；infra 用 down+up 消除容器名冲突
             if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] Config changed, force-recreating ALL services..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate
+              echo "[info] infra 变更：compose down（--remove-orphans）后整栈 up"
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml down --remove-orphans
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
             else
               RECREATE_SERVICES=""
               if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
@@ -371,6 +381,22 @@ jobs:
               fi
               echo "[info] Code changed, recreating: $RECREATE_SERVICES"
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate $RECREATE_SERVICES
+            fi
+            echo "[info] 等待 MySQL healthy（最多约 3min）..."
+            for i in $(seq 1 90); do
+              if $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml ps mysql 2>/dev/null | grep -q healthy; then
+                echo "[info] MySQL 已 healthy，再等 10s 后执行 init_db"
+                sleep 10
+                break
+              fi
+              if [ "$i" -eq 90 ]; then
+                echo "[warn] 仍未检测到 MySQL healthy，仍尝试 init_db"
+              fi
+              sleep 2
+            done
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
+              echo "[info] 初始化/校验数据库表结构（python init_db.py）..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm --no-deps backend python init_db.py || echo "[warn] db init failed, continue"
             fi
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
