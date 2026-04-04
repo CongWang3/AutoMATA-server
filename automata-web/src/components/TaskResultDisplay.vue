@@ -315,10 +315,16 @@ watch(() => props.initialProgress, (newProgress) => {
   }
 })
 
-// 监听jobId变化，重新连接WebSocket
+// 监听jobId变化，重新连接 WebSocket 并拉一次 REST（连接失败仍尝试 REST）
 watch(() => props.jobId, (newJobId) => {
   if (newJobId) {
-    connectTaskWebSocket()
+    void connectTaskWebSocket()
+      .catch(() => {})
+      .finally(() => {
+        void DataProcessAPI.getProcessStatus(newJobId)
+          .then((r) => applyRestJobStatus(r as Record<string, unknown>))
+          .catch(() => {})
+      })
   }
 })
 
@@ -361,44 +367,22 @@ const downloadResult = async () => {
   }
 }
 
-// 暴露方法给父组件使用
-defineExpose({
-  refreshStatus: async () => {
-    try {
-      // <!-- 
-      // 审查上下文：
-      // - 设计意图：简化API响应处理逻辑，提高代码可读性
-      // - 已知局限：移除调试日志，专注于核心功能实现
-      // - 业务背景：确保组件状态更新的稳定性和可靠性
-      // - 测试重点：请验证任务状态更新功能的完整性和准确性
-      // -->
-      
-      if (!props.jobId) {
-        return null
-      }
-      
-      // 直接获取状态数据
-      const result = await DataProcessAPI.getProcessStatus(props.jobId)
-      
-      // 安全更新组件状态
-      if (result && typeof result === 'object' && result.status) {
-        status.value = result.status
-        
-        if (typeof result.progress === 'number' && result.progress >= 0) {
-          progress.value = result.progress
-        }
-        
-        return result
-      }
-      
-      return null
-      
-    } catch (error: any) {
-      // 静默处理错误，避免影响用户体验
-      return null
-    }
+/** 用 GET /status 结果更新 UI（与 WebSocket 一致：状态大写、带 error_message） */
+const applyRestJobStatus = (result: Record<string, unknown> | null | undefined) => {
+  if (!result || typeof result !== 'object' || result.status == null || String(result.status) === '') {
+    return null
   }
-})
+  const normalized = String(result.status).toUpperCase() as TaskStatus
+  status.value = normalized
+  emit('status-change', normalized)
+  if (typeof result.progress === 'number' && result.progress >= 0) {
+    progress.value = result.progress
+  }
+  if (result.error_message != null && String(result.error_message).length) {
+    errorMessage.value = String(result.error_message)
+  }
+  return result
+}
 
 // WebSocket连接管理
 const connectTaskWebSocket = async () => {
@@ -452,10 +436,30 @@ const disconnectTaskWebSocket = () => {
   taskSocketState.value = 'idle'
 }
 
+// 暴露方法给父组件使用
+defineExpose({
+  refreshStatus: async () => {
+    if (!props.jobId) {
+      return null
+    }
+    try {
+      const result = await DataProcessAPI.getProcessStatus(props.jobId)
+      return applyRestJobStatus(result as Record<string, unknown>)
+    } catch {
+      return null
+    }
+  }
+})
+
 // 生命周期钩子
-onMounted(() => {
-  if (props.jobId) {
-    connectTaskWebSocket()
+onMounted(async () => {
+  if (!props.jobId) return
+  await connectTaskWebSocket().catch(() => {})
+  try {
+    const result = await DataProcessAPI.getProcessStatus(props.jobId)
+    applyRestJobStatus(result as Record<string, unknown>)
+  } catch {
+    /* 与 WS 互补：未连上或已终态时仍展示失败/完成 */
   }
 })
 

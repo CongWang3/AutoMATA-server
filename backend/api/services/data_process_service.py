@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import UploadFile, HTTPException
 
 from sqlalchemy.orm import Session
+from config.database import SessionLocal
 from sqlalchemy import text
 from api.models.user import User
 from api.models.job import Job, JobType, JobStatus
@@ -58,14 +59,24 @@ class DataProcessService:
         self.process_dir.mkdir(parents=True, exist_ok=True)
 
     @asynccontextmanager
-    async def _global_script_slot(self, job_id: str):
+    async def _global_script_slot(
+        self,
+        job_id: str,
+        *,
+        db: Optional[Session] = None,
+        user_id: Optional[int] = None,
+    ):
         """
         Global (all-job-types) concurrency gate for external script execution.
 
         Queued semantics:
         - Keep status as Submitted
         - Write current_step='排队中（等待资源）' at most once while waiting
+
+        后台任务须传入 request 外新建的 db 与 user_id；省略时沿用 self.db / self.user（同请求内调用）。
         """
+        sess = db if db is not None else self.db
+        uid = user_id if user_id is not None else self.user.id
         acquired_immediately = False
         try:
             await asyncio.wait_for(GLOBAL_TASK_SEM.acquire(), timeout=0)
@@ -74,14 +85,14 @@ class DataProcessService:
             acquired_immediately = False
 
         if not acquired_immediately:
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            job = sess.query(Job).filter(Job.job_id == job_id).first()
             if job and job.status == JobStatus.SUBMITTED and (job.current_step or "") != "排队中（等待资源）":
                 job.current_step = "排队中（等待资源）"
                 job.updated_at = datetime.now()
-                self.db.commit()
+                sess.commit()
                 try:
                     await task_status_manager.send_task_status(
-                        str(self.user.id),
+                        str(uid),
                         {
                             "job_id": job_id,
                             "status": JobStatus.SUBMITTED.value,
@@ -160,7 +171,7 @@ class DataProcessService:
             
             # 异步处理数据（避免阻塞主线程）
             asyncio.create_task(self._execute_genome_processing(
-                job_id, saved_file_path, gene_nomenclature, data_type, organism, email
+                job_id, saved_file_path, gene_nomenclature, data_type, organism, email, self.user.id
             ))
             
             return GenomeProcessResponse(
@@ -226,7 +237,7 @@ class DataProcessService:
             
             # 异步处理数据
             asyncio.create_task(self._execute_transcriptome_processing(
-                job_id, saved_file_path, mrna_nomenclature, data_type, organism, email
+                job_id, saved_file_path, mrna_nomenclature, data_type, organism, email, self.user.id
             ))
             
             return TranscriptomeProcessResponse(
@@ -290,6 +301,7 @@ class DataProcessService:
                     protein_nomenclature=protein_nomenclature,
                     organism=organism,
                     email=email,
+                    user_id=self.user.id,
                 )
             )
 
@@ -365,6 +377,7 @@ class DataProcessService:
                     file2_path=file2_saved,
                     file3_path=file3_saved,
                     email=email,
+                    user_id=self.user.id,
                 )
             )
             
@@ -432,6 +445,7 @@ class DataProcessService:
                     file3_path=file3_saved,
                     method=method,
                     email=email,
+                    user_id=self.user.id,
                 )
             )
 
@@ -453,163 +467,186 @@ class DataProcessService:
         gene_nomenclature: str,
         data_type: str,
         organism: str,
-        email: Optional[str]
+        email: Optional[str],
+        user_id: int,
     ):
-        """执行基因组数据处理"""
+        """执行基因组数据处理（独立 DB 会话，避免请求结束后 self.db 已关闭）。"""
+        db = SessionLocal()
         try:
-            async with self._global_script_slot(job_id):
-                # 更新任务状态：拿到 slot 后才进入 Processing（排队时仍为 Submitted）
-                job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            try:
+                async with self._global_script_slot(job_id, db=db, user_id=user_id):
+                    # 更新任务状态：拿到 slot 后才进入 Processing（排队时仍为 Submitted）
+                    job = db.query(Job).filter(Job.job_id == job_id).first()
+                    if job:
+                        job.status = JobStatus.PROCESSING
+                        job.current_step = "开始处理基因组数据"
+                        job.updated_at = datetime.now()
+                        db.commit()
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.PROCESSING.value,
+                                    "progress": 0,
+                                    "message": "开始处理基因组数据",
+                                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                                    "server_seq": next_server_seq(),
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                # 准备 Jobs 目录的输入文件（与原 PHP 实现兼容）
+                jobs_dir = settings.path_jobs / job_id
+                jobs_dir.mkdir(parents=True, exist_ok=True)
+                jobs_input_file = jobs_dir / "origin.txt"
+
+                # 复制上传文件到 Jobs 目录
+                import shutil
+                shutil.copy2(str(file_path), str(jobs_input_file))
+
+                # 构建 R脚本命令（使用绝对路径）
+                r_script = str(settings.path_code / "mysql2TPM.R")
+                output_dir = self.process_dir / job_id
+                output_dir.mkdir(parents=True, exist_ok=True)
+
+                # 使用绝对路径确保 R 脚本能正确访问文件
+                output_file = str(settings.path_jobs / job_id / "processed.txt")
+
+                # 参数映射
+                nomenclature_map = {"GeneID": "GeneID", "EnsemblID": "EnsemblID", "Symbol": "Symbol"}
+                type_map = {"FPKM": "FPKM", "TPM": "TPM", "ReadCounts": "ReadCounts", "RPKM": "RPKM", "RPM": "RPM"}
+                organism_map = {
+                    "homo_sapiens": "homo_sapiens",
+                    "mus_musculus": "mus_musculus",
+                    "drosophila_melanogaster": "drosophila_melanogaster",
+                    "arabidopsis_thaliana": "arabidopsis_thaliana",
+                    "bos_taurus": "bos_taurus",
+                }
+
+                cmd = [
+                    settings.RSCRIPT_PATH,
+                    r_script,
+                    "-g",
+                    nomenclature_map[gene_nomenclature],
+                    "-d",
+                    type_map[data_type],
+                    "-r",
+                    organism_map[organism],
+                    "-i",
+                    str(jobs_input_file),
+                    "-o",
+                    output_file,
+                    "-h",
+                    "none",
+                    "-a",
+                    job_id,
+                ]
+
+                result = await run_subprocess(
+                    cmd,
+                    cwd=os.getcwd(),
+                    shell=False,
+                    timeout=None,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=_r_mysql_subprocess_env(),
+                )
+
+                # 更新任务结果
+                job = db.query(Job).filter(Job.job_id == job_id).first()
                 if job:
-                    job.status = JobStatus.PROCESSING
-                    job.current_step = "开始处理基因组数据"
-                    job.updated_at = datetime.now()
-                    self.db.commit()
-                    try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": JobStatus.PROCESSING.value,
-                                "progress": 0,
-                                "message": "开始处理基因组数据",
-                                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
-                                "server_seq": next_server_seq(),
-                            },
+                    if result.returncode == 0:
+                        job.status = JobStatus.COMPLETED
+                        job.current_step = "已完成"
+                        job.result_file = output_file
+                        job.output_params = json.dumps(
+                            {"stdout": result.stdout or ""}, ensure_ascii=False
                         )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
+                        job.updated_at = datetime.now()
+                        db.commit()
 
-            # 准备 Jobs 目录的输入文件（与原 PHP 实现兼容）
-            jobs_dir = settings.path_jobs / job_id
-            jobs_dir.mkdir(parents=True, exist_ok=True)
-            jobs_input_file = jobs_dir / "origin.txt"
-                
-            # 复制上传文件到 Jobs 目录
-            import shutil
-            shutil.copy2(str(file_path), str(jobs_input_file))
-                
-            # 构建 R脚本命令（使用绝对路径）
-            r_script = str(settings.path_code / "mysql2TPM.R")
-            output_dir = self.process_dir / job_id
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
-            # 使用绝对路径确保 R 脚本能正确访问文件
-            output_file = str(settings.path_jobs / job_id / "processed.txt")
-                
-            # 参数映射
-            nomenclature_map = {"GeneID": "GeneID", "EnsemblID": "EnsemblID", "Symbol": "Symbol"}
-            type_map = {"FPKM": "FPKM", "TPM": "TPM", "ReadCounts": "ReadCounts", "RPKM": "RPKM", "RPM": "RPM"}
-            organism_map = {
-                "homo_sapiens": "homo_sapiens",
-                "mus_musculus": "mus_musculus", 
-                "drosophila_melanogaster": "drosophila_melanogaster",
-                "arabidopsis_thaliana": "arabidopsis_thaliana",
-                "bos_taurus": "bos_taurus"
-            }
-                
-            cmd = [
-                settings.RSCRIPT_PATH, r_script,
-                "-g", nomenclature_map[gene_nomenclature],
-                "-d", type_map[data_type],
-                "-r", organism_map[organism],
-                "-i", str(jobs_input_file),
-                "-o", output_file,  # 使用绝对路径
-                "-h", "none",
-                "-a", job_id  # 关键：传递 jobID 参数
-            ]
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.COMPLETED.value,
+                                    "progress": 100,
+                                    "result_file": job.result_file,
+                                    "message": "基因组数据处理完成",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
 
-            result = await run_subprocess(
-                cmd,
-                cwd=os.getcwd(),
-                shell=False,
-                timeout=None,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env=_r_mysql_subprocess_env(),
-            )
+                    else:
+                        job.status = JobStatus.FAILED
+                        job.current_step = "处理失败"
+                        _err = (result.stderr or "").strip()
+                        if not _err:
+                            _err = (result.stdout or "").strip()
+                        job.error_message = _err or "R 脚本执行失败"
+                        job.updated_at = datetime.now()
+                        db.commit()
 
-            # 更新任务结果
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                if result.returncode == 0:
-                    job.status = JobStatus.COMPLETED
-                    job.current_step = "已完成"
-                    job.result_file = output_file  # 使用绝对路径
-                    job.output_params = json.dumps({"stdout": result.stdout}, ensure_ascii=False)
-                    job.updated_at = datetime.now()
-                    self.db.commit()  # 自己改
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.FAILED.value,
+                                    "progress": 0,
+                                    "error_message": job.error_message,
+                                    "message": "基因组数据处理失败",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
 
-                                
-                    # 推送完成状态
-                    try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": "Completed",
-                                "progress": 100,
-                                "result_file": job.result_file,
-                                "message": "基因组数据处理完成"
-                            }
-                        )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
-                                    
-                else:
+                    logger.info(f"基因组处理完成：job_id={job_id}, status={job.status}")
+
+                    if job.status == JobStatus.COMPLETED and email:
+                        try:
+                            await email_service.send_result_email(
+                                to_email=email,
+                                job_id=job_id,
+                                analysis_type="基因组数据处理",
+                                result_dir=job.result_file,
+                            )
+                        except Exception as e:
+                            logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
+
+            except Exception as e:
+                logger.error(f"基因组处理执行失败: job_id={job_id}, error={str(e)}")
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                err_text = str(e)
+                if job:
                     job.status = JobStatus.FAILED
-                    job.current_step = "处理失败"
-                    _err = (result.stderr or "").strip()
-                    if not _err:
-                        _err = (result.stdout or "").strip()
-                    job.error_message = _err or "R 脚本执行失败"
+                    job.error_message = err_text
                     job.updated_at = datetime.now()
-                    self.db.commit()
-
-                    # 推送失败状态
                     try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": "Failed",
-                                "progress": 0,
-                                "error_message": job.error_message,
-                                "message": "基因组数据处理失败"
-                            }
-                        )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
-
-                logger.info(f"基因组处理完成：job_id={job_id}, status={job.status}")
-                
-                # 如果任务成功且提供了邮箱，发送结果邮件
-                if job.status == "Completed" and email:
-                    try:
-                        await email_service.send_result_email(
-                            to_email=email,
-                            job_id=job_id,
-                            analysis_type="基因组数据处理",
-                            result_dir=job.result_file
-                        )
-                    except Exception as e:
-                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
-            
-        except Exception as e:
-            logger.error(f"基因组处理执行失败: job_id={job_id}, error={str(e)}")
-            # 更新失败状态
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.FAILED
-                job.error_message = str(e)
-                job.updated_at = datetime.now()
+                        db.commit()
+                    except Exception:
+                        pass
                 try:
-                    self.db.commit()
+                    await task_status_manager.send_task_status(
+                        str(user_id),
+                        {
+                            "job_id": job_id,
+                            "status": JobStatus.FAILED.value,
+                            "progress": 0,
+                            "error_message": err_text,
+                            "message": "基因组数据处理失败",
+                        },
+                    )
                 except Exception:
-                    # If even the failure commit fails, the status can remain stale (Processing).
                     pass
-    
+        finally:
+            db.close()
+
     async def _execute_transcriptome_processing(
         self,
         job_id: str,
@@ -617,155 +654,176 @@ class DataProcessService:
         mrna_nomenclature: str,
         data_type: str,
         organism: str,
-        email: Optional[str]
+        email: Optional[str],
+        user_id: int,
     ):
-        """执行转录组数据处理"""
+        """执行转录组数据处理（独立 DB 会话）。"""
+        db = SessionLocal()
         try:
-            async with self._global_script_slot(job_id):
-                # 更新任务状态：拿到 slot 后才进入 Processing（排队时仍为 Submitted）
-                job = self.db.query(Job).filter(Job.job_id == job_id).first()
+            try:
+                async with self._global_script_slot(job_id, db=db, user_id=user_id):
+                    job = db.query(Job).filter(Job.job_id == job_id).first()
+                    if job:
+                        job.status = JobStatus.PROCESSING
+                        job.current_step = "开始处理转录组数据"
+                        job.updated_at = datetime.now()
+                        db.commit()
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.PROCESSING.value,
+                                    "progress": 0,
+                                    "message": "开始处理转录组数据",
+                                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                                    "server_seq": next_server_seq(),
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                jobs_dir = settings.path_jobs / job_id
+                jobs_dir.mkdir(parents=True, exist_ok=True)
+                jobs_input_file = jobs_dir / "origin.txt"
+
+                import shutil
+                shutil.copy2(str(file_path), str(jobs_input_file))
+
+                r_script = str(settings.path_code / "mrna_mysql2TPM.R")
+                output_dir = self.process_dir / job_id
+                output_dir.mkdir(parents=True, exist_ok=True)
+
+                output_file = str(settings.path_jobs / job_id / "processed.txt")
+
+                nomenclature_map = {"Refseq": "Refseq", "EnsemblID": "EnsemblID", "Transcript_name": "Transcript_name"}
+                type_map = {"FPKM": "FPKM", "TPM": "TPM", "ReadCounts": "ReadCounts", "RPKM": "RPKM", "RPM": "RPM"}
+                organism_map = {
+                    "homo_sapiens": "homo_sapiens",
+                    "mus_musculus": "mus_musculus",
+                    "drosophila_melanogaster": "drosophila_melanogaster",
+                    "bos_taurus": "bos_taurus",
+                }
+
+                cmd = [
+                    settings.RSCRIPT_PATH,
+                    r_script,
+                    "-g",
+                    nomenclature_map[mrna_nomenclature],
+                    "-d",
+                    type_map[data_type],
+                    "-r",
+                    organism_map[organism],
+                    "-i",
+                    str(jobs_input_file),
+                    "-o",
+                    output_file,
+                    "-a",
+                    job_id,
+                ]
+
+                result = await run_subprocess(
+                    cmd,
+                    cwd=os.getcwd(),
+                    shell=False,
+                    timeout=None,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=_r_mysql_subprocess_env(),
+                )
+
+                job = db.query(Job).filter(Job.job_id == job_id).first()
                 if job:
-                    job.status = JobStatus.PROCESSING
-                    job.current_step = "开始处理转录组数据"
-                    job.updated_at = datetime.now()
-                    self.db.commit()
-                    try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": JobStatus.PROCESSING.value,
-                                "progress": 0,
-                                "message": "开始处理转录组数据",
-                                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
-                                "server_seq": next_server_seq(),
-                            },
+                    if result.returncode == 0:
+                        job.status = JobStatus.COMPLETED
+                        job.current_step = "已完成"
+                        job.result_file = output_file
+                        job.output_params = json.dumps(
+                            {"stdout": result.stdout or ""}, ensure_ascii=False
                         )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
+                        job.updated_at = datetime.now()
+                        db.commit()
 
-            # 准备 Jobs 目录的输入文件（与原 PHP 实现兼容）
-            jobs_dir = settings.path_jobs / job_id
-            jobs_dir.mkdir(parents=True, exist_ok=True)
-            jobs_input_file = jobs_dir / "origin.txt"
-                
-            # 复制上传文件到 Jobs 目录
-            import shutil
-            shutil.copy2(str(file_path), str(jobs_input_file))
-                
-            # 构建 R脚本命令（使用绝对路径）
-            r_script = str(settings.path_code / "mrna_mysql2TPM.R")
-            output_dir = self.process_dir / job_id
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
-            # 使用绝对路径确保 R 脚本能正确访问文件
-            output_file = str(settings.path_jobs / job_id / "processed.txt")
-                
-            # 参数映射
-            nomenclature_map = {"Refseq": "Refseq", "EnsemblID": "EnsemblID", "Transcript_name": "Transcript_name"}
-            type_map = {"FPKM": "FPKM", "TPM": "TPM", "ReadCounts": "ReadCounts", "RPKM": "RPKM", "RPM": "RPM"}
-            organism_map = {
-                "homo_sapiens": "homo_sapiens",
-                "mus_musculus": "mus_musculus",
-                "drosophila_melanogaster": "drosophila_melanogaster",
-                "bos_taurus": "bos_taurus"
-            }
-                
-            cmd = [
-                settings.RSCRIPT_PATH, r_script,
-                "-g", nomenclature_map[mrna_nomenclature],  # 修正为 -g（与 R脚本定义一致）
-                "-d", type_map[data_type],
-                "-r", organism_map[organism],
-                "-i", str(jobs_input_file),
-                "-o", output_file,  # 使用绝对路径
-                "-a", job_id  # 关键：传递 jobID 参数
-            ]
-            
-            result = await run_subprocess(
-                cmd,
-                cwd=os.getcwd(),
-                shell=False,
-                timeout=None,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env=_r_mysql_subprocess_env(),
-            )
-                        
-            # 更新任务结果
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                if result.returncode == 0:
-                    job.status = JobStatus.COMPLETED
-                    job.current_step = "已完成"
-                    job.result_file = output_file  # 使用绝对路径
-                    job.output_params = json.dumps({"stdout": result.stdout}, ensure_ascii=False)
-                    job.updated_at = datetime.now()
-                    self.db.commit()  # 自己改
-                                
-                    # 推送完成状态
-                    try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": "Completed",
-                                "progress": 100,
-                                "result_file": job.result_file,
-                                "message": "转录组数据处理完成"
-                            }
-                        )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
-                                    
-                else:
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.COMPLETED.value,
+                                    "progress": 100,
+                                    "result_file": job.result_file,
+                                    "message": "转录组数据处理完成",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                    else:
+                        job.status = JobStatus.FAILED
+                        job.current_step = "处理失败"
+                        _err_tx = (result.stderr or "").strip()
+                        if not _err_tx:
+                            _err_tx = (result.stdout or "").strip()
+                        job.error_message = _err_tx or "R 脚本执行失败"
+                        job.updated_at = datetime.now()
+                        db.commit()
+
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.FAILED.value,
+                                    "progress": 0,
+                                    "error_message": job.error_message,
+                                    "message": "转录组数据处理失败",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                    logger.info(f"转录组处理完成：job_id={job_id}, status={job.status}")
+
+                    if job.status == JobStatus.COMPLETED and email:
+                        try:
+                            await email_service.send_result_email(
+                                to_email=email,
+                                job_id=job_id,
+                                analysis_type="转录组数据处理",
+                                result_dir=job.result_file,
+                            )
+                        except Exception as e:
+                            logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
+
+            except Exception as e:
+                logger.error(f"转录组处理执行失败: job_id={job_id}, error={str(e)}")
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                err_text = str(e)
+                if job:
                     job.status = JobStatus.FAILED
-                    job.current_step = "处理失败"
-                    _err_tx = (result.stderr or "").strip()
-                    if not _err_tx:
-                        _err_tx = (result.stdout or "").strip()
-                    job.error_message = _err_tx or "R 脚本执行失败"
+                    job.error_message = err_text
                     job.updated_at = datetime.now()
-                    self.db.commit()
-
-                    # 推送失败状态
                     try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": "Failed",
-                                "progress": 0,
-                                "error_message": job.error_message,
-                                "message": "转录组数据处理失败"
-                            }
-                        )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
+                        db.commit()
+                    except Exception:
+                        pass
+                try:
+                    await task_status_manager.send_task_status(
+                        str(user_id),
+                        {
+                            "job_id": job_id,
+                            "status": JobStatus.FAILED.value,
+                            "progress": 0,
+                            "error_message": err_text,
+                            "message": "转录组数据处理失败",
+                        },
+                    )
+                except Exception:
+                    pass
+        finally:
+            db.close()
 
-                logger.info(f"转录组处理完成：job_id={job_id}, status={job.status}")
-                
-                # 如果任务成功且提供了邮箱，发送结果邮件
-                if job.status == "Completed" and email:
-                    try:
-                        await email_service.send_result_email(
-                            to_email=email,
-                            job_id=job_id,
-                            analysis_type="转录组数据处理",
-                            result_dir=job.result_file
-                        )
-                    except Exception as e:
-                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
-            
-        except Exception as e:
-            logger.error(f"转录组处理执行失败: job_id={job_id}, error={str(e)}")
-            # 更新失败状态
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.FAILED
-                job.error_message = str(e)
-                job.updated_at = datetime.now()
-                self.db.commit()  # 自己改
     async def _execute_protein_processing(
         self,
         job_id: str,
@@ -773,226 +831,235 @@ class DataProcessService:
         protein_nomenclature: str,
         organism: str,
         email: Optional[str],
+        user_id: int,
     ):
         """
-        执行蛋白质数据处理
+        执行蛋白质数据处理（独立 DB 会话）
 
         逻辑参考原 protein2.php：
         - 根据命名方式和物种，从 protein_* 表查询 Symbol
         - 生成 [命名ID, Symbol, log2(value+1)...] 结果矩阵
         """
+        db = SessionLocal()
         try:
-            # 更新任务状态
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.PROCESSING
-                job.updated_at = datetime.now()
-                self.db.commit()
+            try:
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                if job:
+                    job.status = JobStatus.PROCESSING
+                    job.updated_at = datetime.now()
+                    db.commit()
 
-                # 通过 WebSocket 推送状态更新
-                try:
-                    await task_status_manager.send_task_status(
-                        str(self.user.id),
-                        {
-                            "job_id": job_id,
-                            "status": JobStatus.PROCESSING.value,
-                            "progress": 0,
-                            "message": "开始处理蛋白质数据",
-                        },
-                    )
-                except Exception as e:
-                    logger.debug(f"WebSocket 状态推送失败: {e}")
-
-            # 读取上传文件
-            if not file_path.exists():
-                raise RuntimeError(f"输入文件不存在: {file_path}")
-
-            with open(file_path, "r", encoding="utf-8") as f:
-                raw_lines = [line.rstrip("\n\r") for line in f if line.strip()]
-
-            if not raw_lines:
-                raise RuntimeError("输入文件为空")
-
-            header_cols = raw_lines[0].split("\t")
-            if len(header_cols) < 2:
-                raise RuntimeError("输入文件格式错误：至少需要一列ID和一列样本数据")
-
-            sample_names = header_cols[1:]
-            sample_count = len(sample_names)
-
-            ids = []
-            data_map = {}
-            for line in raw_lines[1:]:
-                cols = line.split("\t")
-                if not cols or not cols[0]:
-                    continue
-                pid = cols[0]
-                ids.append(pid)
-                # 后续会根据 sample_count 自动补齐/截断
-                data_map[pid] = cols[1:]
-
-            # 映射 organism -> protein 表名
-            table_map = {
-                "homo_sapiens": "protein_homo_sapiens",
-                "bos_taurus": "protein_bos_taurus",
-                "mus_musculus": "protein_mus",
-                "drosophila_melanogaster": "protein_dm",
-            }
-            table_name = table_map.get(organism)
-            if not table_name:
-                raise RuntimeError(f"不支持的物种: {organism}")
-
-            # 查询 Symbol（参考 protein2.php 逻辑）
-            engine = self.db.get_bind()
-            id_to_symbol = {}
-            processed_clean = {}
-
-            def _clean_id(value: str) -> str:
-                # 移除小数点及后面的所有内容（与 PHP cleanRefSeq 一致）
-                if not value:
-                    return ""
-                return value.split(".")[0]
-
-            with engine.connect() as conn:
-                for raw_id in ids:
-                    cleaned = _clean_id(raw_id)
-                    if not cleaned:
-                        continue
-
-                    # 复用已处理过的 ID，避免重复查询
-                    if cleaned in processed_clean:
-                        id_to_symbol[raw_id] = processed_clean[cleaned]
-                        continue
-
-                    symbol = ""
-
-                    if protein_nomenclature == "RefSeq":
-                        # RefSeq 处理：先模糊匹配，再在结果中精确比对 cleaned ID
-                        sql = text(
-                            f"SELECT RefSeq, Symbol FROM {table_name} WHERE RefSeq LIKE :pattern"
-                        )
-                        rows = conn.execute(
-                            sql, {"pattern": f"%{raw_id}%"}
-                        ).fetchall()
-                        for row in rows:
-                            refseq_field = row[0] or ""
-                            for db_ref in refseq_field.split(";"):
-                                cleaned_db = _clean_id(db_ref.strip())
-                                if cleaned_db == cleaned:
-                                    symbol = row[1]
-                                    break
-                            if symbol:
-                                break
-                    else:
-                        # 其它命名方式：Entry / AlphaFoldDB / Ensembl
-                        if protein_nomenclature == "Ensembl":
-                            col_name = "Protein_stable_ID"
-                        else:
-                            col_name = protein_nomenclature
-
-                        sql = text(
-                            f"SELECT Symbol FROM {table_name} WHERE {col_name} = :pid LIMIT 1"
-                        )
-                        row = conn.execute(sql, {"pid": raw_id}).fetchone()
-                        if row:
-                            symbol = row[0]
-
-                    if symbol:
-                        id_to_symbol[raw_id] = symbol
-                        processed_clean[cleaned] = symbol
-
-            # 生成输出内容：命名ID, Symbol, log2(value+1)
-            jobs_dir = settings.path_jobs / job_id
-            jobs_dir.mkdir(parents=True, exist_ok=True)
-            output_file = jobs_dir / "processed.txt"
-
-            lines_out = []
-            header_out = (
-                f"{protein_nomenclature}\tSymbol\t" + "\t".join(sample_names)
-            )
-            lines_out.append(header_out)
-
-            for pid in ids:
-                symbol = id_to_symbol.get(pid, "")
-                sample_values = data_map.get(pid, [])
-
-                # 补齐或截断为固定样本数
-                if len(sample_values) < sample_count:
-                    sample_values = sample_values + ["0"] * (
-                        sample_count - len(sample_values)
-                    )
-                elif len(sample_values) > sample_count:
-                    sample_values = sample_values[:sample_count]
-
-                log_values = []
-                for v in sample_values:
-                    v_str = (v or "").strip()
-                    if not v_str:
-                        log_values.append("0")
-                        continue
                     try:
-                        num = float(v_str)
-                    except ValueError:
-                        num = 0.0
-                    if num != 0:
-                        log_val = math.log2(num + 1.0)
-                        log_values.append(f"{log_val:.6f}")
-                    else:
-                        log_values.append("0")
+                        await task_status_manager.send_task_status(
+                            str(user_id),
+                            {
+                                "job_id": job_id,
+                                "status": JobStatus.PROCESSING.value,
+                                "progress": 0,
+                                "message": "开始处理蛋白质数据",
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket 状态推送失败: {e}")
 
-                lines_out.append(f"{pid}\t{symbol}\t" + "\t".join(log_values))
+                if not file_path.exists():
+                    raise RuntimeError(f"输入文件不存在: {file_path}")
 
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write("\n".join(lines_out) + "\n")
+                with open(file_path, "r", encoding="utf-8") as f:
+                    raw_lines = [line.rstrip("\n\r") for line in f if line.strip()]
 
-            # 更新任务结果
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.COMPLETED
-                job.result_file = str(output_file)
-                job.output_params = json.dumps(
-                    {"stdout": f"Protein process finished: {output_file}"},
-                    ensure_ascii=False,
+                if not raw_lines:
+                    raise RuntimeError("输入文件为空")
+
+                header_cols = raw_lines[0].split("\t")
+                if len(header_cols) < 2:
+                    raise RuntimeError("输入文件格式错误：至少需要一列ID和一列样本数据")
+
+                sample_names = header_cols[1:]
+                sample_count = len(sample_names)
+
+                ids = []
+                data_map = {}
+                for line in raw_lines[1:]:
+                    cols = line.split("\t")
+                    if not cols or not cols[0]:
+                        continue
+                    pid = cols[0]
+                    ids.append(pid)
+                    data_map[pid] = cols[1:]
+
+                table_map = {
+                    "homo_sapiens": "protein_homo_sapiens",
+                    "bos_taurus": "protein_bos_taurus",
+                    "mus_musculus": "protein_mus",
+                    "drosophila_melanogaster": "protein_dm",
+                }
+                table_name = table_map.get(organism)
+                if not table_name:
+                    raise RuntimeError(f"不支持的物种: {organism}")
+
+                engine = db.get_bind()
+                id_to_symbol = {}
+                processed_clean = {}
+
+                def _clean_id(value: str) -> str:
+                    if not value:
+                        return ""
+                    return value.split(".")[0]
+
+                with engine.connect() as conn:
+                    for raw_id in ids:
+                        cleaned = _clean_id(raw_id)
+                        if not cleaned:
+                            continue
+
+                        if cleaned in processed_clean:
+                            id_to_symbol[raw_id] = processed_clean[cleaned]
+                            continue
+
+                        symbol = ""
+
+                        if protein_nomenclature == "RefSeq":
+                            sql = text(
+                                f"SELECT RefSeq, Symbol FROM {table_name} WHERE RefSeq LIKE :pattern"
+                            )
+                            rows = conn.execute(
+                                sql, {"pattern": f"%{raw_id}%"}
+                            ).fetchall()
+                            for row in rows:
+                                refseq_field = row[0] or ""
+                                for db_ref in refseq_field.split(";"):
+                                    cleaned_db = _clean_id(db_ref.strip())
+                                    if cleaned_db == cleaned:
+                                        symbol = row[1]
+                                        break
+                                if symbol:
+                                    break
+                        else:
+                            if protein_nomenclature == "Ensembl":
+                                col_name = "Protein_stable_ID"
+                            else:
+                                col_name = protein_nomenclature
+
+                            sql = text(
+                                f"SELECT Symbol FROM {table_name} WHERE {col_name} = :pid LIMIT 1"
+                            )
+                            row = conn.execute(sql, {"pid": raw_id}).fetchone()
+                            if row:
+                                symbol = row[0]
+
+                        if symbol:
+                            id_to_symbol[raw_id] = symbol
+                            processed_clean[cleaned] = symbol
+
+                jobs_dir = settings.path_jobs / job_id
+                jobs_dir.mkdir(parents=True, exist_ok=True)
+                output_file = jobs_dir / "processed.txt"
+
+                lines_out = []
+                header_out = (
+                    f"{protein_nomenclature}\tSymbol\t" + "\t".join(sample_names)
                 )
-                job.updated_at = datetime.now()
-                self.db.commit()
+                lines_out.append(header_out)
 
-                # 推送完成状态
+                for pid in ids:
+                    symbol = id_to_symbol.get(pid, "")
+                    sample_values = data_map.get(pid, [])
+
+                    if len(sample_values) < sample_count:
+                        sample_values = sample_values + ["0"] * (
+                            sample_count - len(sample_values)
+                        )
+                    elif len(sample_values) > sample_count:
+                        sample_values = sample_values[:sample_count]
+
+                    log_values = []
+                    for v in sample_values:
+                        v_str = (v or "").strip()
+                        if not v_str:
+                            log_values.append("0")
+                            continue
+                        try:
+                            num = float(v_str)
+                        except ValueError:
+                            num = 0.0
+                        if num != 0:
+                            log_val = math.log2(num + 1.0)
+                            log_values.append(f"{log_val:.6f}")
+                        else:
+                            log_values.append("0")
+
+                    lines_out.append(f"{pid}\t{symbol}\t" + "\t".join(log_values))
+
+                with open(output_file, "w", encoding="utf-8") as f:
+                    f.write("\n".join(lines_out) + "\n")
+
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                if job:
+                    job.status = JobStatus.COMPLETED
+                    job.result_file = str(output_file)
+                    job.output_params = json.dumps(
+                        {"stdout": f"Protein process finished: {output_file}"},
+                        ensure_ascii=False,
+                    )
+                    job.updated_at = datetime.now()
+                    db.commit()
+
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(user_id),
+                            {
+                                "job_id": job_id,
+                                "status": JobStatus.COMPLETED.value,
+                                "progress": 100,
+                                "result_file": job.result_file,
+                                "message": "蛋白质数据处理完成",
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                logger.info(f"蛋白质处理完成：job_id={job_id}, output={output_file}")
+
+                if email:
+                    try:
+                        await email_service.send_result_email(
+                            to_email=email,
+                            job_id=job_id,
+                            analysis_type="蛋白质数据处理",
+                            result_dir=str(output_file),
+                        )
+                    except Exception as e:
+                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
+
+            except Exception as e:
+                logger.error(f"蛋白质处理执行失败: job_id={job_id}, error={str(e)}")
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                err_text = str(e)
+                if job:
+                    job.status = JobStatus.FAILED
+                    job.error_message = err_text
+                    job.updated_at = datetime.now()
+                    try:
+                        db.commit()
+                    except Exception:
+                        pass
                 try:
                     await task_status_manager.send_task_status(
-                        str(self.user.id),
+                        str(user_id),
                         {
                             "job_id": job_id,
-                            "status": JobStatus.COMPLETED.value,
-                            "progress": 100,
-                            "result_file": job.result_file,
-                            "message": "蛋白质数据处理完成",
+                            "status": JobStatus.FAILED.value,
+                            "progress": 0,
+                            "error_message": err_text,
+                            "message": "蛋白质数据处理失败",
                         },
                     )
-                except Exception as e:
-                    logger.debug(f"WebSocket 状态推送失败: {e}")
+                except Exception:
+                    pass
+        finally:
+            db.close()
 
-            logger.info(f"蛋白质处理完成：job_id={job_id}, output={output_file}")
-            
-            # 如果任务成功且提供了邮箱，发送结果邮件
-            if email:
-                try:
-                    await email_service.send_result_email(
-                        to_email=email,
-                        job_id=job_id,
-                        analysis_type="蛋白质数据处理",
-                        result_dir=str(output_file)
-                    )
-                except Exception as e:
-                    logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
-        except Exception as e:
-            logger.error(f"蛋白质处理执行失败: job_id={job_id}, error={str(e)}")
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.FAILED
-                job.error_message = str(e)
-                job.updated_at = datetime.now()
-                self.db.commit()
     async def _execute_integration_processing(
         self,
         job_id: str,
@@ -1001,155 +1068,169 @@ class DataProcessService:
         file2_path: Path,
         file3_path: Path,
         email: Optional[str],
+        user_id: int,
     ):
-        """执行多组学数据整合（调用 Python integration.py 脚本）"""
+        """执行多组学数据整合（独立 DB 会话，调用 Python integration.py）"""
+        db = SessionLocal()
         try:
-            # 更新任务状态
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.PROCESSING
-                job.updated_at = datetime.now()
-                self.db.commit()
-                
-                # 通过 WebSocket 推送状态更新
+            try:
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                if job:
+                    job.status = JobStatus.PROCESSING
+                    job.updated_at = datetime.now()
+                    db.commit()
+
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(user_id),
+                            {
+                                "job_id": job_id,
+                                "status": JobStatus.PROCESSING.value,
+                                "progress": 0,
+                                "message": "开始进行多组学数据整合",
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                jobs_dir = settings.path_jobs / job_id
+                jobs_dir.mkdir(parents=True, exist_ok=True)
+                result_dir = jobs_dir / "result"
+                result_dir.mkdir(parents=True, exist_ok=True)
+
+                pheno_file = jobs_dir / f"{job_id}_pheno.txt"
+                omics1_file = jobs_dir / f"{job_id}_omics_1.txt"
+                omics2_file = jobs_dir / f"{job_id}_omics_2.txt"
+                omics3_file = jobs_dir / f"{job_id}_omics_3.txt"
+                output_file = result_dir / f"{job_id}_result.txt"
+
+                import shutil
+
+                shutil.copy2(str(pheno_path), str(pheno_file))
+                shutil.copy2(str(file1_path), str(omics1_file))
+                shutil.copy2(str(file2_path), str(omics2_file))
+                shutil.copy2(str(file3_path), str(omics3_file))
+
+                python_exec = settings.PYTHON_EXEC_PATH
+                script_path = str(settings.path_code / "train_model" / "integration.py")
+
+                cmd = [
+                    python_exec,
+                    script_path,
+                    "--jobID",
+                    job_id,
+                    "--pheno_file",
+                    str(pheno_file),
+                    "--file_1",
+                    str(omics1_file),
+                    "--file_2",
+                    str(omics2_file),
+                    "--file_3",
+                    str(omics3_file),
+                    "--output_file",
+                    str(output_file),
+                ]
+
+                async with self._global_script_slot(job_id, db=db, user_id=user_id):
+                    result = await run_subprocess(
+                        cmd,
+                        cwd=os.getcwd(),
+                        shell=False,
+                        timeout=None,
+                        stdout=None,
+                        stderr=None,
+                        text=True,
+                    )
+
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                if job:
+                    if result.returncode == 0:
+                        job.status = JobStatus.COMPLETED
+                        job.current_step = "已完成"
+                        job.result_file = str(output_file)
+                        job.output_params = json.dumps(
+                            {"stdout": result.stdout or ""}, ensure_ascii=False
+                        )
+                        job.updated_at = datetime.now()
+                        db.commit()
+
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.COMPLETED.value,
+                                    "progress": 100,
+                                    "result_file": job.result_file,
+                                    "message": "多组学数据整合完成",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
+                    else:
+                        job.status = JobStatus.FAILED
+                        job.current_step = "处理失败"
+                        _em = (result.stderr or "").strip() or (
+                            result.stdout or ""
+                        ).strip() or "Integration 脚本执行失败"
+                        job.error_message = _em
+                        job.updated_at = datetime.now()
+                        db.commit()
+
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.FAILED.value,
+                                    "progress": 0,
+                                    "error_message": job.error_message,
+                                    "message": "多组学数据整合失败",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                    logger.info(f"多组学数据整合完成：job_id={job_id}, status={job.status}")
+
+                    if job.status == JobStatus.COMPLETED and email:
+                        try:
+                            await email_service.send_result_email(
+                                to_email=email,
+                                job_id=job_id,
+                                analysis_type="多组学数据整合",
+                                result_dir=str(result_dir),
+                            )
+                        except Exception as e:
+                            logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
+
+            except Exception as e:
+                logger.error(f"多组学数据整合执行失败: job_id={job_id}, error={str(e)}")
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                err_text = str(e)
+                if job:
+                    job.status = JobStatus.FAILED
+                    job.error_message = err_text
+                    job.updated_at = datetime.now()
+                    try:
+                        db.commit()
+                    except Exception:
+                        pass
                 try:
                     await task_status_manager.send_task_status(
-                        str(self.user.id),
+                        str(user_id),
                         {
                             "job_id": job_id,
-                            "status": JobStatus.PROCESSING.value,
+                            "status": JobStatus.FAILED.value,
                             "progress": 0,
-                            "message": "开始进行多组学数据整合",
+                            "error_message": err_text,
+                            "message": "多组学数据整合失败",
                         },
                     )
-                except Exception as e:
-                    logger.debug(f"WebSocket 状态推送失败: {e}")
-            
-            # 准备 Jobs 目录及输入文件（与原 PHP 实现保持一致）
-            jobs_dir = settings.path_jobs / job_id
-            jobs_dir.mkdir(parents=True, exist_ok=True)
-            result_dir = jobs_dir / "result"
-            result_dir.mkdir(parents=True, exist_ok=True)
-            
-            # 目标文件路径（integration.py 期望的命名）
-            pheno_file = jobs_dir / f"{job_id}_pheno.txt"
-            omics1_file = jobs_dir / f"{job_id}_omics_1.txt"
-            omics2_file = jobs_dir / f"{job_id}_omics_2.txt"
-            omics3_file = jobs_dir / f"{job_id}_omics_3.txt"
-            output_file = result_dir / f"{job_id}_result.txt"
-            
-            # 将上传文件拷贝到 Jobs 目录并改名
-            import shutil
-            
-            shutil.copy2(str(pheno_path), str(pheno_file))
-            shutil.copy2(str(file1_path), str(omics1_file))
-            shutil.copy2(str(file2_path), str(omics2_file))
-            shutil.copy2(str(file3_path), str(omics3_file))
-            
-            # 构建 Python 脚本命令（与 integration.php 保持一致）
-            python_exec = settings.PYTHON_EXEC_PATH
-            script_path = str(settings.path_code / "train_model" / "integration.py")
-            
-            cmd = [
-                python_exec,
-                script_path,
-                "--jobID",
-                job_id,
-                "--pheno_file",
-                str(pheno_file),
-                "--file_1",
-                str(omics1_file),
-                "--file_2",
-                str(omics2_file),
-                "--file_3",
-                str(omics3_file),
-                "--output_file",
-                str(output_file),
-            ]
-            
-            async with self._global_script_slot(job_id):
-                result = await run_subprocess(
-                    cmd,
-                    cwd=os.getcwd(),
-                    shell=False,
-                    timeout=None,
-                    stdout=None,
-                    stderr=None,
-                    text=True,
-                )
-            
-            # 更新任务结果
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                if result.returncode == 0:
-                    job.status = JobStatus.COMPLETED
-                    job.current_step = "已完成"
-                    job.result_file = str(output_file)
-                    job.output_params = json.dumps(
-                        {"stdout": result.stdout}, ensure_ascii=False
-                    )
-                    job.updated_at = datetime.now()
-                    self.db.commit()  # 自己改
-
-                    
-                    # 推送完成状态
-                    try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": JobStatus.COMPLETED.value,
-                                "progress": 100,
-                                "result_file": job.result_file,
-                                "message": "多组学数据整合完成",
-                            },
-                        )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
-                else:
-                    job.status = JobStatus.FAILED
-                    job.current_step = "处理失败"
-                    job.error_message = result.stderr or "Integration 脚本执行失败"
-                    job.updated_at = datetime.now()
-                    self.db.commit()
-
-                    # 推送失败状态
-                    try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": JobStatus.FAILED.value,
-                                "progress": 0,
-                                "error_message": job.error_message,
-                                "message": "多组学数据整合失败",
-                            },
-                        )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
-
-                logger.info(f"多组学数据整合完成：job_id={job_id}, status={job.status}")
-                
-                # 如果任务成功且提供了邮箱，发送结果邮件
-                if job.status == JobStatus.COMPLETED and email:
-                    try:
-                        await email_service.send_result_email(
-                            to_email=email,
-                            job_id=job_id,
-                            analysis_type="多组学数据整合",
-                            result_dir=str(result_dir)
-                        )
-                    except Exception as e:
-                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
-        
-        except Exception as e:
-            logger.error(f"多组学数据整合执行失败: job_id={job_id}, error={str(e)}")
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.FAILED
-                job.error_message = str(e)
-                job.updated_at = datetime.now()
-                self.db.commit()
+                except Exception:
+                    pass
+        finally:
+            db.close()
 
     async def _execute_pvalue_integration_processing(
         self,
@@ -1159,140 +1240,154 @@ class DataProcessService:
         file3_path: Path,
         method: str,
         email: Optional[str],
+        user_id: int,
     ):
-        """
-        执行 pvalue 多组学整合（调用 R 脚本 integration_pvalue.R）
-        """
+        """执行 pvalue 多组学整合（独立 DB 会话，调用 R 脚本 integration_pvalue.R）"""
+        db = SessionLocal()
         try:
-            # 更新任务状态
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.PROCESSING
-                job.updated_at = datetime.now()
-                self.db.commit()
+            try:
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                if job:
+                    job.status = JobStatus.PROCESSING
+                    job.updated_at = datetime.now()
+                    db.commit()
 
-                # 通过 WebSocket 推送状态更新
+                    try:
+                        await task_status_manager.send_task_status(
+                            str(user_id),
+                            {
+                                "job_id": job_id,
+                                "status": JobStatus.PROCESSING.value,
+                                "progress": 0,
+                                "message": "开始进行 pvalue 多组学整合",
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                jobs_dir = settings.path_jobs / job_id
+                jobs_dir.mkdir(parents=True, exist_ok=True)
+                result_dir = jobs_dir / "result"
+                result_dir.mkdir(parents=True, exist_ok=True)
+                output_file = result_dir / f"{job_id}_result.txt"
+
+                r_script = str(settings.path_code / "integration_pvalue.R")
+                rscript_path = settings.RSCRIPT_PATH
+
+                cmd = [
+                    rscript_path,
+                    r_script,
+                    "-a",
+                    str(file1_path),
+                    "-b",
+                    str(file2_path),
+                    "-c",
+                    str(file3_path),
+                    "-d",
+                    method,
+                    "-j",
+                    job_id,
+                    "-e",
+                    str(output_file),
+                ]
+
+                async with self._global_script_slot(job_id, db=db, user_id=user_id):
+                    result = await run_subprocess(
+                        cmd,
+                        cwd=os.getcwd(),
+                        shell=False,
+                        timeout=None,
+                        stdout=None,
+                        stderr=None,
+                        text=True,
+                    )
+
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                if job:
+                    if result.returncode == 0:
+                        job.status = JobStatus.COMPLETED
+                        job.current_step = "已完成"
+                        job.result_file = str(output_file)
+                        job.output_params = json.dumps(
+                            {"stdout": result.stdout or ""}, ensure_ascii=False
+                        )
+                        job.updated_at = datetime.now()
+                        db.commit()
+
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.COMPLETED.value,
+                                    "progress": 100,
+                                    "result_file": job.result_file,
+                                    "message": "pvalue 多组学整合完成",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
+                    else:
+                        job.status = JobStatus.FAILED
+                        job.current_step = "处理失败"
+                        _ep = (result.stderr or "").strip() or (
+                            result.stdout or ""
+                        ).strip() or "integration_pvalue.R 脚本执行失败"
+                        job.error_message = _ep
+                        job.updated_at = datetime.now()
+                        db.commit()
+
+                        try:
+                            await task_status_manager.send_task_status(
+                                str(user_id),
+                                {
+                                    "job_id": job_id,
+                                    "status": JobStatus.FAILED.value,
+                                    "progress": 0,
+                                    "error_message": job.error_message,
+                                    "message": "pvalue 多组学整合失败",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug(f"WebSocket 状态推送失败: {e}")
+
+                    logger.info(f"pvalue 多组学整合完成：job_id={job_id}, status={job.status}")
+
+                    if job.status == JobStatus.COMPLETED and email:
+                        try:
+                            await email_service.send_result_email(
+                                to_email=email,
+                                job_id=job_id,
+                                analysis_type="pvalue多组学整合",
+                                result_dir=str(result_dir),
+                            )
+                        except Exception as e:
+                            logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
+
+            except Exception as e:
+                logger.error(f"pvalue 多组学整合执行失败: job_id={job_id}, error={str(e)}")
+                job = db.query(Job).filter(Job.job_id == job_id).first()
+                err_text = str(e)
+                if job:
+                    job.status = JobStatus.FAILED
+                    job.error_message = err_text
+                    job.updated_at = datetime.now()
+                    try:
+                        db.commit()
+                    except Exception:
+                        pass
                 try:
                     await task_status_manager.send_task_status(
-                        str(self.user.id),
+                        str(user_id),
                         {
                             "job_id": job_id,
-                            "status": JobStatus.PROCESSING.value,
+                            "status": JobStatus.FAILED.value,
                             "progress": 0,
-                            "message": "开始进行 pvalue 多组学整合",
+                            "error_message": err_text,
+                            "message": "pvalue 多组学整合失败",
                         },
                     )
-                except Exception as e:
-                    logger.debug(f"WebSocket 状态推送失败: {e}")
-
-            # 准备 Jobs 目录及输出文件
-            jobs_dir = settings.path_jobs / job_id
-            jobs_dir.mkdir(parents=True, exist_ok=True)
-            result_dir = jobs_dir / "result"
-            result_dir.mkdir(parents=True, exist_ok=True)
-            output_file = result_dir / f"{job_id}_result.txt"
-
-            # 构建 R 脚本命令
-            r_script = str(settings.path_code / "integration_pvalue.R")
-            rscript_path = settings.RSCRIPT_PATH
-
-            cmd = [
-                rscript_path,
-                r_script,
-                "-a",
-                str(file1_path),
-                "-b",
-                str(file2_path),
-                "-c",
-                str(file3_path),
-                "-d",
-                method,
-                "-j",
-                job_id,
-                "-e",
-                str(output_file),
-            ]
-
-            async with self._global_script_slot(job_id):
-                result = await run_subprocess(
-                    cmd,
-                    cwd=os.getcwd(),
-                    shell=False,
-                    timeout=None,
-                    stdout=None,
-                    stderr=None,
-                    text=True,
-                )
-
-            # 更新任务结果
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                if result.returncode == 0:
-                    job.status = JobStatus.COMPLETED
-                    job.current_step = "已完成"
-                    job.result_file = str(output_file)
-                    job.output_params = json.dumps(
-                        {"stdout": result.stdout}, ensure_ascii=False
-                    )
-                    job.updated_at = datetime.now()
-                    self.db.commit()  # 自己改
-
-
-                    # 推送完成状态
-                    try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": JobStatus.COMPLETED.value,
-                                "progress": 100,
-                                "result_file": job.result_file,
-                                "message": "pvalue 多组学整合完成",
-                            },
-                        )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
-                else:
-                    job.status = JobStatus.FAILED
-                    job.current_step = "处理失败"
-                    job.error_message = result.stderr or "integration_pvalue.R 脚本执行失败"
-                    job.updated_at = datetime.now()
-                    self.db.commit()
-
-                    # 推送失败状态
-                    try:
-                        await task_status_manager.send_task_status(
-                            str(self.user.id),
-                            {
-                                "job_id": job_id,
-                                "status": JobStatus.FAILED.value,
-                                "progress": 0,
-                                "error_message": job.error_message,
-                                "message": "pvalue 多组学整合失败",
-                            },
-                        )
-                    except Exception as e:
-                        logger.debug(f"WebSocket 状态推送失败: {e}")
-
-                logger.info(f"pvalue 多组学整合完成：job_id={job_id}, status={job.status}")
-                
-                # 如果任务成功且提供了邮箱，发送结果邮件
-                if job.status == JobStatus.COMPLETED and email:
-                    try:
-                        await email_service.send_result_email(
-                            to_email=email,
-                            job_id=job_id,
-                            analysis_type="pvalue多组学整合",
-                            result_dir=str(result_dir)
-                        )
-                    except Exception as e:
-                        logger.warning(f"邮件发送失败（不影响任务结果）: {e}")
-
-        except Exception as e:
-            logger.error(f"pvalue 多组学整合执行失败: job_id={job_id}, error={str(e)}")
-            job = self.db.query(Job).filter(Job.job_id == job_id).first()
-            if job:
-                job.status = JobStatus.FAILED
-                job.error_message = str(e)
-                job.updated_at = datetime.now()
-                self.db.commit()
+                except Exception:
+                    pass
+        finally:
+            db.close()
