@@ -35,6 +35,9 @@ assets
 # 前端 public 图片资源（占位图/静态图）需纳入版本控制
 !automata-web/public/images/
 !automata-web/public/images/**
+# 前端 public/assets 静态资源（Bootstrap CSS/JS 等）需纳入版本控制
+!automata-web/public/assets/
+!automata-web/public/assets/**
 
 # Python 环境配置
 # Conda 环境导出文件（用于环境复现，可以提交）
