@@ -71,6 +71,16 @@ def drop_db():
 
 
 if __name__ == "__main__":
-    # 直接运行此脚本将初始化数据库
+    import logging as _logging
+    import sys
+
+    # CI/SSH 部署需实时看到进度；默认无 basicConfig 时 INFO 不会输出
+    _logging.basicConfig(
+        level=_logging.INFO,
+        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
+        stream=sys.stdout,
+        force=True,
+    )
     init_db()
-    print("数据库初始化完成！")
+    print("数据库初始化完成！", flush=True)

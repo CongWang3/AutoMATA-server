@@ -278,7 +278,7 @@ jobs:
             done
             if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] 初始化/校验数据库表结构（python init_db.py）..."
-              $DOCKER_COMPOSE_PROD run --rm --no-deps backend python init_db.py || echo "[warn] db init failed, continue"
+              $DOCKER_COMPOSE_PROD run --rm --no-deps -e PYTHONUNBUFFERED=1 backend python -u init_db.py || echo "[warn] db init failed, continue"
             fi
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
@@ -398,7 +398,7 @@ jobs:
             done
             if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] 初始化/校验数据库表结构（python init_db.py）..."
-              $DOCKER_COMPOSE_PROD run --rm --no-deps backend python init_db.py || echo "[warn] db init failed, continue"
+              $DOCKER_COMPOSE_PROD run --rm --no-deps -e PYTHONUNBUFFERED=1 backend python -u init_db.py || echo "[warn] db init failed, continue"
             fi
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"

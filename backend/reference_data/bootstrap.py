@@ -10,6 +10,7 @@ from __future__ import annotations
 import gzip
 import logging
 import subprocess
+import time
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -421,6 +422,13 @@ def _mysql_cli_import(sql_path: Path) -> None:
         raw = sql_path.read_bytes()
 
     payload = _normalize_sql_line_endings(raw)
+    size_mb = len(payload) / (1024 * 1024)
+    t0 = time.monotonic()
+    logger.info(
+        "mysql 导入开始: %s（约 %.1f MB，大表可能需数分钟）",
+        sql_path.name,
+        size_mb,
+    )
     # 勿用 BytesIO 作 stdin：部分环境下 fileno() 不可用会导致 Popen 失败
     subprocess.run(
         cmd,
@@ -429,6 +437,11 @@ def _mysql_cli_import(sql_path: Path) -> None:
         check=True,
         capture_output=True,
         timeout=86400,
+    )
+    logger.info(
+        "mysql 导入完成: %s（耗时 %.1f 秒）",
+        sql_path.name,
+        time.monotonic() - t0,
     )
 
 
@@ -441,15 +454,21 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
         return
 
     try:
+        sql_dir = settings.REFERENCE_DATA_SQL_DIR
+        logger.info(
+            "参考注释表：REFERENCE_DATA_SQL_DIR=%s",
+            sql_dir or "(未设置，仅建表/补列，不自动导入 SQL)",
+        )
+
         missing = [t for t in REFERENCE_ANNOTATION_TABLES if not _table_exists(engine, t)]
         if missing:
             logger.info("创建缺失的参考注释表: %s", ", ".join(missing))
             _apply_ddl(engine, missing)
 
+        logger.info("参考注释表：按 SPECS 校验并补齐缺失列…")
         for t in REFERENCE_ANNOTATION_TABLES:
             _sync_reference_columns(engine, t)
 
-        sql_dir = settings.REFERENCE_DATA_SQL_DIR
         if not sql_dir:
             empty_or_unknown = [
                 t
@@ -469,6 +488,8 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
         if not base.is_dir():
             logger.error("REFERENCE_DATA_SQL_DIR 不是目录: %s", base)
             return
+
+        logger.info("参考 SQL 目录: %s（空表将依次导入，日志会显示每文件耗时）", base)
 
         for table in REFERENCE_ANNOTATION_TABLES:
             n = _table_row_count(engine, table)
