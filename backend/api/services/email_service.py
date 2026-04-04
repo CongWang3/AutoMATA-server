@@ -29,7 +29,7 @@ class EmailService:
         except Exception:
             app_settings = None
 
-        # 优先使用 config.settings（pydantic 已从 backend/.env 读取），
+        # 优先使用 config.settings（pydantic 已按 APP_ENV 加载 dotenv / 环境变量），
         # 避免 os.getenv 在当前进程中拿不到 .env 注入值导致 smtp_password_configured=false。
         if app_settings is not None:
             self.smtp_host = getattr(app_settings, "SMTP_HOST", "smtp.163.com")

@@ -37,7 +37,7 @@ opt <- parse_args(opt_parser)
 # 建立数据库连接（与后端 DB_* 环境变量一致）
 _db_user <- Sys.getenv("DB_USER", unset = "automata")
 _db_pass <- Sys.getenv("DB_PASSWORD", unset = "")
-if (!nzchar(_db_pass)) stop("未设置 DB_PASSWORD：请在 backend/.env 配置或导出环境变量", call. = FALSE)
+if (!nzchar(_db_pass)) stop("未设置 DB_PASSWORD：请在 .env.development 或环境中配置并导出 DB_*", call. = FALSE)
 _db_name <- Sys.getenv("DB_NAME", unset = "automata")
 _db_host <- Sys.getenv("DB_HOST", unset = "localhost")
 _db_port <- as.integer(Sys.getenv("DB_PORT", unset = "3306"))

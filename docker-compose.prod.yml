@@ -57,6 +57,7 @@ services:
     env_file:
       - .env.prod
     environment:
+      APP_ENV: production
       REPO_ROOT: /app
       PYTHON_EXEC_PATH: ${PYTHON_EXEC_PATH:-python}
       RSCRIPT_PATH: ${RSCRIPT_PATH:-/usr/bin/Rscript}
