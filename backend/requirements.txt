@@ -24,6 +24,8 @@ pydantic-settings==2.11.0
 
 # 工具库
 python-multipart==0.0.6
+# train_model / use_model 脚本抑制控制台 warning（cnn.py 等）
+shutup
 
 # 任务队列
 celery==5.3.4
