@@ -1,14 +1,14 @@
 """
-MySQL 参考注释表（gene_*/mrna_*/protein_*）：与 code/mysql2TPM.R、mrna_mysql2TPM.R、
-data_process_service 中的查询字段对齐。
+MySQL 参考注释表（gene_*/mrna_*/protein_*）：与 Navicat 导出结构、R 脚本及 Python 查询列名一致。
 
-- 启动时若表不存在则创建空表（幂等）。
+- 启动时若表不存在：按 REFERENCE_TABLE_SPECS 建空表（CREATE TABLE IF NOT EXISTS）。
+- 表已存在时：对照 SPECS 用 ALTER TABLE 补齐缺失列（不删列、不改类型），便于仅含 INSERT 的 SQL 导入。
 - 若配置 REFERENCE_DATA_SQL_DIR 且表行数为 0，则用 mysql 客户端导入同名 .sql / .sql.gz。
-  数据文件建议为 mysqldump 导出的 INSERT 片段，或仅含 INSERT 的脚本。
 """
 from __future__ import annotations
 
 import gzip
+import io
 import logging
 import subprocess
 from pathlib import Path
@@ -38,34 +38,319 @@ REFERENCE_ANNOTATION_TABLES: tuple[str, ...] = (
     "protein_mus",
 )
 
+# 与开发库 Navicat 结构导出一致（仅参考注释表）；列名须与 INSERT 脚本一致（含空格等特殊名）
+REFERENCE_TABLE_SPECS: dict[str, tuple[tuple[str, str], ...]] = {
+    "gene_bos_taurus": (
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "TEXT NULL DEFAULT NULL"),
+        ("Start", "INT NULL DEFAULT NULL"),
+        ("End", "INT NULL DEFAULT NULL"),
+        ("Chromosomes", "TEXT NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl_ID", "TEXT NULL DEFAULT NULL"),
+        ("OMIM_ID", "TEXT NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "INT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+    ),
+    "gene_dm": (
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "TEXT NULL DEFAULT NULL"),
+        ("Start", "INT NULL DEFAULT NULL"),
+        ("End", "INT NULL DEFAULT NULL"),
+        ("Chromosomes", "TEXT NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl_ID", "TEXT NULL DEFAULT NULL"),
+        ("OMIM_ID", "TEXT NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "INT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+    ),
+    "gene_homo_sapiens": (
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "TEXT NULL DEFAULT NULL"),
+        ("Start", "INT NULL DEFAULT NULL"),
+        ("End", "INT NULL DEFAULT NULL"),
+        ("Chromosomes", "INT NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl_ID", "TEXT NULL DEFAULT NULL"),
+        ("OMIM_ID", "TEXT NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "INT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+    ),
+    "gene_mus": (
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "TEXT NULL DEFAULT NULL"),
+        ("Start", "INT NULL DEFAULT NULL"),
+        ("End", "INT NULL DEFAULT NULL"),
+        ("Chromosomes", "TEXT NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl_ID", "TEXT NULL DEFAULT NULL"),
+        ("OMIM_ID", "TEXT NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "INT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+    ),
+    "gene_at": (
+        ("GeneID", "BIGINT UNSIGNED NULL DEFAULT NULL"),
+        ("Length", "DOUBLE NULL DEFAULT NULL"),
+        ("Symbol", "VARCHAR(512) NULL DEFAULT NULL"),
+        ("Ensembl_ID", "VARCHAR(128) NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "VARCHAR(64) NULL DEFAULT NULL"),
+        ("Start", "BIGINT NULL DEFAULT NULL"),
+        ("End", "BIGINT NULL DEFAULT NULL"),
+        ("Chromosomes", "VARCHAR(64) NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "VARCHAR(128) NULL DEFAULT NULL"),
+        ("OMIM_ID", "VARCHAR(128) NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "BIGINT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "VARCHAR(256) NULL DEFAULT NULL"),
+    ),
+    "mrna_bos_taurus": (
+        ("MyUnknownColumn", "INT NULL DEFAULT NULL"),
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "TEXT NULL DEFAULT NULL"),
+        ("Start", "INT NULL DEFAULT NULL"),
+        ("End", "INT NULL DEFAULT NULL"),
+        ("Chromosomes", "TEXT NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl_ID", "TEXT NULL DEFAULT NULL"),
+        ("OMIM_ID", "TEXT NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "INT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+        ("Gene_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_name", "TEXT NULL DEFAULT NULL"),
+        ("Gene_name", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_type", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq_mRNA_ID", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq_mRNA_predicted_ID", "TEXT NULL DEFAULT NULL"),
+    ),
+    "mrna_dm": (
+        ("MyUnknownColumn", "INT NULL DEFAULT NULL"),
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "TEXT NULL DEFAULT NULL"),
+        ("Start", "INT NULL DEFAULT NULL"),
+        ("End", "INT NULL DEFAULT NULL"),
+        ("Chromosomes", "TEXT NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl_ID", "TEXT NULL DEFAULT NULL"),
+        ("OMIM_ID", "TEXT NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "INT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+        ("Gene_ stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("Gene_name", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_name", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_type", "TEXT NULL DEFAULT NULL"),
+        ("FlyBase_ transcript_ID", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq_DNA_ID", "TEXT NULL DEFAULT NULL"),
+    ),
+    "mrna_homo_sapiens": (
+        ("MyUnknownColumn", "INT NULL DEFAULT NULL"),
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "TEXT NULL DEFAULT NULL"),
+        ("Start", "INT NULL DEFAULT NULL"),
+        ("End", "INT NULL DEFAULT NULL"),
+        ("Chromosomes", "TEXT NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl_ID", "TEXT NULL DEFAULT NULL"),
+        ("OMIM_ID", "TEXT NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "INT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+        ("Gene_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq_match_transcript_MANE_Select", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq_mRNA_ID", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq_mRNA_predicted_ID", "TEXT NULL DEFAULT NULL"),
+        ("Gene_name", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_type", "TEXT NULL DEFAULT NULL"),
+        ("Transcript_name", "TEXT NULL DEFAULT NULL"),
+    ),
+    "mrna_mus": (
+        ("MyUnknownColumn", "INT NULL DEFAULT NULL"),
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Description", "TEXT NULL DEFAULT NULL"),
+        ("Feature", "TEXT NULL DEFAULT NULL"),
+        ("Start", "INT NULL DEFAULT NULL"),
+        ("End", "INT NULL DEFAULT NULL"),
+        ("Chromosomes", "INT NULL DEFAULT NULL"),
+        ("Nomenclature_ID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl_ID", "TEXT NULL DEFAULT NULL"),
+        ("OMIM_ID", "TEXT NULL DEFAULT NULL"),
+        ("Taxonomic_ID", "INT NULL DEFAULT NULL"),
+        ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("Synonyms", "TEXT NULL DEFAULT NULL"),
+        ("Gene stable ID", "TEXT NULL DEFAULT NULL"),
+        ("Transcript stable ID", "TEXT NULL DEFAULT NULL"),
+        ("Transcript name", "TEXT NULL DEFAULT NULL"),
+        ("Gene name", "TEXT NULL DEFAULT NULL"),
+        ("Transcript type", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq mRNA ID", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq mRNA predicted ID", "TEXT NULL DEFAULT NULL"),
+    ),
+    "protein_bos_taurus": (
+        ("Entry", "TEXT NULL DEFAULT NULL"),
+        ("Reviewed", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Protein names", "TEXT NULL DEFAULT NULL"),
+        ("Gene Names", "TEXT NULL DEFAULT NULL"),
+        ("Organism", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("RefSeq", "TEXT NULL DEFAULT NULL"),
+        ("EMBL", "TEXT NULL DEFAULT NULL"),
+        ("AlphaFoldDB", "TEXT NULL DEFAULT NULL"),
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl", "TEXT NULL DEFAULT NULL"),
+        ("Transcript stable ID", "TEXT NULL DEFAULT NULL"),
+        ("Protein_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("Protein stable ID version", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq peptide ID biomart", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq peptide predicted ID biomart", "TEXT NULL DEFAULT NULL"),
+    ),
+    "protein_dm": (
+        ("Entry", "TEXT NULL DEFAULT NULL"),
+        ("Reviewed", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Protein names", "TEXT NULL DEFAULT NULL"),
+        ("Gene Names", "TEXT NULL DEFAULT NULL"),
+        ("Organism", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("EMBL", "TEXT NULL DEFAULT NULL"),
+        ("AlphaFoldDB", "TEXT NULL DEFAULT NULL"),
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("RefSeq", "TEXT NULL DEFAULT NULL"),
+        ("Protein_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("FlyBase transcript ID", "TEXT NULL DEFAULT NULL"),
+        ("FlyBase gene ID", "TEXT NULL DEFAULT NULL"),
+    ),
+    "protein_homo_sapiens": (
+        ("Entry", "TEXT NULL DEFAULT NULL"),
+        ("Reviewed", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Protein names", "TEXT NULL DEFAULT NULL"),
+        ("Gene Names", "TEXT NULL DEFAULT NULL"),
+        ("Organism", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("RefSeq", "TEXT NULL DEFAULT NULL"),
+        ("EMBL", "TEXT NULL DEFAULT NULL"),
+        ("AlphaFoldDB", "TEXT NULL DEFAULT NULL"),
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl", "TEXT NULL DEFAULT NULL"),
+        ("Transcript stable ID", "TEXT NULL DEFAULT NULL"),
+        ("Protein_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("Protein stable ID version", "TEXT NULL DEFAULT NULL"),
+    ),
+    "protein_mus": (
+        ("Entry", "TEXT NULL DEFAULT NULL"),
+        ("Reviewed", "TEXT NULL DEFAULT NULL"),
+        ("Symbol", "TEXT NULL DEFAULT NULL"),
+        ("Protein names", "TEXT NULL DEFAULT NULL"),
+        ("Gene Names", "TEXT NULL DEFAULT NULL"),
+        ("Organism", "TEXT NULL DEFAULT NULL"),
+        ("Length", "INT NULL DEFAULT NULL"),
+        ("RefSeq", "TEXT NULL DEFAULT NULL"),
+        ("EMBL", "TEXT NULL DEFAULT NULL"),
+        ("AlphaFoldDB", "TEXT NULL DEFAULT NULL"),
+        ("GeneID", "TEXT NULL DEFAULT NULL"),
+        ("Ensembl", "TEXT NULL DEFAULT NULL"),
+        ("Transcript stable ID", "TEXT NULL DEFAULT NULL"),
+        ("Protein_stable_ID", "TEXT NULL DEFAULT NULL"),
+        ("Protein stable ID version", "TEXT NULL DEFAULT NULL"),
+    ),
+}
 
-# 与 mysqldump / Release 中 gene_*.sql 的 INSERT 列一致（避免 Unknown column 'Description' 等）
-_GENE_LIKE_COLUMN_DEFS: tuple[tuple[str, str], ...] = (
-    ("GeneID", "BIGINT UNSIGNED DEFAULT NULL"),
-    ("Symbol", "VARCHAR(512) DEFAULT NULL"),
-    ("Description", "TEXT"),
-    ("Feature", "VARCHAR(64) DEFAULT NULL"),
-    ("Start", "BIGINT DEFAULT NULL"),
-    ("End", "BIGINT DEFAULT NULL"),
-    ("Chromosomes", "VARCHAR(64) DEFAULT NULL"),
-    ("Nomenclature_ID", "VARCHAR(128) DEFAULT NULL"),
-    ("Ensembl_ID", "VARCHAR(128) DEFAULT NULL"),
-    ("OMIM_ID", "VARCHAR(128) DEFAULT NULL"),
-    ("Taxonomic_ID", "BIGINT DEFAULT NULL"),
-    ("SwissProt_Access", "VARCHAR(256) DEFAULT NULL"),
-    ("Length", "DOUBLE DEFAULT NULL"),
-    ("Synonyms", "TEXT"),
-)
+
+def _bt_ident(name: str) -> str:
+    return f"`{name.replace('`', '``')}`"
 
 
-def _gene_like_ddl(table: str) -> str:
-    cols = ",\n  ".join(f"`{name}` {typ}" for name, typ in _GENE_LIKE_COLUMN_DEFS)
+def _ddl_index_suffix(table: str) -> str:
+    """CREATE TABLE 末尾索引（与常见查询/R 脚本一致）。"""
+    if table == "gene_at":
+        return (
+            ",\n  KEY `ix_gene_at_geneid` (`GeneID`),\n"
+            "  KEY `ix_gene_at_ensembl` (`Ensembl_ID`),\n"
+            "  KEY `ix_gene_at_symbol` (`Symbol`(128))"
+        )
+    if table in (
+        "gene_bos_taurus",
+        "gene_dm",
+        "gene_homo_sapiens",
+        "gene_mus",
+    ):
+        return (
+            f",\n  KEY `ix_{table}_geneid` (`GeneID`(128)),\n"
+            f"  KEY `ix_{table}_ensembl` (`Ensembl_ID`(128)),\n"
+            f"  KEY `ix_{table}_symbol` (`Symbol`(128))"
+        )
+    if table in ("mrna_bos_taurus", "mrna_homo_sapiens"):
+        return (
+            f",\n  KEY `ix_{table}_refseq` (`RefSeq_mRNA_ID`(128)),\n"
+            f"  KEY `ix_{table}_refseq_pred` (`RefSeq_mRNA_predicted_ID`(128))"
+        )
+    if table == "mrna_dm":
+        return (
+            ",\n  KEY `ix_mrna_dm_refseq_dna` (`RefSeq_DNA_ID`(128)),\n"
+            "  KEY `ix_mrna_dm_fb_tx` (`FlyBase_ transcript_ID`(128))"
+        )
+    if table == "mrna_mus":
+        return (
+            ",\n  KEY `ix_mrna_mus_rna` (`RefSeq mRNA ID`(128)),\n"
+            "  KEY `ix_mrna_mus_rna_pred` (`RefSeq mRNA predicted ID`(128))"
+        )
+    if table == "protein_dm":
+        return (
+            ",\n  KEY `ix_protein_dm_entry` (`Entry`(128)),\n"
+            "  KEY `ix_protein_dm_symbol` (`Symbol`(128)),\n"
+            "  KEY `ix_protein_dm_fb_gene` (`FlyBase gene ID`(128))"
+        )
+    if table.startswith("protein_"):
+        return (
+            f",\n  KEY `ix_{table}_entry` (`Entry`(128)),\n"
+            f"  KEY `ix_{table}_ensembl` (`Ensembl`(128)),\n"
+            f"  KEY `ix_{table}_symbol` (`Symbol`(128))"
+        )
+    return ""
+
+
+def _ddl_for_table(name: str) -> str:
+    spec = REFERENCE_TABLE_SPECS.get(name)
+    if not spec:
+        raise ValueError(f"未知参考表: {name}")
+    col_sql = ",\n  ".join(f"{_bt_ident(cn)} {ct}" for cn, ct in spec)
+    idx = _ddl_index_suffix(name)
     return f"""
-CREATE TABLE IF NOT EXISTS `{table}` (
-  {cols},
-  KEY `ix_{table}_geneid` (`GeneID`),
-  KEY `ix_{table}_ensembl` (`Ensembl_ID`),
-  KEY `ix_{table}_symbol` (`Symbol`(128))
+CREATE TABLE IF NOT EXISTS `{name}` (
+  {col_sql}{idx}
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 """.strip()
 
@@ -83,81 +368,24 @@ def _existing_mysql_columns(engine: Engine, table: str) -> set[str]:
         return {row[0] for row in r}
 
 
-def _sync_gene_like_columns(engine: Engine, table: str) -> None:
-    """已存在旧版空壳表时补齐列，以便导入与 dump 列集一致的 INSERT。"""
-    if not _table_exists(engine, table):
+def _sync_reference_columns(engine: Engine, table: str) -> None:
+    """按 REFERENCE_TABLE_SPECS 为已存在的表补齐缺失列（不删除、不修改已有列类型）。"""
+    spec = REFERENCE_TABLE_SPECS.get(table)
+    if not spec or not _table_exists(engine, table):
         return
     have = _existing_mysql_columns(engine, table)
-    # 与 information_schema 大小写差异兼容，避免重复 ADD 同名列
     have_ci = {c.lower() for c in have}
-    to_add = [
-        (name, typ)
-        for name, typ in _GENE_LIKE_COLUMN_DEFS
-        if name.lower() not in have_ci
-    ]
+    to_add = [(cn, ct) for cn, ct in spec if cn.lower() not in have_ci]
     if not to_add:
         return
     logger.info("补齐参考表 `%s` 列（%s 个新列）", table, len(to_add))
     with engine.begin() as conn:
-        # 单列 ALTER，失败时日志更可读；部分环境对超长多 ADD 单语句不友好
-        for name, typ in to_add:
-            conn.execute(text(f"ALTER TABLE `{table}` ADD COLUMN `{name}` {typ}"))
-
-
-def _mrna_homo_ddl() -> str:
-    return """
-CREATE TABLE IF NOT EXISTS `mrna_homo_sapiens` (
-  `RefSeq_match_transcript_MANE_Select` VARCHAR(128) DEFAULT NULL,
-  `RefSeq_mRNA_ID` VARCHAR(128) DEFAULT NULL,
-  `RefSeq_mRNA_predicted_ID` VARCHAR(128) DEFAULT NULL,
-  `Length` DOUBLE DEFAULT NULL,
-  `Transcript_name` VARCHAR(1024) DEFAULT NULL,
-  KEY `ix_mrna_hs_mane` (`RefSeq_match_transcript_MANE_Select`),
-  KEY `ix_mrna_hs_id` (`RefSeq_mRNA_ID`),
-  KEY `ix_mrna_hs_pred` (`RefSeq_mRNA_predicted_ID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-""".strip()
-
-
-def _mrna_other_ddl(table: str) -> str:
-    return f"""
-CREATE TABLE IF NOT EXISTS `{table}` (
-  `RefSeq_mRNA_ID` VARCHAR(128) DEFAULT NULL,
-  `RefSeq_mRNA_predicted_ID` VARCHAR(128) DEFAULT NULL,
-  `Length` DOUBLE DEFAULT NULL,
-  `Transcript_name` VARCHAR(1024) DEFAULT NULL,
-  KEY `ix_{table}_id` (`RefSeq_mRNA_ID`),
-  KEY `ix_{table}_pred` (`RefSeq_mRNA_predicted_ID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-""".strip()
-
-
-def _protein_ddl(table: str) -> str:
-    return f"""
-CREATE TABLE IF NOT EXISTS `{table}` (
-  `RefSeq` TEXT,
-  `Symbol` VARCHAR(512) DEFAULT NULL,
-  `Entry` VARCHAR(128) DEFAULT NULL,
-  `Protein_stable_ID` VARCHAR(128) DEFAULT NULL,
-  `AlphaFoldDB` VARCHAR(128) DEFAULT NULL,
-  `Ensembl` VARCHAR(128) DEFAULT NULL,
-  KEY `ix_{table}_entry` (`Entry`),
-  KEY `ix_{table}_ensembl` (`Ensembl`),
-  KEY `ix_{table}_symbol` (`Symbol`(128))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-""".strip()
-
-
-def _ddl_for_table(name: str) -> str:
-    if name == "mrna_homo_sapiens":
-        return _mrna_homo_ddl()
-    if name.startswith("mrna_"):
-        return _mrna_other_ddl(name)
-    if name.startswith("protein_"):
-        return _protein_ddl(name)
-    if name.startswith("gene_"):
-        return _gene_like_ddl(name)
-    raise ValueError(f"未知参考表: {name}")
+        for cn, ct in to_add:
+            conn.execute(
+                text(
+                    f"ALTER TABLE `{table}` ADD COLUMN {_bt_ident(cn)} {ct}"
+                )
+            )
 
 
 def _apply_ddl(engine: Engine, tables: Iterable[str]) -> None:
@@ -184,6 +412,11 @@ def _find_sql_file(base_dir: Path, table: str) -> Optional[Path]:
     return None
 
 
+def _normalize_sql_line_endings(raw: bytes) -> bytes:
+    """Windows CRLF / 旧式 CR → LF，减轻 mysql 客户端解析大批量 INSERT 时的异常。"""
+    return raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def _mysql_cli_import(sql_path: Path) -> None:
     """使用 mysql 非交互导入；密码经环境变量 MYSQL_PWD 传入。"""
     import os
@@ -206,26 +439,25 @@ def _mysql_cli_import(sql_path: Path) -> None:
     ]
 
     if sql_path.suffix == ".gz":
-        fobj = gzip.open(sql_path, "rb")
+        with gzip.open(sql_path, "rb") as zf:
+            raw = zf.read()
     else:
-        fobj = open(sql_path, "rb")
+        raw = sql_path.read_bytes()
 
-    try:
-        subprocess.run(
-            cmd,
-            stdin=fobj,
-            env=env,
-            check=True,
-            capture_output=True,
-            timeout=86400,
-        )
-    finally:
-        fobj.close()
+    payload = _normalize_sql_line_endings(raw)
+    subprocess.run(
+        cmd,
+        stdin=io.BytesIO(payload),
+        env=env,
+        check=True,
+        capture_output=True,
+        timeout=86400,
+    )
 
 
 def ensure_reference_annotation_tables(engine: Engine) -> None:
     """
-    仅针对 MySQL：创建注释表空壳；可选从 REFERENCE_DATA_SQL_DIR 导入数据。
+    仅针对 MySQL：按 SPECS 建表/补列；可选从 REFERENCE_DATA_SQL_DIR 导入仅 INSERT 的 SQL。
     """
     if engine.dialect.name != "mysql":
         logger.info("当前数据库非 MySQL，跳过参考注释表（gene/mrna/protein）初始化")
@@ -238,8 +470,7 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
             _apply_ddl(engine, missing)
 
         for t in REFERENCE_ANNOTATION_TABLES:
-            if t.startswith("gene_"):
-                _sync_gene_like_columns(engine, t)
+            _sync_reference_columns(engine, t)
 
         sql_dir = settings.REFERENCE_DATA_SQL_DIR
         if not sql_dir:
@@ -278,8 +509,7 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
                 continue
             try:
                 logger.info("导入参考数据: %s <- %s", table, sql_file.name)
-                if table.startswith("gene_"):
-                    _sync_gene_like_columns(engine, table)
+                _sync_reference_columns(engine, table)
                 _mysql_cli_import(sql_file)
                 after = _table_row_count(engine, table)
                 logger.info("表 `%s` 导入后行数: %s", table, after)
@@ -294,16 +524,12 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
                 err_txt = (e.stderr or e.stdout or b"").decode(
                     "utf-8", errors="replace"
                 )[:4000]
-                if (
-                    table.startswith("gene_")
-                    and "Unknown column" in err_txt
-                    and "42S22" in err_txt
-                ):
+                if "Unknown column" in err_txt and "42S22" in err_txt:
                     logger.warning(
-                        "表 `%s` 导入因列不匹配失败，再次同步列结构后重试一次",
+                        "表 `%s` 导入因列不匹配失败，按 SPECS 再次补齐列后重试一次",
                         table,
                     )
-                    _sync_gene_like_columns(engine, table)
+                    _sync_reference_columns(engine, table)
                     _mysql_cli_import(sql_file)
                     after = _table_row_count(engine, table)
                     logger.info("表 `%s` 导入后行数: %s", table, after)

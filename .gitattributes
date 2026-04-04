@@ -1,0 +1,2 @@
+# 参考 SQL 使用 LF；CRLF 在部分环境下经管道喂给 mysql 客户端时可能引发解析问题
+data/reference_sql/*.sql text eol=lf
