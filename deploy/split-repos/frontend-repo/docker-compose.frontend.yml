@@ -3,6 +3,8 @@ services:
     image: ghcr.io/${GHCR_OWNER}/automata-frontend:latest
     container_name: automata-frontend
     restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
       interval: 30s

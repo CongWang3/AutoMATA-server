@@ -3,6 +3,8 @@ services:
     image: ghcr.io/${GHCR_OWNER}/automata-backend:latest
     container_name: automata-backend
     restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     env_file:
       - .env.prod
     volumes:
@@ -30,6 +32,7 @@ services:
     container_name: automata-mysql
     restart: unless-stopped
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
@@ -50,6 +53,8 @@ services:
     image: redis:7-alpine
     container_name: automata-redis
     restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - ./data/redis:/data

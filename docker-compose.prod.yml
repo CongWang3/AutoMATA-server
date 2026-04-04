@@ -3,6 +3,8 @@ services:
     image: ${ALIYUN_REGISTRY:-ghcr.io}/automata-bio/automata-frontend:${FRONTEND_IMAGE_TAG:-latest}
     container_name: automata-frontend
     restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     ports:
       - "127.0.0.1:${FRONTEND_HOST_PORT:-8080}:80"
     healthcheck:
@@ -22,6 +24,7 @@ services:
       - .env.prod
     environment:
       APP_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
       REPO_ROOT: /app
       AUTOMATA_REPO_ROOT: /app
       # 默认不注入占位域名；由 .env.prod 的 DOWNLOAD_PUBLIC_BASE_URL 决定。留空则 API 返回同源相对路径。
@@ -58,6 +61,7 @@ services:
       - .env.prod
     environment:
       APP_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
       REPO_ROOT: /app
       PYTHON_EXEC_PATH: ${PYTHON_EXEC_PATH:-python}
       RSCRIPT_PATH: ${RSCRIPT_PATH:-/usr/bin/Rscript}
@@ -88,6 +92,8 @@ services:
     # 与 backend 共用 .env.prod；勿在此处写 ${MYSQL_ROOT_PASSWORD}，否则未 --env-file 时会把 env_file 中的值覆盖为空
     env_file:
       - .env.prod
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
     volumes:
       - ./data/mysql:/var/lib/mysql
@@ -105,6 +111,8 @@ services:
     image: redis:7-alpine
     container_name: automata-redis
     restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - ./data/redis:/data
