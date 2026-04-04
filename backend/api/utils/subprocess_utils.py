@@ -22,6 +22,8 @@ async def run_subprocess(
     text: bool = True,
     shell: bool = False,
     env: Optional[Dict[str, str]] = None,
+    encoding: Optional[str] = None,
+    errors: Optional[str] = None,
 ) -> subprocess.CompletedProcess:
     """
     Run subprocess.run(...) in a dedicated executor.
@@ -41,6 +43,10 @@ async def run_subprocess(
         "text": text,
         "shell": shell,
     }
+    if encoding is not None:
+        kwargs["encoding"] = encoding
+    if errors is not None:
+        kwargs["errors"] = errors
     if env is not None:
         merged = os.environ.copy()
         merged.update({k: str(v) for k, v in env.items()})

@@ -154,6 +154,7 @@ import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 import type { FormData, NomenclatureOption, SpeciesOption } from '@/types/dataProcess'
 import { webSocketService } from '@/api/websocket'
 import type { WebSocketProgressMessage } from '@/api/types'
+import { resolvePublicStaticUrl } from '@/config/deploy'
 
 // <!-- 
 // 审查上下文：
@@ -272,39 +273,39 @@ const beforeUpload = (file: File): boolean => {
   return true
 }
 
-const downloadExampleData = () => {
-  // <!-- 
-  // 审查上下文：
-  // - 设计意图：使用独立下载服务提供示例数据，与原版PHP功能保持一致
-  // - 已知局限：示例文件需要特殊处理，因为它们不在数据库files表中
-  // - 业务背景：与原始PHP的示例下载功能对应
-  // - 测试重点：请验证下载链接生成、文件传输的正确性
-  // -->
-  
+/** public 下示例文件请求 URL：生产可用 VITE_PUBLIC_SITE_ORIGIN，开发默认当前页 origin */
+const resolveExampleFetchUrl = (): string => resolvePublicStaticUrl(props.exampleDataUrl || '')
+
+const downloadExampleData = async () => {
   if (!props.exampleDataUrl) {
     ElMessage.warning('No example data available')
     return
   }
-  
-  // 对于示例文件，直接使用Vite服务（因为它们在public目录下）
-  // 但为了保持一致性，我们也可以通过下载服务提供
+
   const fileName = props.exampleFileName || 'example_data.txt'
-  
-  // 方案1：直接下载（推荐用于示例文件）
-  const link = document.createElement('a')
-  link.href = props.exampleDataUrl
-  link.download = fileName
-  link.style.display = 'none'
-  
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  
-  ElMessage.success(`Example data has started downloading: ${fileName}`)
-  
-  // 方案2：如果需要通过下载服务，可以这样实现：
-  // const downloadUrl = `http://localhost:8001/example${props.exampleDataUrl}`
-  // window.open(downloadUrl, '_blank')
+  const fetchUrl = resolveExampleFetchUrl()
+
+  try {
+    const res = await fetch(fetchUrl)
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`)
+    }
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = fileName
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(objectUrl)
+    ElMessage.success(`Example data downloaded: ${fileName}`)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Example download failed:', fetchUrl, e)
+    ElMessage.error(`Failed to download example (${msg}). Open in browser: ${fetchUrl}`)
+  }
 }
 
 const submitForm = async () => {

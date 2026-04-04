@@ -35,6 +35,24 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# R 子进程合并输出写入 DB/UI 时的最大长度（避免 error_message 过大）
+_R_SCRIPT_OUTPUT_MAX_LEN = 12000
+
+
+def _subprocess_combined_output(result: subprocess.CompletedProcess) -> str:
+    """stderr 已合并到 stdout 时取可读文本；否则拼接两端。"""
+    if result.stderr is None:
+        return (result.stdout or "") if isinstance(result.stdout, str) else ""
+    parts = [result.stderr or "", result.stdout or ""]
+    return "\n".join(p for p in parts if p).strip()
+
+
+def _truncate_script_log(text: str, max_len: int = _R_SCRIPT_OUTPUT_MAX_LEN) -> str:
+    t = (text or "").strip()
+    if len(t) <= max_len:
+        return t
+    return "…(输出过长，仅显示末尾)\n" + t[-max_len:]
+
 
 def _r_mysql_subprocess_env() -> dict[str, str]:
     """与 FastAPI settings 一致的数据库环境变量，供 R 子进程读取（避免缺省 localhost 走 Unix socket）。"""
@@ -550,10 +568,20 @@ class DataProcessService:
                     shell=False,
                     timeout=None,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     env=_r_mysql_subprocess_env(),
                 )
+
+                combined = _subprocess_combined_output(result)
+                try:
+                    (jobs_dir / "mysql2TPM_run.log").write_text(
+                        combined, encoding="utf-8", errors="replace"
+                    )
+                except OSError:
+                    pass
 
                 # 更新任务结果
                 job = db.query(Job).filter(Job.job_id == job_id).first()
@@ -563,7 +591,7 @@ class DataProcessService:
                         job.current_step = "已完成"
                         job.result_file = output_file
                         job.output_params = json.dumps(
-                            {"stdout": result.stdout or ""}, ensure_ascii=False
+                            {"stdout": combined}, ensure_ascii=False
                         )
                         job.updated_at = datetime.now()
                         db.commit()
@@ -585,10 +613,11 @@ class DataProcessService:
                     else:
                         job.status = JobStatus.FAILED
                         job.current_step = "处理失败"
-                        _err = (result.stderr or "").strip()
-                        if not _err:
-                            _err = (result.stdout or "").strip()
-                        job.error_message = _err or "R 脚本执行失败"
+                        _err = _truncate_script_log(combined)
+                        job.error_message = _err or (
+                            f"R 脚本退出码 {result.returncode}，且无控制台输出；"
+                            f"请查看 Jobs/{job_id}/mysql2TPM_run.log 或服务器 R/MySQL 配置。"
+                        )
                         job.updated_at = datetime.now()
                         db.commit()
 
@@ -728,10 +757,20 @@ class DataProcessService:
                     shell=False,
                     timeout=None,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     env=_r_mysql_subprocess_env(),
                 )
+
+                combined_tx = _subprocess_combined_output(result)
+                try:
+                    (jobs_dir / "mrna_mysql2TPM_run.log").write_text(
+                        combined_tx, encoding="utf-8", errors="replace"
+                    )
+                except OSError:
+                    pass
 
                 job = db.query(Job).filter(Job.job_id == job_id).first()
                 if job:
@@ -740,7 +779,7 @@ class DataProcessService:
                         job.current_step = "已完成"
                         job.result_file = output_file
                         job.output_params = json.dumps(
-                            {"stdout": result.stdout or ""}, ensure_ascii=False
+                            {"stdout": combined_tx}, ensure_ascii=False
                         )
                         job.updated_at = datetime.now()
                         db.commit()
@@ -762,10 +801,11 @@ class DataProcessService:
                     else:
                         job.status = JobStatus.FAILED
                         job.current_step = "处理失败"
-                        _err_tx = (result.stderr or "").strip()
-                        if not _err_tx:
-                            _err_tx = (result.stdout or "").strip()
-                        job.error_message = _err_tx or "R 脚本执行失败"
+                        _err_tx = _truncate_script_log(combined_tx)
+                        job.error_message = _err_tx or (
+                            f"R 脚本退出码 {result.returncode}，且无控制台输出；"
+                            f"请查看 Jobs/{job_id}/mrna_mysql2TPM_run.log 或服务器 R/MySQL 配置。"
+                        )
                         job.updated_at = datetime.now()
                         db.commit()
 

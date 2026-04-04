@@ -548,6 +548,12 @@ td.line {
 .error-message {
   color: #f56c6c;
   font-weight: 500;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+  vertical-align: top;
 }
 
 /* 下载按钮样式 */

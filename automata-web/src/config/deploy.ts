@@ -63,6 +63,40 @@ export function getDownloadOrigin(): string {
 }
 
 /**
+ * 前端站点根 URL（无路径、无尾斜杠），用于拼接 public 下静态资源（如 /example/*.txt）。
+ * 仅当环境变量 `import.meta.env.VITE_PUBLIC_SITE_ORIGIN` 非空时使用；否则用 `window.location.origin`。
+ */
+export function getPublicSiteOrigin(): string {
+  const explicit = (import.meta.env.VITE_PUBLIC_SITE_ORIGIN as string | undefined)?.trim()
+  if (explicit) {
+    return trimTrailingSlash(explicit)
+  }
+  if (typeof window !== 'undefined') {
+    return trimTrailingSlash(window.location.origin)
+  }
+  return ''
+}
+
+/**
+ * 将 public 目录下的路径解析为完整 URL（含 Vite BASE_URL 子路径）。
+ * @param path 如 /example/foo.txt
+ */
+export function resolvePublicStaticUrl(path: string): string {
+  const p = (path || '').trim()
+  if (!p) return ''
+  const pathNoLead = p.replace(/^\/+/, '')
+  const base = import.meta.env.BASE_URL || '/'
+  const origin = getPublicSiteOrigin()
+  if (!origin) {
+    const baseNorm = base === '/' ? '/' : base.endsWith('/') ? base : `${base}/`
+    const rel = `${baseNorm}${pathNoLead}`.replace(/([^:]\/)\/+/g, '$1')
+    return rel.startsWith('/') ? rel : `/${rel}`
+  }
+  const basePrefix = base === '/' ? `${origin}/` : `${origin}${base.endsWith('/') ? base : `${base}/`}`
+  return new URL(pathNoLead, basePrefix).href
+}
+
+/**
  * WebSocket 基础 URL（无路径、无尾斜杠），与 VITE_WS_BASE_URL 或 VITE_API_BASE_URL 同源推导一致
  */
 export function getWsBaseUrl(): string {

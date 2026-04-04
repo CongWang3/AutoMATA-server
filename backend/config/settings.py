@@ -3,9 +3,9 @@
 """
 from pathlib import Path
 
-from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import List, Optional
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import List, Optional, Any, Union
 import json
 import warnings
 import os
@@ -26,12 +26,45 @@ def _generate_warning_key() -> str:
     return "DEVELOPMENT_KEY_DO_NOT_USE_IN_PRODUCTION_" + secrets.token_urlsafe(16)
 
 
-# 固定为 backend/.env，避免从仓库根或其它目录启动时读错路径；生产以容器/compose 注入的环境变量为准（优先级高于文件）
-_BACKEND_ENV = Path(__file__).resolve().parent.parent / ".env"
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _backend_env_file_paths() -> list[Path]:
+    """
+    选择要加载的 dotenv 文件（仅看进程环境变量，不读文件内容，避免鸡生蛋）。
+
+    - APP_ENV 或 ENVIRONMENT 为 production/prod → .env.production + .env.production.local
+    - 否则 → .env.development + .env.development.local
+    - 若上述主文件均不存在 → 回退 legacy 单文件 .env
+
+    Docker/Compose：通常只注入环境变量、镜像内无上述文件，则列表为空，完全依赖环境变量。
+    """
+    mode = os.environ.get("APP_ENV", os.environ.get("ENVIRONMENT", "development")).strip().lower()
+    prod = mode in ("production", "prod")
+    primary = _BACKEND_ROOT / (".env.production" if prod else ".env.development")
+    local = _BACKEND_ROOT / (".env.production.local" if prod else ".env.development.local")
+    paths = [p for p in (primary, local) if p.is_file()]
+    if not paths:
+        legacy = _BACKEND_ROOT / ".env"
+        if legacy.is_file():
+            paths = [legacy]
+    return paths
+
+
+_BACKEND_ENV_FILES = _backend_env_file_paths()
+_ENV_FILE_TUPLE: Union[tuple[str, ...], None] = (
+    tuple(str(p) for p in _BACKEND_ENV_FILES) if _BACKEND_ENV_FILES else None
+)
 
 
 class Settings(BaseSettings):
-    """应用配置"""
+    """应用配置（dotenv 由 APP_ENV/ENVIRONMENT 选择，见 _backend_env_file_paths 文档字符串）。"""
+
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILE_TUPLE,
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
     
     # 应用基础配置
     APP_NAME: str = "AutoMATA"
@@ -58,8 +91,7 @@ class Settings(BaseSettings):
     PYTHON_EXEC_PATH: str = "/opt/anaconda/envs/automata/bin/python"
     RSCRIPT_PATH: str = "/opt/anaconda/envs/R_442/bin/Rscript"
     
-    # 数据库配置：不在代码中写密码。本地复制 backend/.env.example 为 backend/.env 并填写（示例中为 123456）；
-    # 生产使用独立配置文件（如 deploy/.env.prod），由 compose / 环境变量注入。
+    # 数据库配置：本地用 .env.development（或 legacy .env）；Docker 生产由 deploy/.env.prod / 环境变量注入。
     DB_USER: str = "automata"
     DB_PASSWORD: str = ""
     DB_HOST: str = "localhost"
@@ -111,10 +143,8 @@ class Settings(BaseSettings):
     # Redis 配置（Celery 使用）
     REDIS_URL: str = "redis://localhost:6379/0"
     
-    # CORS 配置 - 开发环境允许所有来源（支持本地前端直连）
+    # CORS 配置 - 开发默认 *；生产请在 .env.production 或环境变量中写明域名列表 JSON
     CORS_ORIGINS: List[str] = ["*"]
-    # 旧代码设置的CORS_ORIGINS
-    # CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
     
     # Email 配置
     EMAIL_ENABLED: bool = False
@@ -127,7 +157,7 @@ class Settings(BaseSettings):
     
     # AI Agent 配置
     AGENT_ENABLED: bool = False
-    AGENT_DEFAULT_PROVIDER: str = "openai"  # openai / qwen / deepseek
+    AGENT_DEFAULT_PROVIDER: str = "deepseek"  # openai / qwen / deepseek
     AGENT_OPENAI_API_KEY: str = ""
     AGENT_OPENAI_BASE_URL: str = ""  # 可选代理地址
     AGENT_OPENAI_MODEL: str = "gpt-4o"
@@ -137,19 +167,23 @@ class Settings(BaseSettings):
     AGENT_DEEPSEEK_MODEL: str = "deepseek-chat"
     AGENT_DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
     AGENT_MAX_TURNS: int = 10
-    
-    class Config:
-        env_file = str(_BACKEND_ENV)
-        
-        @classmethod
-        def parse_env_var(cls, value: str):
-            """解析环境变量中的 JSON 格式列表"""
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v: Any) -> Any:
+        """兼容 .env 中 JSON 数组或单个 URL 字符串。"""
+        if v is None or isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return []
             try:
-                return json.loads(value)
+                return json.loads(s)
             except (json.JSONDecodeError, TypeError):
-                # 兼容单字符串格式
-                return [value] if value else []
-    
+                return [s]
+        return v
+
     @property
     def is_production(self) -> bool:
         """判断是否为生产环境"""

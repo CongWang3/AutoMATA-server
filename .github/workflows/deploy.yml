@@ -97,6 +97,8 @@ jobs:
         with:
           context: ./automata-web
           file: ./automata-web/Dockerfile
+          build-args: |
+            VITE_PUBLIC_SITE_ORIGIN=${{ vars.VITE_PUBLIC_SITE_ORIGIN }}
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ env.IMAGE_FRONTEND }}:latest

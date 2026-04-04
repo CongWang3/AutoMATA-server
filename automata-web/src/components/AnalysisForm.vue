@@ -243,6 +243,7 @@ import AnalysisResultPanel from './AnalysisResultPanel.vue'
 import { webSocketService } from '@/api/websocket'
 import { AnalysisAPI, type AnalysisField, type AnalysisResultFile } from '@/api/analysis'
 import type { AnalysisParamRow } from './AnalysisResultPanel.vue'
+import { resolvePublicStaticUrl } from '@/config/deploy'
 
 // ==================== Props 定义 ====================
 
@@ -555,77 +556,70 @@ const beforeSecondUpload = (file: File): boolean => {
   return true
 }
 
-// 下载示例数据
-const downloadExampleData = () => {
+// 下载示例数据（与 DataProcessForm 一致：VITE_PUBLIC_SITE_ORIGIN + fetch Blob）
+const downloadExampleData = async () => {
   if (!props.exampleDataUrl) {
     ElMessage.warning('No example data available')
     return
   }
-  
+
   const fileName = props.exampleFileName || 'example_data.txt'
-  const link = document.createElement('a')
-  link.href = props.exampleDataUrl
-  link.download = fileName
-  link.style.display = 'none'
-  
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  
-  ElMessage.success(`Example download started: ${fileName}`)
+  const fetchUrl = resolvePublicStaticUrl(props.exampleDataUrl)
 
-  // // 使用后端 API 下载示例数据
-  // const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
-  // // 从 exampleDataUrl 中提取分析类型，例如：/example/draw_example/pca_example.txt -> pca
-  // const analysisType = extractAnalysisType(props.exampleDataUrl)
-  
-  // if (analysisType) {
-  //   const downloadUrl = `${apiBaseUrl}/api/v1/data-process/examples/draw/${analysisType}`
-  //   window.open(downloadUrl, '_blank')
-  //   ElMessage.success(`示例数据已开始下载：${fileName}`)
-  // } else {
-  //   // 降级处理：直接下载静态文件
-  //   const link = document.createElement('a')
-  //   link.href = props.exampleDataUrl
-  //   link.download = fileName
-  //   link.style.display = 'none'
-    
-  //   document.body.appendChild(link)
-  //   link.click()
-  //   document.body.removeChild(link)
-    
-  //   ElMessage.success(`示例数据已开始下载：${fileName}`)
-  // }
-}
-
-// 从 URL 中提取分析类型
-const extractAnalysisType = (url: string): string | null => {
-  // 匹配 /example/draw_example/{type}_example.txt 格式
-  const match = url.match(/\/example\/draw_example\/([\w-]+)_example\.txt/)
-  if (match && match[1]) {
-    return match[1]
+  try {
+    const res = await fetch(fetchUrl)
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`)
+    }
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = fileName
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(objectUrl)
+    ElMessage.success(`Example data downloaded: ${fileName}`)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Example download failed:', fetchUrl, e)
+    ElMessage.error(`Failed to download example (${msg}). Open in browser: ${fetchUrl}`)
   }
-  return null
 }
 
 // 下载第二个示例数据
-const downloadSecondExampleData = () => {
+const downloadSecondExampleData = async () => {
   if (!props.secondExampleUrl) {
     ElMessage.warning('No example data available')
     return
   }
-  
+
   const fileName = props.secondExampleFileName || 'example_data_2.txt'
-  const link = document.createElement('a')
-  link.href = props.secondExampleUrl
-  link.download = fileName
-  link.style.display = 'none'
-  
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  
-  ElMessage.success(`Example download started: ${fileName}`)
+  const fetchUrl = resolvePublicStaticUrl(props.secondExampleUrl)
+
+  try {
+    const res = await fetch(fetchUrl)
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`)
+    }
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = fileName
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(objectUrl)
+    ElMessage.success(`Example data downloaded: ${fileName}`)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Second example download failed:', fetchUrl, e)
+    ElMessage.error(`Failed to download example (${msg}). Open in browser: ${fetchUrl}`)
+  }
 }
 
 // WebSocket 连接
