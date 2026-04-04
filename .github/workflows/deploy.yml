@@ -41,7 +41,7 @@ jobs:
 
   build-and-push:
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -72,7 +72,7 @@ jobs:
         run: echo "value=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push backend image
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -87,7 +87,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=automata-backend
 
       - name: Build and push frontend image
-        if: needs.changes.outputs.frontend == 'true'
+        if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./automata-web
@@ -175,6 +175,10 @@ jobs:
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
+            # 从 GitHub Secrets 注入 Agent 配置到 .env.prod
+            sed -i 's|^AGENT_ENABLED=.*|AGENT_ENABLED=${{ secrets.AGENT_ENABLED }}|' .env.prod
+            sed -i 's|^AGENT_DEFAULT_PROVIDER=.*|AGENT_DEFAULT_PROVIDER=${{ secrets.AGENT_DEFAULT_PROVIDER }}|' .env.prod
+            sed -i 's|^AGENT_DEEPSEEK_API_KEY=.*|AGENT_DEEPSEEK_API_KEY=${{ secrets.AGENT_DEEPSEEK_API_KEY }}|' .env.prod
             # 加载环境变量
             set -a && source .env.prod && set +a
             # 使用阿里云 ACR 镜像（国内访问更快）
@@ -197,20 +201,33 @@ jobs:
             fi
             echo "[info] Using: $DOCKER_COMPOSE_CMD"
             
-            if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Running database migration..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             fi
-            if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+            if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Pulling frontend image (this may take a while)..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet frontend && echo "[info] Frontend image pulled successfully"
             fi
-            if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Pulling backend image (this may take a while)..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet backend && echo "[info] Backend image pulled successfully"
             fi
-            echo "[info] Starting services..."
-            $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
+            # 配置变更：全部重建；仅代码变更：只更新对应服务
+            if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
+              echo "[info] Config changed, force-recreating ALL services..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate
+            else
+              RECREATE_SERVICES=""
+              if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+                RECREATE_SERVICES="$RECREATE_SERVICES frontend"
+              fi
+              if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+                RECREATE_SERVICES="$RECREATE_SERVICES backend download-server"
+              fi
+              echo "[info] Code changed, recreating: $RECREATE_SERVICES"
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate $RECREATE_SERVICES
+            fi
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
             curl -fsS "http://127.0.0.1:18001/health" >/dev/null || echo "[warn] download health failed"
@@ -231,6 +248,10 @@ jobs:
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
+            # 从 GitHub Secrets 注入 Agent 配置到 .env.prod
+            sed -i 's|^AGENT_ENABLED=.*|AGENT_ENABLED=${{ secrets.AGENT_ENABLED }}|' .env.prod
+            sed -i 's|^AGENT_DEFAULT_PROVIDER=.*|AGENT_DEFAULT_PROVIDER=${{ secrets.AGENT_DEFAULT_PROVIDER }}|' .env.prod
+            sed -i 's|^AGENT_DEEPSEEK_API_KEY=.*|AGENT_DEEPSEEK_API_KEY=${{ secrets.AGENT_DEEPSEEK_API_KEY }}|' .env.prod
             # 加载环境变量
             set -a && source .env.prod && set +a
             # 使用阿里云 ACR 镜像（国内访问更快）
@@ -253,20 +274,33 @@ jobs:
             fi
             echo "[info] Using: $DOCKER_COMPOSE_CMD"
             
-            if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Running database migration..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
             fi
-            if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+            if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Pulling frontend image (this may take a while)..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet frontend && echo "[info] Frontend image pulled successfully"
             fi
-            if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+            if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Pulling backend image (this may take a while)..."
               $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml pull --quiet backend && echo "[info] Backend image pulled successfully"
             fi
-            echo "[info] Starting services..."
-            $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
+            # 配置变更：全部重建；仅代码变更：只更新对应服务
+            if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
+              echo "[info] Config changed, force-recreating ALL services..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate
+            else
+              RECREATE_SERVICES=""
+              if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+                RECREATE_SERVICES="$RECREATE_SERVICES frontend"
+              fi
+              if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+                RECREATE_SERVICES="$RECREATE_SERVICES backend download-server"
+              fi
+              echo "[info] Code changed, recreating: $RECREATE_SERVICES"
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate $RECREATE_SERVICES
+            fi
             curl -fsS "http://127.0.0.1:8080/" >/dev/null || echo "[warn] frontend health failed"
             curl -fsS "http://127.0.0.1:18005/health" >/dev/null || echo "[warn] backend health failed"
             curl -fsS "http://127.0.0.1:18001/health" >/dev/null || echo "[warn] download health failed"
