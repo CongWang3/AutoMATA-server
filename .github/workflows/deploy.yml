@@ -176,9 +176,12 @@ jobs:
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
             # 从 GitHub Secrets 注入 Agent 配置到 .env.prod
-            sed -i 's|^AGENT_ENABLED=.*|AGENT_ENABLED=${{ secrets.AGENT_ENABLED }}|' .env.prod
-            sed -i 's|^AGENT_DEFAULT_PROVIDER=.*|AGENT_DEFAULT_PROVIDER=${{ secrets.AGENT_DEFAULT_PROVIDER }}|' .env.prod
-            sed -i 's|^AGENT_DEEPSEEK_API_KEY=.*|AGENT_DEEPSEEK_API_KEY=${{ secrets.AGENT_DEEPSEEK_API_KEY }}|' .env.prod
+            grep -q '^AGENT_ENABLED=' .env.prod && sed -i '/^AGENT_ENABLED=/d' .env.prod
+            grep -q '^AGENT_DEFAULT_PROVIDER=' .env.prod && sed -i '/^AGENT_DEFAULT_PROVIDER=/d' .env.prod
+            grep -q '^AGENT_DEEPSEEK_API_KEY=' .env.prod && sed -i '/^AGENT_DEEPSEEK_API_KEY=/d' .env.prod
+            echo 'AGENT_ENABLED=${{ secrets.AGENT_ENABLED }}' >> .env.prod
+            echo 'AGENT_DEFAULT_PROVIDER=${{ secrets.AGENT_DEFAULT_PROVIDER }}' >> .env.prod
+            echo 'AGENT_DEEPSEEK_API_KEY=${{ secrets.AGENT_DEEPSEEK_API_KEY }}' >> .env.prod
             # 加载环境变量
             set -a && source .env.prod && set +a
             # 使用阿里云 ACR 镜像（国内访问更快）
@@ -249,9 +252,12 @@ jobs:
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
             # 从 GitHub Secrets 注入 Agent 配置到 .env.prod
-            sed -i 's|^AGENT_ENABLED=.*|AGENT_ENABLED=${{ secrets.AGENT_ENABLED }}|' .env.prod
-            sed -i 's|^AGENT_DEFAULT_PROVIDER=.*|AGENT_DEFAULT_PROVIDER=${{ secrets.AGENT_DEFAULT_PROVIDER }}|' .env.prod
-            sed -i 's|^AGENT_DEEPSEEK_API_KEY=.*|AGENT_DEEPSEEK_API_KEY=${{ secrets.AGENT_DEEPSEEK_API_KEY }}|' .env.prod
+            grep -q '^AGENT_ENABLED=' .env.prod && sed -i '/^AGENT_ENABLED=/d' .env.prod
+            grep -q '^AGENT_DEFAULT_PROVIDER=' .env.prod && sed -i '/^AGENT_DEFAULT_PROVIDER=/d' .env.prod
+            grep -q '^AGENT_DEEPSEEK_API_KEY=' .env.prod && sed -i '/^AGENT_DEEPSEEK_API_KEY=/d' .env.prod
+            echo 'AGENT_ENABLED=${{ secrets.AGENT_ENABLED }}' >> .env.prod
+            echo 'AGENT_DEFAULT_PROVIDER=${{ secrets.AGENT_DEFAULT_PROVIDER }}' >> .env.prod
+            echo 'AGENT_DEEPSEEK_API_KEY=${{ secrets.AGENT_DEEPSEEK_API_KEY }}' >> .env.prod
             # 加载环境变量
             set -a && source .env.prod && set +a
             # 使用阿里云 ACR 镜像（国内访问更快）
