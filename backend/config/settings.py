@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # 独立下载服务（download_server.py）：绑定地址/端口，以及返回给浏览器/邮件的下载根 URL（无尾斜杠）
     DOWNLOAD_SERVER_HOST: str = "0.0.0.0"
     DOWNLOAD_SERVER_PORT: int = 8001
-    # 生产：设为对外 HTTPS 或网关路径（见 deploy/.env.prod.example）。
+    # 生产：通常留空或设为对外站点根 URL（无尾斜杠、勿加 /download），由网关把 /job-result、/download 反代到 download_server（见 deploy/.env.prod.example）。
     # 开发：DEBUG=True 且仍为默认 localhost/127.0.0.1:8001 时，API 返回同源相对路径，由前端 dev server 反代到本机 8001。
     # 远程 IDE：若必须把绝对 URL 指到你本机映射端口，可设 DOWNLOAD_PUBLIC_BASE_URL=http://localhost:3450（与「端口」面板本地端口一致）。
     DOWNLOAD_PUBLIC_BASE_URL: str = "http://localhost:8001"

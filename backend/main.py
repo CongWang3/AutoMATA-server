@@ -169,6 +169,12 @@ async def startup_event():
     if settings.is_production:
         logger.warning(f"生产环境 CORS 配置：{settings.CORS_ORIGINS}")
         settings.validate_cors_config()
+        _dl = (settings.DOWNLOAD_PUBLIC_BASE_URL or "").strip()
+        if _dl and "your-domain.com" in _dl:
+            logger.warning(
+                "DOWNLOAD_PUBLIC_BASE_URL 仍含占位域名 your-domain.com，生成的下载链接无效；"
+                "请改为真实公网站点根（无 /download 后缀）或留空以使用同源相对路径。"
+            )
     
     # 启动定时清理任务（每小时执行一次）
     scheduler.add_job(

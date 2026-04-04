@@ -23,7 +23,8 @@ services:
     environment:
       REPO_ROOT: /app
       AUTOMATA_REPO_ROOT: /app
-      DOWNLOAD_PUBLIC_BASE_URL: ${DOWNLOAD_PUBLIC_BASE_URL:-https://your-domain.com/download}
+      # 默认不注入占位域名；由 .env.prod 的 DOWNLOAD_PUBLIC_BASE_URL 决定。留空则 API 返回同源相对路径。
+      DOWNLOAD_PUBLIC_BASE_URL: ${DOWNLOAD_PUBLIC_BASE_URL:-}
       PYTHON_EXEC_PATH: ${PYTHON_EXEC_PATH:-python}
       RSCRIPT_PATH: ${RSCRIPT_PATH:-/usr/bin/Rscript}
     depends_on:
