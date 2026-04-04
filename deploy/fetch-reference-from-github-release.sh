@@ -8,7 +8,7 @@
 #   REFERENCE_ASSET_NAME    Release 附件精确文件名，未设置则直接跳过（不报错）
 #   REFERENCE_RELEASE_TAG   标签名；设为 latest 或未设置则使用 /releases/latest
 #   REFERENCE_SQL_DIR       解压目录，默认 ./data/reference_sql
-#   REFERENCE_GITHUB_TOKEN  可选；私有仓库 Release 需 PAT（read 权限即可）
+#   REFERENCE_GITHUB_TOKEN  可选；私有仓库 Release 需 PAT（read）。CI 通常注入 GHCR_READ_TOKEN（与拉 compose 同源）
 #
 # 支持附件类型：.tar.gz / .tgz / .zip；若为单个 .sql 或 .sql.gz 则直接复制到目标目录。
 
@@ -41,7 +41,8 @@ fi
 
 hdr=()
 if [[ -n "${TOKEN}" ]]; then
-  hdr=( -H "Authorization: Bearer ${TOKEN}" )
+  # 与 GitHub REST API 常用写法一致（与 deploy 里 curl 的 Authorization: token 相同）
+  hdr=( -H "Authorization: token ${TOKEN}" )
 fi
 
 if [[ "${TAG}" == "latest" ]]; then
@@ -51,7 +52,23 @@ else
 fi
 
 echo "[reference-data] 获取 Release: ${API_URL}"
-json="$(curl -fsSL "${hdr[@]}" "${API_URL}")"
+json_file="$(mktemp)"
+trap 'rm -f "${json_file}"' EXIT
+# 不用 curl -f：404 时仍需读 body/状态码，便于给出明确说明（无 Release 时 /releases/latest 为 404）
+http_code="$(curl -sSL -o "${json_file}" -w "%{http_code}" "${hdr[@]}" "${API_URL}")" || true
+if [[ "${http_code}" == "404" ]]; then
+  echo "[reference-data] 跳过：该 URL 返回 404（通常表示仓库还没有任何 GitHub Release，或标签「${TAG}」不存在）。"
+  echo "[reference-data] 需要参考注释 SQL 时：在 ${REPO} 发布 Release，并上传附件「${ASSET}」。私有仓库请确保 PAT（如 Actions Secret GHCR_READ_TOKEN）可读 Release。"
+  exit 0
+fi
+if [[ "${http_code}" != "200" ]]; then
+  echo "[reference-data] 错误: GitHub API 返回 HTTP ${http_code}（期望 200）: ${API_URL}" >&2
+  [[ -s "${json_file}" ]] && head -c 800 "${json_file}" >&2 && echo >&2 || true
+  exit 1
+fi
+json="$(cat "${json_file}")"
+rm -f "${json_file}"
+trap - EXIT
 
 asset_id="$(echo "${json}" | jq -r --arg n "${ASSET}" '.assets[]? | select(.name == $n) | .id' | head -1)"
 if [[ -z "${asset_id}" || "${asset_id}" == "null" ]]; then
