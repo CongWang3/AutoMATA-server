@@ -39,19 +39,66 @@ REFERENCE_ANNOTATION_TABLES: tuple[str, ...] = (
 )
 
 
+# 与 mysqldump / Release 中 gene_*.sql 的 INSERT 列一致（避免 Unknown column 'Description' 等）
+_GENE_LIKE_COLUMN_DEFS: tuple[tuple[str, str], ...] = (
+    ("GeneID", "BIGINT UNSIGNED DEFAULT NULL"),
+    ("Symbol", "VARCHAR(512) DEFAULT NULL"),
+    ("Description", "TEXT"),
+    ("Feature", "VARCHAR(64) DEFAULT NULL"),
+    ("Start", "BIGINT DEFAULT NULL"),
+    ("End", "BIGINT DEFAULT NULL"),
+    ("Chromosomes", "VARCHAR(64) DEFAULT NULL"),
+    ("Nomenclature_ID", "VARCHAR(128) DEFAULT NULL"),
+    ("Ensembl_ID", "VARCHAR(128) DEFAULT NULL"),
+    ("OMIM_ID", "VARCHAR(128) DEFAULT NULL"),
+    ("Taxonomic_ID", "BIGINT DEFAULT NULL"),
+    ("SwissProt_Access", "VARCHAR(256) DEFAULT NULL"),
+    ("Length", "DOUBLE DEFAULT NULL"),
+    ("Synonyms", "TEXT"),
+)
+
+
 def _gene_like_ddl(table: str) -> str:
+    cols = ",\n  ".join(f"`{name}` {typ}" for name, typ in _GENE_LIKE_COLUMN_DEFS)
     return f"""
 CREATE TABLE IF NOT EXISTS `{table}` (
-  `GeneID` BIGINT UNSIGNED DEFAULT NULL,
-  `Length` DOUBLE DEFAULT NULL,
-  `Symbol` VARCHAR(512) DEFAULT NULL,
-  `Ensembl_ID` VARCHAR(128) DEFAULT NULL,
-  `Synonyms` TEXT,
+  {cols},
   KEY `ix_{table}_geneid` (`GeneID`),
   KEY `ix_{table}_ensembl` (`Ensembl_ID`),
   KEY `ix_{table}_symbol` (`Symbol`(128))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 """.strip()
+
+
+def _existing_mysql_columns(engine: Engine, table: str) -> set[str]:
+    db = settings.DB_NAME
+    with engine.connect() as conn:
+        r = conn.execute(
+            text(
+                "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :t"
+            ),
+            {"db": db, "t": table},
+        )
+        return {row[0] for row in r}
+
+
+def _sync_gene_like_columns(engine: Engine, table: str) -> None:
+    """已存在旧版空壳表时补齐列，以便导入与 dump 列集一致的 INSERT。"""
+    if not _table_exists(engine, table):
+        return
+    have = _existing_mysql_columns(engine, table)
+    adds = [
+        f"ADD COLUMN `{name}` {typ}"
+        for name, typ in _GENE_LIKE_COLUMN_DEFS
+        if name not in have
+    ]
+    if not adds:
+        return
+    stmt = f"ALTER TABLE `{table}` {', '.join(adds)}"
+    logger.info("补齐参考表 `%s` 列（%s 个新列）", table, len(adds))
+    with engine.begin() as conn:
+        conn.execute(text(stmt))
 
 
 def _mrna_homo_ddl() -> str:
@@ -186,6 +233,10 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
         if missing:
             logger.info("创建缺失的参考注释表: %s", ", ".join(missing))
             _apply_ddl(engine, missing)
+
+        for t in REFERENCE_ANNOTATION_TABLES:
+            if t.startswith("gene_"):
+                _sync_gene_like_columns(engine, t)
 
         sql_dir = settings.REFERENCE_DATA_SQL_DIR
         if not sql_dir:

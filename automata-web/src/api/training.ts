@@ -9,6 +9,7 @@
 import { apiClient } from './client'
 import type { BaseApiResponse } from './types'
 import { JobApiBase } from './jobApiBase'
+import { getDownloadOrigin } from '@/config/deploy'
 
 // 监督学习训练响应
 export interface SupervisedTrainResponse extends BaseApiResponse {
@@ -183,9 +184,7 @@ export class TrainingAPI extends JobApiBase<TrainingFileUploadResponse, any> {
    */
   static getJobResultDownloadUrl(jobId: string, userId: number): string {
     const timestamp = Math.floor(Date.now() / 1000)
-    const base = import.meta.env.PROD
-      ? `${window.location.origin}`
-      : 'http://localhost:8001'
+    const base = getDownloadOrigin()
     return `${base}/job-result/${jobId}?uid=${userId}&t=${timestamp}`
   }
 

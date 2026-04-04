@@ -8,6 +8,7 @@
 // -->
 import type { WebSocketProgressMessage } from './types'
 import { AuthService } from './auth'
+import { getWsBaseUrl } from '@/config/deploy'
 
 export class WebSocketService {
   private static instance: WebSocketService | null = null
@@ -62,14 +63,7 @@ export class WebSocketService {
     // 关闭旧的任务状态连接（不影响文件进度 WS）
     this.disconnectTaskStatus()
     
-    const getDefaultWsBase = () => {
-      if (import.meta.env.PROD) {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        return `${protocol}//${window.location.host}`
-      }
-      return 'ws://localhost:8005'
-    }
-    const base = baseUrl || import.meta.env.VITE_WS_BASE_URL || getDefaultWsBase()
+    const base = baseUrl?.trim() || getWsBaseUrl()
     const token = AuthService.getAuthToken()
       
     if (!token) {
@@ -183,17 +177,7 @@ export class WebSocketService {
       // 关闭现有连接
       this.disconnect()
   
-      // 动态获取 WebSocket 基础 URL
-      const getDefaultWsBase = () => {
-        // 生产环境：使用当前域名（根据协议自动选择 ws/wss）
-        if (import.meta.env.PROD) {
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-          return `${protocol}//${window.location.host}`
-        }
-        // 开发环境：使用本地后端
-        return 'ws://localhost:8005'
-      }
-      const base = baseUrl || import.meta.env.VITE_WS_BASE_URL || getDefaultWsBase()
+      const base = baseUrl?.trim() || getWsBaseUrl()
       const token = AuthService.getAuthToken()
         
       if (!token) {
@@ -202,7 +186,6 @@ export class WebSocketService {
       }
   
       const wsUrl = `${base}/api/v1/files/ws/progress`
-      
       try {
         this.ws = new WebSocket(wsUrl)
         

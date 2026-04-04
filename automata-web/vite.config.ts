@@ -29,6 +29,8 @@ export default defineConfig({
         target: 'http://localhost:8005',
         changeOrigin: true,
         secure: false,
+        // 允许 /api 下的 WebSocket（如 /api/v1/tasks/ws/status）
+        ws: true,
         // 增加超时时间，防止代理超时
         timeout: 120000,  // 2分钟
         // 配置代理错误处理，防止崩溃
@@ -48,8 +50,25 @@ export default defineConfig({
         target: 'ws://localhost:8005',
         ws: true,
         changeOrigin: true
-      }
-      // 注意：/download 路径不代理，直接访问 8001 端口
+      },
+      // 开发环境：后端在 DEBUG 且默认 DOWNLOAD_PUBLIC_BASE_URL 时返回同源相对路径，由此反代到独立下载服务
+      '/job-result': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
+      '/download': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
+      '/analysis-result': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
+      // 与 getDownloadOrigin() 同源；public/example 下有的文件仍由 Vite 静态优先
+      '/example': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
     },
     // 修复WebSocket HMR连接问题
     hmr: {

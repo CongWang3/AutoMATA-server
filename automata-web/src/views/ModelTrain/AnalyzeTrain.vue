@@ -579,6 +579,7 @@ import { buildTrainingResultParamRows } from '@/components/Training/trainingResu
 import { jobsApi, type UnifiedJob } from '@/api/jobs'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getDownloadOrigin } from '@/config/deploy'
 
 // 类型定义
 interface Job {
@@ -1331,7 +1332,7 @@ const downloadStrategyExample = () => {
 
 const downloadExample = (filePath: string) => {
     try {
-        const base = import.meta.env.PROD ? window.location.origin : 'http://localhost:8001'
+        const base = getDownloadOrigin()
         const downloadUrl = `${base}/example/${filePath}`
         
         // 获取文件名（从路径中提取）

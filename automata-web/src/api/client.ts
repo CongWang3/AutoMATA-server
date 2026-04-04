@@ -13,7 +13,6 @@ export class ApiClient {
       configBaseUrl: API_CONFIG.BASE_URL 
     })
 
-        
     this.client = axios.create({
       baseURL,
       timeout: API_CONFIG.TIMEOUT,
@@ -48,7 +47,6 @@ export class ApiClient {
           // })()
         })
 
-                
         return config
       },
       (error) => {
@@ -71,7 +69,6 @@ export class ApiClient {
         const errorMessage = this.handleError(error)
         console.error('❌ API Error:', errorMessage)
 
-        
         return Promise.reject(new ApiError(errorMessage, error.response?.status))
       }
     )
@@ -96,6 +93,11 @@ export class ApiClient {
           return 'Resource not found'
         case 500:
           return 'Internal server error'
+        case 502:
+          if (import.meta.env.DEV && data?.message) {
+            return `无法连接后端（${data.message}）。请确认已在 8005 端口启动 backend。`
+          }
+          return data?.detail || data?.message || 'Bad gateway'
         default:
           return data?.detail || data?.message || `HTTP ${status} error`
       }

@@ -3,6 +3,7 @@
  */
 import { apiClient } from './client'
 import type { BaseApiResponse } from './types'
+import { getDownloadOrigin } from '@/config/deploy'
 
 // <!-- 
 // 审查上下文：
@@ -182,9 +183,7 @@ export class DataProcessAPI {
    */
   static getJobResultDownloadUrl(jobId: string, userId: number): string {
     const timestamp = Math.floor(Date.now() / 1000)
-    const base = import.meta.env.PROD
-      ? `${window.location.origin}`
-      : 'http://localhost:8001'
+    const base = getDownloadOrigin()
     return `${base}/job-result/${jobId}?uid=${userId}&t=${timestamp}`
   }
 

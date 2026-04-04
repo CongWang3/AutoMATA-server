@@ -4,6 +4,7 @@
  */
 import { apiClient } from './client'
 import type { BaseApiResponse } from './types'
+import { getDownloadOrigin } from '@/config/deploy'
 
 // ==================== 类型定义 ====================
 
@@ -383,10 +384,7 @@ export class AnalysisAPI {
    * @param filename 文件名
    */
   static getResultFileUrl(jobId: string, filename: string): string {
-    // 生产环境通过 Apache 反向代理，开发环境直连下载服务
-    const base = import.meta.env.PROD
-      ? `${window.location.origin}`
-      : 'http://localhost:8001'
+    const base = getDownloadOrigin()
     return `${base}/analysis-result/${jobId}/${encodeURIComponent(filename)}`
   }
 

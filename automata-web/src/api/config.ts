@@ -6,18 +6,10 @@
 // - 业务背景：支持前后端分离部署，便于维护和扩展
 // - 测试重点：验证不同环境下API连接的正确性
 // -->
-function devApiBaseFromEnv(): string {
-  const origin = (import.meta.env.VITE_DEV_API_ORIGIN || '').trim().replace(/\/+$/, '')
-  if (origin) {
-    return `${origin}/api`
-  }
-  return 'http://127.0.0.1:8005/api'
-}
+import { getApiBaseUrl } from '@/config/deploy'
 
 export const API_CONFIG = {
-  // 生产环境优先使用显式配置；开发环境可按 VITE_DIRECT_API 直连后端
-  BASE_URL: import.meta.env.VITE_API_BASE_URL
-    || (import.meta.env.VITE_DIRECT_API === 'true' ? devApiBaseFromEnv() : '/api'),
+  BASE_URL: getApiBaseUrl(),
   TIMEOUT: 300000, // 5分钟超时，适应大文件上传
   HEADERS: {
     'Content-Type': 'application/json',

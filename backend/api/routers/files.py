@@ -815,12 +815,13 @@ def get_direct_download_link(
     signature = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
     
     # 下载服务根 URL：统一由环境变量 DOWNLOAD_PUBLIC_BASE_URL 配置（参见 config/settings.py）
-    base_url = settings.download_public_base()
-    logger.info(f"[DIRECT_LINK] 使用配置的下载服务根: {base_url}")
+    logger.info(f"[DIRECT_LINK] 使用配置的下载服务根: {settings.download_public_base() or '(同源相对路径)'}")
     
     # 构建下载URL - 指向独立下载服务器
     encoded_filename = urllib.parse.quote(db_file.original_name, safe='')
-    download_url = f"{base_url}/download/{file_id}?token={signature}&uid={uid}&t={timestamp}&filename={encoded_filename}"
+    download_url = settings.download_public_url(
+        f"/download/{file_id}?token={signature}&uid={uid}&t={timestamp}&filename={encoded_filename}"
+    )
     
     logger.info(f"[DIRECT_LINK] 生成下载链接: file={db_file.original_name}, user={uid}")
     

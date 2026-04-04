@@ -380,10 +380,11 @@ async def get_job_download_url(
         message = f"{job_id}:{uid}:{timestamp}".encode()
         token = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
         
-        # 构建下载链接
-        base = settings.download_public_base()
-        download_url = f"{base}/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
-        
+        # 构建下载链接（开发环境默认同源相对路径 + Vite 反代 8001）
+        download_url = settings.download_public_url(
+            f"/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
+        )
+
         return DownloadUrlResponse(
             download_url=download_url,
             expires_in=300  # 5 分钟有效期

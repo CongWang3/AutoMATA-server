@@ -42,10 +42,12 @@ class Settings(BaseSettings):
     # 仓库根目录（code、download_data、example、automata-web 的父目录）。生产可通过环境变量 REPO_ROOT 覆盖。
     REPO_ROOT: str = "/xp/www/AutoMATA"
 
-    # 独立下载服务（download_server.py）：绑定地址/端口，以及返回给浏览器/邮件的下载根 URL（无尾斜杠，如 https://example.com 或 http://host:8001）
+    # 独立下载服务（download_server.py）：绑定地址/端口，以及返回给浏览器/邮件的下载根 URL（无尾斜杠）
     DOWNLOAD_SERVER_HOST: str = "0.0.0.0"
     DOWNLOAD_SERVER_PORT: int = 8001
-    # 公网下载设置为 "http://1.95.52.33:8001" 。部署时把 DOWNLOAD_PUBLIC_BASE_URL 设成真实对外地址即可。
+    # 生产：设为对外 HTTPS 或网关路径（见 deploy/.env.prod.example）。
+    # 开发：DEBUG=True 且仍为默认 localhost/127.0.0.1:8001 时，API 返回同源相对路径，由前端 dev server 反代到本机 8001。
+    # 远程 IDE：若必须把绝对 URL 指到你本机映射端口，可设 DOWNLOAD_PUBLIC_BASE_URL=http://localhost:3450（与「端口」面板本地端口一致）。
     DOWNLOAD_PUBLIC_BASE_URL: str = "http://localhost:8001"
 
     # 脚本执行器路径（默认兼容现有本地 conda 环境；Docker 内可通过环境变量覆盖）
@@ -173,10 +175,22 @@ class Settings(BaseSettings):
         return self.path_repo / "code" / "data_analysis_plot"
 
     def download_public_base(self) -> str:
-        """下载服务对外 base，已去除尾斜杠。"""
-        return (self.DOWNLOAD_PUBLIC_BASE_URL or "").rstrip("/")
+        """下载服务对外 base，已去除尾斜杠。开发环境若仍为默认 localhost:8001，则返回空串以生成同源相对路径（由 Vite/网关反代到 8001）。"""
+        raw = (self.DOWNLOAD_PUBLIC_BASE_URL or "").strip().rstrip("/")
+        if self.DEBUG and raw in (
+            "http://localhost:8001",
+            "http://127.0.0.1:8001",
+            "https://localhost:8001",
+            "https://127.0.0.1:8001",
+        ):
+            return ""
+        return raw
 
-
+    def download_public_url(self, path_and_query: str) -> str:
+        """生成浏览器可用的下载 URL。path_and_query 须以 / 开头并可带 query。"""
+        base = self.download_public_base()
+        pq = path_and_query if path_and_query.startswith("/") else f"/{path_and_query}"
+        return f"{base}{pq}" if base else pq
 
     def validate_cors_config(self) -> None:
         """验证 CORS 配置"""

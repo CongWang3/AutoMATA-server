@@ -51,10 +51,6 @@ MAX_SKEW = 60  # 允许的时间偏差，单位秒
 DOWNLOAD_THROTTLE_BPS = int(os.environ.get("DOWNLOAD_THROTTLE_BPS", "0"))
 
 
-
-# #endregion
-
-
 async def _throttle_after_chunk(chunk_len: int) -> None:
     """按 DOWNLOAD_THROTTLE_BPS 在每次写出后休眠；chunk_len 为本次写入字节数。"""
     if DOWNLOAD_THROTTLE_BPS <= 0 or chunk_len <= 0:

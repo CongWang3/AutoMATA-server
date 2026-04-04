@@ -209,6 +209,7 @@ import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { DataProcessAPI } from '@/api'
+import { getDownloadOrigin } from '@/config/deploy'
 
 const formRef = ref<FormInstance>()
 
@@ -275,10 +276,7 @@ const handleExceed = () => {
 }
 
 const downloadExample = (type: 'pheno' | 'omics1' | 'omics2' | 'omics3') => {
-  // 使用独立下载服务 (8001) 提供示例文件：
-  // 例如 http://localhost:8001/example/train_example/jobID_pheno.txt
-  const origin = window.location.origin
-  const base = origin.replace(/:\d+$/, ':8001')
+  const base = getDownloadOrigin()
 
   let relativePath = ''
   switch (type) {

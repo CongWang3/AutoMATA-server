@@ -4,6 +4,7 @@
  */
 
 import { getToken } from '@/utils/auth'
+import { getWsBaseUrl } from '@/config/deploy'
 
 class TaskStatusWebSocket {
   private ws: WebSocket | null = null
@@ -28,15 +29,7 @@ class TaskStatusWebSocket {
       // 关闭现有连接
       this.disconnect()
 
-      // 动态获取 WebSocket URL
-      const getDefaultWsBase = () => {
-        if (import.meta.env.PROD) {
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-          return `${protocol}//${window.location.host}`
-        }
-        return 'ws://localhost:8005'
-      }
-      const wsUrl = `${import.meta.env.VITE_WEBSOCKET_URL || getDefaultWsBase()}/api/v1/tasks/ws/status`
+      const wsUrl = `${getWsBaseUrl()}/api/v1/tasks/ws/status`
       this.ws = new WebSocket(wsUrl)
 
       this.ws.onopen = () => {

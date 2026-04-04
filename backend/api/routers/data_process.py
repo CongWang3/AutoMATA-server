@@ -651,8 +651,9 @@ async def get_download_url(
         token = hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
         
         # 构建下载链接
-        base = settings.download_public_base()
-        download_url = f"{base}/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
+        download_url = settings.download_public_url(
+            f"/job-result/{job_id}?uid={uid}&t={timestamp}&token={token}"
+        )
         
         return DownloadUrlResponse(
             download_url=download_url,
