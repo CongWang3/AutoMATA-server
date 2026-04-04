@@ -28,8 +28,15 @@ class TaskStatusWebSocket {
       // 关闭现有连接
       this.disconnect()
 
-      // 创建新的 WebSocket 连接
-      const wsUrl = `${import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000'}/api/v1/tasks/ws/status`
+      // 动态获取 WebSocket URL
+      const getDefaultWsBase = () => {
+        if (import.meta.env.PROD) {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+          return `${protocol}//${window.location.host}`
+        }
+        return 'ws://localhost:8005'
+      }
+      const wsUrl = `${import.meta.env.VITE_WEBSOCKET_URL || getDefaultWsBase()}/api/v1/tasks/ws/status`
       this.ws = new WebSocket(wsUrl)
 
       this.ws.onopen = () => {

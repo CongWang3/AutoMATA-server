@@ -55,11 +55,17 @@ export class WebSocketService {
     
     console.log('🔌 开始任务状态 WebSocket 连接...')
     
-    // 如果启用了直接 API 连接，使用后端地址而不是 Vite代理
-    const useDirectAPI = import.meta.env.VITE_DIRECT_API === 'true'
-    const base = baseUrl || (useDirectAPI 
-      ? 'ws://localhost:8005' 
-      : import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8005')
+    // 动态获取 WebSocket 基础 URL
+    const getDefaultWsBase = () => {
+      // 生产环境：使用当前域名（根据协议自动选择 ws/wss）
+      if (import.meta.env.PROD) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        return `${protocol}//${window.location.host}`
+      }
+      // 开发环境：使用本地后端
+      return 'ws://localhost:8005'
+    }
+    const base = baseUrl || import.meta.env.VITE_WS_BASE_URL || getDefaultWsBase()
     const token = AuthService.getAuthToken()
       
     if (!token) {
@@ -130,11 +136,17 @@ export class WebSocketService {
       // 关闭现有连接
       this.disconnect()
   
-      // 如果启用了直接 API 连接，使用后端地址而不是 Vite代理
-      const useDirectAPI = import.meta.env.VITE_DIRECT_API === 'true'
-      const base = baseUrl || (useDirectAPI 
-        ? 'ws://localhost:8005' 
-        : import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8005')
+      // 动态获取 WebSocket 基础 URL
+      const getDefaultWsBase = () => {
+        // 生产环境：使用当前域名（根据协议自动选择 ws/wss）
+        if (import.meta.env.PROD) {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+          return `${protocol}//${window.location.host}`
+        }
+        // 开发环境：使用本地后端
+        return 'ws://localhost:8005'
+      }
+      const base = baseUrl || import.meta.env.VITE_WS_BASE_URL || getDefaultWsBase()
       const token = AuthService.getAuthToken()
         
       if (!token) {
