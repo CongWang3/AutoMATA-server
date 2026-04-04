@@ -29,6 +29,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN R -e "install.packages(c('BiocManager','optparse','dplyr','tidyr','ggplot2','ggrepel','ggpubr','patchwork','VennDiagram','UpSetR','RMySQL','igraph','ggraph','pheatmap','vegan','RColorBrewer','ggnewscale','GOplot'), repos='https://cloud.r-project.org')" \
     && R -e "BiocManager::install(c('DESeq2','ComplexHeatmap','clusterProfiler','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','KEGG.db','ActivePathways','DEFormats','yulab.utils'), ask=FALSE, update=FALSE)"
 
+# pca.R 等依赖 ggpubr；单独再装一层并 dependencies=TRUE，避免批量安装偶发缺包或旧镜像层未含此包
+RUN R -e "install.packages('ggpubr', repos='https://cloud.r-project.org', dependencies=TRUE)"
+
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
