@@ -31,6 +31,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
+# 如果 code/ 目录存在（通过构建 context 或挂载传入），则复制到镜像内
+# 在 CI 构建时通过 GitHub Actions 预先复制到 backend/code/
+COPY code/ /app/code/
+
 EXPOSE 8005
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005"]
