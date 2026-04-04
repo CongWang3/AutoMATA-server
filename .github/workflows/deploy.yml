@@ -240,8 +240,8 @@ jobs:
             echo "[info] Using: $DOCKER_COMPOSE_CMD"
             
             if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] Running database migration..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
+              echo "[info] 初始化/校验数据库表结构（python init_db.py）..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend python init_db.py || echo "[warn] db init failed, continue"
             fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Pulling frontend image (this may take a while)..."
@@ -346,8 +346,8 @@ jobs:
             echo "[info] Using: $DOCKER_COMPOSE_CMD"
             
             if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] Running database migration..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend alembic -c /app/alembic.ini upgrade head || echo "[warn] db migration failed, continue"
+              echo "[info] 初始化/校验数据库表结构（python init_db.py）..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml run --rm backend python init_db.py || echo "[warn] db init failed, continue"
             fi
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
               echo "[info] Pulling frontend image (this may take a while)..."
