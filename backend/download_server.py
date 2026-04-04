@@ -27,8 +27,10 @@ from aiohttp import web
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from config.settings import settings
+from config.runtime_log_levels import apply_production_third_party_log_levels
 
 logging.basicConfig(level=logging.INFO)
+apply_production_third_party_log_levels()
 logger = logging.getLogger(__name__)
 
 

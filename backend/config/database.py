@@ -6,6 +6,8 @@ import logging
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
+from config.runtime_log_levels import apply_production_third_party_log_levels
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -70,3 +72,6 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+apply_production_third_party_log_levels()
