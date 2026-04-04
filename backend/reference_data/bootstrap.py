@@ -8,7 +8,6 @@ MySQL 参考注释表（gene_*/mrna_*/protein_*）：与 Navicat 导出结构、
 from __future__ import annotations
 
 import gzip
-import io
 import logging
 import subprocess
 from pathlib import Path
@@ -21,13 +20,12 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# 与 R 脚本、Python 查询一致；含拟南芥 gene_at（mysql2TPM.R）
+# 与 R 脚本、Python 查询一致。拟南芥 gene_at 不由本流程建表/导数（需用时自行建表灌数）。
 REFERENCE_ANNOTATION_TABLES: tuple[str, ...] = (
     "gene_bos_taurus",
     "gene_dm",
     "gene_homo_sapiens",
     "gene_mus",
-    "gene_at",
     "mrna_bos_taurus",
     "mrna_dm",
     "mrna_homo_sapiens",
@@ -103,22 +101,6 @@ REFERENCE_TABLE_SPECS: dict[str, tuple[tuple[str, str], ...]] = {
         ("SwissProt_Access", "TEXT NULL DEFAULT NULL"),
         ("Length", "INT NULL DEFAULT NULL"),
         ("Synonyms", "TEXT NULL DEFAULT NULL"),
-    ),
-    "gene_at": (
-        ("GeneID", "BIGINT UNSIGNED NULL DEFAULT NULL"),
-        ("Length", "DOUBLE NULL DEFAULT NULL"),
-        ("Symbol", "VARCHAR(512) NULL DEFAULT NULL"),
-        ("Ensembl_ID", "VARCHAR(128) NULL DEFAULT NULL"),
-        ("Synonyms", "TEXT NULL DEFAULT NULL"),
-        ("Description", "TEXT NULL DEFAULT NULL"),
-        ("Feature", "VARCHAR(64) NULL DEFAULT NULL"),
-        ("Start", "BIGINT NULL DEFAULT NULL"),
-        ("End", "BIGINT NULL DEFAULT NULL"),
-        ("Chromosomes", "VARCHAR(64) NULL DEFAULT NULL"),
-        ("Nomenclature_ID", "VARCHAR(128) NULL DEFAULT NULL"),
-        ("OMIM_ID", "VARCHAR(128) NULL DEFAULT NULL"),
-        ("Taxonomic_ID", "BIGINT NULL DEFAULT NULL"),
-        ("SwissProt_Access", "VARCHAR(256) NULL DEFAULT NULL"),
     ),
     "mrna_bos_taurus": (
         ("MyUnknownColumn", "INT NULL DEFAULT NULL"),
@@ -295,12 +277,6 @@ def _bt_ident(name: str) -> str:
 
 def _ddl_index_suffix(table: str) -> str:
     """CREATE TABLE 末尾索引（与常见查询/R 脚本一致）。"""
-    if table == "gene_at":
-        return (
-            ",\n  KEY `ix_gene_at_geneid` (`GeneID`),\n"
-            "  KEY `ix_gene_at_ensembl` (`Ensembl_ID`),\n"
-            "  KEY `ix_gene_at_symbol` (`Symbol`(128))"
-        )
     if table in (
         "gene_bos_taurus",
         "gene_dm",
@@ -445,9 +421,10 @@ def _mysql_cli_import(sql_path: Path) -> None:
         raw = sql_path.read_bytes()
 
     payload = _normalize_sql_line_endings(raw)
+    # 勿用 BytesIO 作 stdin：部分环境下 fileno() 不可用会导致 Popen 失败
     subprocess.run(
         cmd,
-        stdin=io.BytesIO(payload),
+        input=payload,
         env=env,
         check=True,
         capture_output=True,
