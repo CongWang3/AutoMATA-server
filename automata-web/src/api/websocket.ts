@@ -11,13 +11,19 @@ import { AuthService } from './auth'
 
 export class WebSocketService {
   private static instance: WebSocketService | null = null
+  // 文件进度 WebSocket
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 3  // 合理的最大重连次数
-  private reconnectDelay = 5000    // 重连延迟5秒
-  private isIntentionallyClosing = false  // 标记是否为主动关闭
+  private maxReconnectAttempts = 3
+  private reconnectDelay = 5000
+  private isIntentionallyClosing = false
   private heartbeatInterval: number | null = null
   private heartbeatTimeout: number | null = null
+  
+  // 任务状态 WebSocket（独立连接，不与文件进度 WS 冲突）
+  private taskWs: WebSocket | null = null
+  private taskHeartbeatInterval: number | null = null
+  private taskIsIntentionallyClosing = false
   
   // 回调函数
   private onProgressCallback: ((message: WebSocketProgressMessage) => void) | null = null
@@ -45,24 +51,22 @@ export class WebSocketService {
    * @returns 连接Promise
    */
   async connectTaskStatus(baseUrl?: string): Promise<void> {
-    // <!-- 
-    // 审查上下文：
-    // - 设计意图：为任务状态监控提供专用的 WebSocket 连接
-    // - 已知局限：复用现有的连接管理逻辑，避免重复代码
-    // - 业务背景：与文件上传 WebSocket 共享基础设施但独立管理
-    // - 测试重点：连接建立、认证流程、消息路由
-    // -->
-    
     console.log('🔌 开始任务状态 WebSocket 连接...')
     
-    // 动态获取 WebSocket 基础 URL
+    // 如果任务状态 WS 已经连接，直接返回
+    if (this.taskWs && this.taskWs.readyState === WebSocket.OPEN) {
+      console.log('✅ 任务状态 WebSocket 已连接，直接返回')
+      return
+    }
+    
+    // 关闭旧的任务状态连接（不影响文件进度 WS）
+    this.disconnectTaskStatus()
+    
     const getDefaultWsBase = () => {
-      // 生产环境：使用当前域名（根据协议自动选择 ws/wss）
       if (import.meta.env.PROD) {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
         return `${protocol}//${window.location.host}`
       }
-      // 开发环境：使用本地后端
       return 'ws://localhost:8005'
     }
     const base = baseUrl || import.meta.env.VITE_WS_BASE_URL || getDefaultWsBase()
@@ -75,22 +79,18 @@ export class WebSocketService {
     const wsUrl = `${base}/api/v1/tasks/ws/status`
     
     try {
-      this.ws = new WebSocket(wsUrl)
+      this.taskWs = new WebSocket(wsUrl)
       
       return new Promise((resolve, reject) => {
-        this.ws!.onopen = (event) => {
+        this.taskWs!.onopen = () => {
           console.log('🟢 任务状态 WebSocket 连接已建立')
-          this.reconnectAttempts = 0
-          this.startHeartbeat()
-          
+          this.startTaskHeartbeat()
           // 发送认证token
-          this.sendMessage({ type: 'auth', token })
-          
-          this.onOpenCallback?.()
+          this.sendTaskMessage({ type: 'auth', token })
           resolve()
         }
 
-        this.ws!.onmessage = (event) => {
+        this.taskWs!.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
             this.handleMessage(data)
@@ -99,15 +99,13 @@ export class WebSocketService {
           }
         }
 
-        this.ws!.onclose = (event) => {
+        this.taskWs!.onclose = (event) => {
           console.log('🔴 任务状态 WebSocket 连接已关闭', event.code, event.reason)
-          this.stopHeartbeat()
-          this.onCloseCallback?.()
+          this.stopTaskHeartbeat()
         }
 
-        this.ws!.onerror = (error) => {
+        this.taskWs!.onerror = (error) => {
           console.error('❌ 任务状态 WebSocket 错误:', error)
-          this.onErrorCallback?.(error)
           reject(error)
         }
       })
@@ -116,6 +114,55 @@ export class WebSocketService {
       console.error('建立任务状态 WebSocket 连接失败:', error)
       throw error
     }
+  }
+
+  /**
+   * 断开任务状态 WebSocket（不影响文件进度 WS）
+   */
+  disconnectTaskStatus(): void {
+    this.taskIsIntentionallyClosing = true
+    if (this.taskWs) {
+      this.taskWs.close(1000, 'Client disconnect task status')
+      this.taskWs = null
+    }
+    this.stopTaskHeartbeat()
+  }
+
+  /**
+   * 发送任务状态 WebSocket 消息
+   */
+  private sendTaskMessage(message: any): void {
+    if (this.taskWs && this.taskWs.readyState === WebSocket.OPEN) {
+      this.taskWs.send(JSON.stringify(message))
+    }
+  }
+
+  /**
+   * 启动任务状态 WS 心跳
+   */
+  private startTaskHeartbeat(): void {
+    this.taskHeartbeatInterval = window.setInterval(() => {
+      if (this.taskWs?.readyState === WebSocket.OPEN) {
+        this.sendTaskMessage({ type: 'heartbeat' })
+      }
+    }, 60000)
+  }
+
+  /**
+   * 停止任务状态 WS 心跳
+   */
+  private stopTaskHeartbeat(): void {
+    if (this.taskHeartbeatInterval) {
+      clearInterval(this.taskHeartbeatInterval)
+      this.taskHeartbeatInterval = null
+    }
+  }
+
+  /**
+   * 检查任务状态 WS 连接状态
+   */
+  isTaskStatusConnected(): boolean {
+    return this.taskWs !== null && this.taskWs.readyState === WebSocket.OPEN
   }
 
   /**
@@ -440,16 +487,7 @@ export class WebSocketService {
    * @returns 连接状态
    */
   isConnected(): boolean {
-    const connected = this.ws !== null && this.ws.readyState === WebSocket.OPEN
-    // 减少日志输出频率，只在调试时显示
-    if (import.meta.env.DEV) {
-      console.debug('🔍 WebSocket连接状态检查:', {
-        hasWebSocket: !!this.ws,
-        readyState: this.ws?.readyState,
-        isConnected: connected
-      })
-    }
-    return connected
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN
   }
 
   /**

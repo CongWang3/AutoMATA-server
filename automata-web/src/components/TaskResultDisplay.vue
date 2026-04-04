@@ -401,7 +401,7 @@ const connectTaskWebSocket = async () => {
 
 const disconnectTaskWebSocket = () => {
   if (wsConnected.value) {
-    webSocketService.disconnect()
+    webSocketService.disconnectTaskStatus()
     wsConnected.value = false
     console.log('🔌 任务状态WebSocket已断开')
   }
