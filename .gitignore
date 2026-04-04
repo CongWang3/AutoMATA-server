@@ -38,6 +38,9 @@ assets
 # 前端 public/assets 静态资源（Bootstrap CSS/JS 等）需纳入版本控制
 !automata-web/public/assets/
 !automata-web/public/assets/**
+# 前端 example 示例文件需纳入版本控制（生产环境下载服务依赖）
+!automata-web/public/example/
+!automata-web/public/example/**
 
 # Python 环境配置
 # Conda 环境导出文件（用于环境复现，可以提交）
