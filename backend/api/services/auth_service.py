@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from fastapi import HTTPException, status
 
 from api.models.user import User
@@ -183,10 +183,18 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # 更新最后登录时间
-        user.last_login_at = datetime.now(timezone.utc)
-        self.db.commit()
-        
+        # 更新最后登录时间（失败时不阻断登录：生产上常见 1205 锁等待超时）
+        try:
+            user.last_login_at = datetime.now(timezone.utc)
+            self.db.commit()
+        except OperationalError as e:
+            self.db.rollback()
+            logger.warning(
+                "更新 last_login_at 失败（已跳过，仍签发 token）: user_id=%s err=%s",
+                user.id,
+                e,
+            )
+
         # 生成访问令牌
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(

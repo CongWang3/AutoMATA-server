@@ -1,9 +1,12 @@
 """
 认证路由：处理用户注册、登录、获取用户信息等接口
 """
-from fastapi import APIRouter, Depends, status
+import logging
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from datetime import timedelta
 
 from config.database import get_db
 from config.settings import settings
@@ -12,8 +15,25 @@ from api.services.auth_service import AuthService
 from api.dependencies.auth import get_current_active_user
 from api.models.user import User
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["认证"])
+
+
+def _user_to_response(user: User) -> UserResponse:
+    """从 ORM 显式构造响应，避免 NULL/类型边缘情况导致 model_validate 抛错。"""
+    created = user.created_at
+    if created is None:
+        created = datetime.now(timezone.utc)
+    return UserResponse(
+        id=int(user.id),
+        username=user.username or "",
+        email=(user.email or "").strip(),
+        is_active=True if user.is_active is None else bool(user.is_active),
+        is_admin=bool(user.is_admin) if user.is_admin is not None else False,
+        created_at=created,
+        last_login_at=user.last_login_at,
+    )
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -75,15 +95,33 @@ def login_user(
     # - 业务背景：docs/api/API_SPECIFICATION.md - POST /api/v1/auth/login
     # - 测试重点：请验证用户名/邮箱登录、密码验证、token 生成、最后登录时间更新
     # -->
-    
-    service = AuthService(db)
-    user, access_token = service.authenticate_user(request)
-    
+    try:
+        service = AuthService(db)
+        user, access_token = service.authenticate_user(request)
+        user_out = _user_to_response(user)
+    except HTTPException:
+        raise
+    except ValidationError:
+        logger.exception(
+            "登录响应序列化失败: username=%s",
+            request.username,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="用户信息格式异常，请联系管理员",
+        ) from None
+    except Exception as e:
+        logger.exception("登录接口未预期异常: username=%s", request.username)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e) if settings.DEBUG else "Internal server error",
+        ) from e
+
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse.model_validate(user)
+        user=user_out,
     )
 
 
