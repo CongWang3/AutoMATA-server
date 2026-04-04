@@ -175,6 +175,8 @@ jobs:
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
+            # 加载环境变量
+            set -a && source .env.prod && set +a
             # 使用阿里云 ACR 镜像（国内访问更快）
             export ALIYUN_REGISTRY="crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com"
             export ALIYUN_NAMESPACE="automata-bio"
@@ -229,6 +231,8 @@ jobs:
             curl -fsSL -H "Authorization: token ${{ secrets.GHCR_READ_TOKEN }}" \
               "https://api.github.com/repos/CongWang3/AutoMATA-server/contents/docker-compose.prod.yml?ref=main" | \
               jq -r '.content' | base64 -d > docker-compose.prod.yml
+            # 加载环境变量
+            set -a && source .env.prod && set +a
             # 使用阿里云 ACR 镜像（国内访问更快）
             export ALIYUN_REGISTRY="crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com"
             export ALIYUN_NAMESPACE="automata-bio"
