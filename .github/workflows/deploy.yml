@@ -243,12 +243,12 @@ jobs:
             DOCKER_COMPOSE_PROD="$DOCKER_COMPOSE_CMD --env-file .env.prod -f docker-compose.prod.yml"
             
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] Pulling frontend image (this may take a while)..."
-              $DOCKER_COMPOSE_PROD pull --quiet frontend && echo "[info] Frontend image pulled successfully"
+              echo "[info] Pulling frontend image (layer progress below; large pulls can take many minutes)..."
+              $DOCKER_COMPOSE_PROD pull frontend && echo "[info] Frontend image pulled successfully"
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] Pulling backend image (this may take a while)..."
-              $DOCKER_COMPOSE_PROD pull --quiet backend && echo "[info] Backend image pulled successfully"
+              echo "[info] Pulling backend image — 含 PyTorch 等依赖时镜像可达数 GB，拉取 15–45 分钟常见；勿用 --quiet 以便日志显示各层进度"
+              $DOCKER_COMPOSE_PROD pull backend && echo "[info] Backend image pulled successfully"
             fi
             # 先 up 再 init_db：避免 MySQL 正被 force-recreate 时跑 DDL 导致 2013/1317；infra 用 down+up 消除容器名冲突
             if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
@@ -363,12 +363,12 @@ jobs:
             DOCKER_COMPOSE_PROD="$DOCKER_COMPOSE_CMD --env-file .env.prod -f docker-compose.prod.yml"
             
             if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] Pulling frontend image (this may take a while)..."
-              $DOCKER_COMPOSE_PROD pull --quiet frontend && echo "[info] Frontend image pulled successfully"
+              echo "[info] Pulling frontend image (layer progress below; large pulls can take many minutes)..."
+              $DOCKER_COMPOSE_PROD pull frontend && echo "[info] Frontend image pulled successfully"
             fi
             if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-              echo "[info] Pulling backend image (this may take a while)..."
-              $DOCKER_COMPOSE_PROD pull --quiet backend && echo "[info] Backend image pulled successfully"
+              echo "[info] Pulling backend image — 含 PyTorch 等依赖时镜像可达数 GB，拉取 15–45 分钟常见；勿用 --quiet 以便日志显示各层进度"
+              $DOCKER_COMPOSE_PROD pull backend && echo "[info] Backend image pulled successfully"
             fi
             # 先 up 再 init_db：避免 MySQL 正被 force-recreate 时跑 DDL 导致 2013/1317；infra 用 down+up 消除容器名冲突
             if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
