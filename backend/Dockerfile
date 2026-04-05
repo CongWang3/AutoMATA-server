@@ -43,7 +43,10 @@ RUN awk 'BEGIN{print "name: R_442\nchannels:\n  - conda-forge\ndependencies:"} /
     && micromamba clean -a -y \
     && rm -f /tmp/conda-r442.yml /tmp/env.yml
 
-ENV PATH="/opt/conda/envs/R_442/bin:${PATH}"
+# /usr/local/bin（系统 Python 3.11）必须在 conda R_442 Python 3.13 之前，
+# 否则 pip install 和 uvicorn 均使用 conda Python 3.13，与 sqlalchemy 等版本不兼容。
+# Rscript 不在 /usr/local/bin，会自动回退到 /opt/conda/envs/R_442/bin/Rscript。
+ENV PATH="/usr/local/bin:/opt/conda/envs/R_442/bin:${PATH}"
 
 # GitHub ggtree 依赖 ggiraph → systemfonts/gdtools；conda-forge 预装二进制，避免 slim 里编失败。
 # bioconductor-clusterprofiler 仅在 Bioconda（不在 conda-forge）；与 conda-forge 混用时 conda-forge 优先列前。
