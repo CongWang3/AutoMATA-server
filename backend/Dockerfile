@@ -25,12 +25,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install R package manager first, then core CRAN/Bioconductor packages
-RUN R -e "install.packages(c('BiocManager','optparse','dplyr','tidyr','ggplot2','ggrepel','ggpubr','patchwork','VennDiagram','UpSetR','RMySQL','igraph','ggraph','pheatmap','vegan','RColorBrewer','ggnewscale','GOplot'), repos='https://cloud.r-project.org')" \
-    && R -e "BiocManager::install(c('DESeq2','ComplexHeatmap','clusterProfiler','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','KEGG.db','ActivePathways','DEFormats','yulab.utils'), ask=FALSE, update=FALSE)"
+# R 依赖与 code/data_analysis_plot 下脚本的 library() 对齐（后端通过 RSCRIPT_PATH 调用 Rscript，见 config/settings.py、docker-compose.prod.yml）。
+# - pca.R：ggplot2 vegan dplyr ggrepel ggpubr patchwork optparse
+# - volcano_gsea_padj.R / dumbbell*.R：ggplot2 dplyr ggrepel|patchwork optparse
+# - venn.R：VennDetail ggplot2 dplyr UpSetR VennDiagram optparse
+# - cor_heatmap.r：linkET ggplot2 RColorBrewer ggnewscale optparse
+# - ppi.R：tidyverse clusterProfiler STRINGdb igraph ggraph optparse
+# - go/kegg_enrichment.R：clusterProfiler org.Hs.eg.db dplyr GOplot DOSE ggplot2 tidyr（kegg 另需 yulab.utils）
+# - df_cluster_heatmap.R：ComplexHeatmap ggplot2 ggplotify optparse
+# - df_count_normalized.R：DESeq2 ggplot2 DEFormats dplyr
+# - limma_fpkm_df.R（code/）：limma dplyr pheatmap ggplot2 ComplexHeatmap optparse
+# dependencies=TRUE：避免 ggpubr 等仅装主包、传递依赖缺失却构建仍“成功”的情况。
+RUN Rscript -e "install.packages(c(\
+  'BiocManager','optparse','dplyr','tidyr','ggplot2','ggrepel','ggpubr','patchwork',\
+  'VennDiagram','UpSetR','RMySQL','igraph','ggraph','pheatmap','vegan','limma',\
+  'RColorBrewer','ggnewscale','GOplot','tidyverse','VennDetail','linkET'\
+), repos='https://cloud.r-project.org', dependencies=TRUE)" \
+ && Rscript -e "BiocManager::install(c('DESeq2','ComplexHeatmap','clusterProfiler','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','KEGG.db','ActivePathways','DEFormats','yulab.utils'), ask=FALSE, update=FALSE)"
 
-# pca.R 等依赖 ggpubr；单独再装一层并 dependencies=TRUE，避免批量安装偶发缺包或旧镜像层未含此包
-RUN R -e "install.packages('ggpubr', repos='https://cloud.r-project.org', dependencies=TRUE)"
+# 构建期校验：任一关键包不可加载则 docker build 失败，避免运行时才报 there is no package
+RUN Rscript -e 'for (p in c(\
+  "ggpubr","ggplot2","vegan","dplyr","ggrepel","patchwork","optparse",\
+  "linkET","VennDetail","tidyverse","VennDiagram","UpSetR","igraph","ggraph",\
+  "RColorBrewer","ggnewscale","RMySQL","pheatmap","GOplot","tidyr",\
+  "DESeq2","DEFormats","ComplexHeatmap","ggplotify",\
+  "clusterProfiler","DOSE","org.Hs.eg.db","STRINGdb","KEGG.db","yulab.utils","BiocManager"\
+)) if (!requireNamespace(p, quietly=TRUE)) stop("missing R package: ", p); cat("R packages verify OK\n")'
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt

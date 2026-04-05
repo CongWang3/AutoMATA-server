@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     # 远程 IDE：若必须把绝对 URL 指到你本机映射端口，可设 DOWNLOAD_PUBLIC_BASE_URL=http://localhost:3450（与「端口」面板本地端口一致）。
     DOWNLOAD_PUBLIC_BASE_URL: str = "http://localhost:8001"
 
-    # 脚本执行器路径（默认兼容现有本地 conda 环境；Docker 内可通过环境变量覆盖）
+    # 脚本执行器路径。默认指向本机 conda，便于本地开发；生产 Docker 请在 compose/env 中设为 python、/usr/bin/Rscript（见 docker-compose.prod.yml）。
     PYTHON_EXEC_PATH: str = "/opt/anaconda/envs/automata/bin/python"
     RSCRIPT_PATH: str = "/opt/anaconda/envs/R_442/bin/Rscript"
     
