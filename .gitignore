@@ -1132,7 +1132,7 @@ backend/manual_tests/
 .env.prod
 deploy/conda-automata-dev.yml
 deploy/conda-automata.yml
-deploy/conda-r442.yml
+# conda-r442.yml 为 R_442 / Docker 构建来源，须纳入版本库供 CI 拷贝至 backend/
 data/reference_sql/*
 .idea/*
 
