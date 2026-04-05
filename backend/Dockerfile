@@ -48,7 +48,7 @@ RUN Rscript -e 'for (p in c(\
   "ggpubr","ggplot2","vegan","dplyr","ggrepel","patchwork","optparse",\
   "linkET","VennDetail","tidyverse","VennDiagram","UpSetR","igraph","ggraph",\
   "RColorBrewer","ggnewscale","RMySQL","pheatmap","GOplot","tidyr",\
-  "DESeq2","DEFormats","ComplexHeatmap","ggplotify",\
+  "DESeq2","DEFormats","ComplexHeatmap","ggplotify","limma",\
   "clusterProfiler","DOSE","org.Hs.eg.db","STRINGdb","KEGG.db","yulab.utils","BiocManager"\
 )) if (!requireNamespace(p, quietly=TRUE)) stop("missing R package: ", p); cat("R packages verify OK\n")'
 
