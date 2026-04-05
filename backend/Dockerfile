@@ -64,11 +64,11 @@ RUN Rscript -e "stopifnot(getRversion() >= '4.4.2', getRversion() < '4.6.0'); ca
 ARG R_PARALLEL_MAKE=2
 RUN Rscript -e "install.packages(c(\
   'remotes','BiocManager','optparse','patchwork','VennDiagram','UpSetR','pheatmap','vegan','limma',\
-  'ggnewscale','GOplot','ggraph'\
+  'ggnewscale','GOplot','ggraph','ellipse','svglite'\
 ), repos='https://cloud.r-project.org', dependencies=c('Depends','Imports','LinkingTo'), Ncpus=${R_PARALLEL_MAKE})" \
  && Rscript -e "BiocManager::install(c(\
   'DESeq2','ComplexHeatmap','DOSE',\
-  'org.Hs.eg.db',\
+  'org.Hs.eg.db','org.Mm.eg.db','org.Bt.eg.db','org.Dm.eg.db',\
   'STRINGdb','impute','ggplotify','ActivePathways','DEFormats','yulab.utils',\
   'treeio','tidytree','aplot','VennDetail'\
   ), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})" \
