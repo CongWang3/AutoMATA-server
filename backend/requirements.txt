@@ -28,7 +28,8 @@ python-multipart==0.0.6
 shutup
 
 # 模型训练与推理（子进程执行 code/train_model、code/use_model）
-# 默认自 PyPI 安装 CPU 版 torch；GPU 见 https://pytorch.org/get-started/locally/
+# 本地/CI：pip 默认 Linux wheel 易带入 nvidia-* / triton（数 GB）。生产镜像在 backend/Dockerfile 中改为先装 CPU wheel。
+# GPU 环境见 https://pytorch.org/get-started/locally/
 numpy>=1.24,<3
 pandas>=2.0
 scipy>=1.10

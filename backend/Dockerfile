@@ -52,8 +52,36 @@ RUN Rscript -e 'for (p in c(\
   "clusterProfiler","DOSE","org.Hs.eg.db","STRINGdb","KEGG.db","yulab.utils","BiocManager"\
 )) if (!requireNamespace(p, quietly=TRUE)) stop("missing R package: ", p); cat("R packages verify OK\n")'
 
+# R 包已编译完成，卸掉编译链与 *-dev 头文件，可省数百 MB（运行期仍保留 r-base 与动态库）
+RUN apt-get update && apt-get purge -y --auto-remove \
+    build-essential \
+    r-base-dev \
+    default-libmysqlclient-dev \
+    libxml2-dev \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libfontconfig1-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    libtiff5-dev \
+    libjpeg-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# PyPI 默认 Linux torch 会安装 nvidia-*、triton 等（约 3GB+）；子进程训练/推理仅需 CPU wheel。
+RUN pip install --no-cache-dir "torch>=2.1,<3" "torchvision>=0.16,<1" \
+    --index-url https://download.pytorch.org/whl/cpu
+# 生产镜像不装 pytest/httpx（仅测试用）；torch 已由 CPU wheel 安装
+RUN grep -vE '^[[:space:]]*torch(vision)?([[:space:]]|>=|==|>|<|\[)' /app/requirements.txt \
+    | grep -vE '^[[:space:]]*pytest' \
+    | grep -vE '^[[:space:]]*httpx' \
+    > /app/requirements-rest.txt \
+    && pip install --no-cache-dir -r /app/requirements-rest.txt \
+    && rm /app/requirements-rest.txt
+# 若某依赖误装 CUDA 栈，统一卸掉（CPU 镜像不需要）
+RUN pip list --format=freeze | grep -iE '^(nvidia-|triton)==' | cut -d= -f1 | xargs -r pip uninstall -y || true
 
 COPY . /app
 
