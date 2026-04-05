@@ -121,25 +121,26 @@ tryCatch({
     if (ncol(data_matrix) == 0) {
         stop("错误：没有可用于 PCA 分析的数值数据列")
     }
-    # 执行 PCA 分析
-    pca <- summary(rda(data_matrix, scale=T))
+    # 执行 PCA 分析（rda_result 保存原始对象，pca_summary 保存摘要用于提取解释度）
+    rda_result <- rda(data_matrix, scale=T)
+    pca_summary <- summary(rda_result)
 }, error = function(e) {
     stop(paste("错误：PCA 分析失败 -", e$message, "\\n请检查数据格式是否正确（第一列为组别，其余列为数值型数据）"))
 })
 # 记录PC1和PC2的解释度
-pc1_Explained <- round(pca$cont$importance[2, 1]*100, 2)
-pc2_Explained <- round(pca$cont$importance[2, 2]*100, 2)
+pc1_Explained <- round(pca_summary$cont$importance[2, 1]*100, 2)
+pc2_Explained <- round(pca_summary$cont$importance[2, 2]*100, 2)
 
 
 # 3. 提取每个样本在PC轴上的坐标以及各变量对PC轴的贡献度信息
 # sites 改为 coords, species 改为 var，group 改为coords$group（对比源代码）
 # coords 数据框存储每个样本的坐标
-coords <- data.frame(pca$sites) %>% mutate(group = c(table_data[,1]))
+coords <- data.frame(scores(rda_result, display="sites", choices=c(1,2))) %>% mutate(group = table_data[[1]])
 # 设置group组别为因子型变量，并定义顺序
 coords$group <- factor(coords$group, levels = unique(table_data[,1]))
 # var 数据框存储变量信息, which is colnames of table_data
-var <- data.frame(pca$species) %>% mutate(func = rownames(pca$species))
-var$func <- factor(var$func, levels = rownames(pca$species), labels = rownames(pca$species))
+var <- data.frame(scores(rda_result, display="species", choices=c(1,2))) %>% mutate(func = rownames(scores(rda_result, display="species")))
+var$func <- factor(var$func, levels = rownames(scores(rda_result, display="species")), labels = rownames(scores(rda_result, display="species")))
 
 
 # 4. PERMANOVA分析
