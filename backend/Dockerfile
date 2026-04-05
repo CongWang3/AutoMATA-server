@@ -45,9 +45,9 @@ RUN awk 'BEGIN{print "name: R_442\nchannels:\n  - conda-forge\ndependencies:"} /
 
 ENV PATH="/opt/conda/envs/R_442/bin:${PATH}"
 
-# GitHub ggtree 依赖 ggiraph → systemfonts/gdtools；用 conda-forge 预装可避免在 slim 里反复编失败。
-# clusterProfiler 走 BiocManager 时会强装与 ggplot2 3.5 不兼容的旧源码 ggtree；改由 conda-forge 一次装齐 enrichplot/ggtree/clusterProfiler。
-RUN micromamba install -y -n R_442 -c conda-forge \
+# GitHub ggtree 依赖 ggiraph → systemfonts/gdtools；conda-forge 预装二进制，避免 slim 里编失败。
+# bioconductor-clusterprofiler 仅在 Bioconda（不在 conda-forge）；与 conda-forge 混用时 conda-forge 优先列前。
+RUN micromamba install -y -n R_442 -c conda-forge -c bioconda \
     r-ggiraph r-gdtools r-systemfonts \
     bioconductor-clusterprofiler \
     && micromamba clean -a -y
