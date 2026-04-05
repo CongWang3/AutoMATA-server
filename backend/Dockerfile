@@ -37,20 +37,23 @@ ENV PATH="/opt/conda/envs/R_442/bin:${PATH}"
 
 RUN Rscript -e "stopifnot(as.character(getRversion()) == '4.4.2'); cat('R ', as.character(getRversion()), ' OK\n', sep='')"
 
-# conda-r442 为 ggplot2 3.5.x：aplot/enrichplot 需要 is_ggplot（3.5+）；勿再降级到 3.4.4。
-# Bioconductor 发行线里的 ggtree 若仍不兼容 3.5，则从 YuLab-SMU/ggtree 安装；linkET 在 CRAN 可能对 R 4.4 不可装，从 Hy4m/linkET 安装。
-# conda-r442 未导出 Bioconductor；下列 CRAN 包也不在 yml 中（不含 linkET，见下）。
+# conda-r442 为 ggplot2 3.5.x：aplot/enrichplot 需要 is_ggplot（3.5+）。
+# install_github(..., dependencies=TRUE) 会装 Suggests，拉 sf/WGCNA/Hmisc 等需系统库或极重依赖，易失败且导致 ggtree 链不完整；仅用 Depends/Imports/LinkingTo。
+# clusterProfiler 可能把 ggtree 换回 Bioc 旧版，装完后再覆盖一次 YuLab-SMU/ggtree。
+# linkET：CRAN 对 R 4.4 可能无包，从 Hy4m/linkET；同样勿 dependencies=TRUE。
 ARG R_PARALLEL_MAKE=2
 RUN Rscript -e "install.packages(c(\
   'remotes','BiocManager','optparse','patchwork','VennDiagram','UpSetR','pheatmap','vegan','limma',\
   'ggnewscale','GOplot','VennDetail','ggraph'\
-), repos='https://cloud.r-project.org', dependencies=TRUE, Ncpus=${R_PARALLEL_MAKE})" \
+), repos='https://cloud.r-project.org', dependencies=c('Depends','Imports','LinkingTo'), Ncpus=${R_PARALLEL_MAKE})" \
  && Rscript -e "BiocManager::install(c(\
-  'DESeq2','ComplexHeatmap','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','ActivePathways','DEFormats','yulab.utils'\
+  'DESeq2','ComplexHeatmap','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','ActivePathways','DEFormats','yulab.utils',\
+  'treeio','tidytree','aplot'\
   ), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})" \
- && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('YuLab-SMU/ggtree', upgrade='never', dependencies=TRUE, build_vignettes=FALSE)" \
+ && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('YuLab-SMU/ggtree', upgrade='never', dependencies=c('Depends','Imports','LinkingTo'), build_vignettes=FALSE)" \
  && Rscript -e "BiocManager::install(c('clusterProfiler'), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})" \
- && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('Hy4m/linkET', upgrade='never', dependencies=TRUE, build_vignettes=FALSE)" \
+ && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('YuLab-SMU/ggtree', upgrade='never', dependencies=c('Depends','Imports','LinkingTo'), build_vignettes=FALSE)" \
+ && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('Hy4m/linkET', upgrade='never', dependencies=c('Depends','Imports','LinkingTo'), build_vignettes=FALSE)" \
  && Rscript -e "stopifnot(requireNamespace('ggtree', quietly=TRUE), requireNamespace('clusterProfiler', quietly=TRUE), requireNamespace('linkET', quietly=TRUE))"
 
 RUN Rscript -e 'for (p in c(\
