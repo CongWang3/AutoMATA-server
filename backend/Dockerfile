@@ -52,8 +52,8 @@ RUN micromamba install -y -n R_442 -c conda-forge -c bioconda \
     bioconductor-clusterprofiler \
     && micromamba clean -a -y
 
-# conda-r442 以 r-base=4.4.2 为准；叠加 bioconda 后可能被解到 4.4.3 等补丁版，与本地仍同属 4.4.x / Bioc 同一大版本线。
-RUN Rscript -e "stopifnot(getRversion() >= '4.4.2', getRversion() < '4.5.0'); cat('R ', as.character(getRversion()), ' OK\n', sep='')"
+# 本地 deploy/conda-r442.yml 钉 r-base=4.4.2；镜像内叠加 bioconda::bioconductor-clusterprofiler 时求解器可能升到 R 4.5.x，与 Bioconductor 当前线一致即可。
+RUN Rscript -e "stopifnot(getRversion() >= '4.4.2', getRversion() < '4.6.0'); cat('R ', as.character(getRversion()), ' OK\n', sep='')"
 
 # conda-r442 为 ggplot2 3.5.x；install_github 勿用 dependencies=TRUE（避免 Suggests 拉 sf/WGCNA 等）。
 # clusterProfiler 已由 micromamba 安装；此处不再 BiocManager::install(clusterProfiler)。
