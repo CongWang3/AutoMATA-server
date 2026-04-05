@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { AuthService } from '@/api/auth'
 import { webSocketManager } from '@/utils/websocket-manager'
 import type { UserInfo } from '@/api/types'
@@ -12,9 +11,6 @@ export interface UserState {
 }
 
 export const useUserStore = defineStore('user', () => {
-  // 路由实例
-  const router = useRouter()
-  
   // 状态
   const userInfo = ref<UserInfo | null>(null)
   const loading = ref<boolean>(false)
@@ -137,21 +133,24 @@ export const useUserStore = defineStore('user', () => {
       // 断开WebSocket连接
       console.log('🔌 用户登出，断开WebSocket连接...')
       webSocketManager.setConnection(false)
-      
-      await AuthService.logout()
+
+      // 先发登出请求（同步阶段会带上 token），不等待：避免全局 5min 超时导致页面不跳转
+      AuthService.notifyLogout()
+
+      AuthService.clearAuth()
       userInfo.value = null
       error.value = null
-      
+
       console.log('✅ 用户登出成功')
-      // 登出后自动跳转到登录页面
-      router.push('/login')
+      const { default: appRouter } = await import('@/router')
+      await appRouter.replace({ path: '/login' })
     } catch (err) {
-      // 即使后端登出失败，也要清除本地状态
+      AuthService.clearAuth()
       userInfo.value = null
       error.value = err instanceof Error ? err.message : '登出过程中出现错误'
       console.warn('⚠️ 登出警告:', error.value)
-      // 仍然跳转到登录页面
-      router.push('/login')
+      const { default: appRouter } = await import('@/router')
+      await appRouter.replace({ path: '/login' }).catch(() => {})
     } finally {
       loading.value = false
     }

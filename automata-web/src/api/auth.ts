@@ -80,6 +80,16 @@ export class AuthService {
   }
 
   /**
+   * 通知服务端登出（JWT 无状态场景下可为空操作）。
+   * 不 await、不清理本地；须在仍持有 token 时调用，与 clearAuth 配合使用。
+   */
+  static notifyLogout(): void {
+    void apiClient.post<BaseApiResponse>('/v1/auth/logout').catch(() => {
+      // 网络/网关异常不影响本地登出
+    })
+  }
+
+  /**
    * 用户登出
    * @returns 登出响应
    */
