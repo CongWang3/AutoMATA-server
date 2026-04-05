@@ -25,6 +25,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# RcppEigen 等在单线程下可能长时间无新日志像「卡住」；并行 make + 压制 Eigen 模板告警（仍合法 C++）
+# 构建时可覆盖：docker build --build-arg R_PARALLEL_MAKE=4 ...
+ARG R_PARALLEL_MAKE=2
+ENV MAKEFLAGS=-j${R_PARALLEL_MAKE}
+RUN mkdir -p /root/.R \
+    && printf '%s\n' 'CXXFLAGS += -Wno-ignored-attributes' 'CXX17FLAGS += -Wno-ignored-attributes' >> /root/.R/Makevars
+
 # R 依赖与 code/data_analysis_plot 下脚本的 library() 对齐（后端通过 RSCRIPT_PATH 调用 Rscript，见 config/settings.py、docker-compose.prod.yml）。
 # - pca.R：ggplot2 vegan dplyr ggrepel ggpubr patchwork optparse
 # - volcano_gsea_padj.R / dumbbell*.R：ggplot2 dplyr ggrepel|patchwork optparse
@@ -40,8 +47,8 @@ RUN Rscript -e "install.packages(c(\
   'BiocManager','optparse','dplyr','tidyr','ggplot2','ggrepel','ggpubr','patchwork',\
   'VennDiagram','UpSetR','RMySQL','igraph','ggraph','pheatmap','vegan','limma',\
   'RColorBrewer','ggnewscale','GOplot','tidyverse','VennDetail','linkET'\
-), repos='https://cloud.r-project.org', dependencies=TRUE)" \
- && Rscript -e "BiocManager::install(c('DESeq2','ComplexHeatmap','clusterProfiler','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','KEGG.db','ActivePathways','DEFormats','yulab.utils'), ask=FALSE, update=FALSE)"
+), repos='https://cloud.r-project.org', dependencies=TRUE, Ncpus=${R_PARALLEL_MAKE})" \
+ && Rscript -e "BiocManager::install(c('DESeq2','ComplexHeatmap','clusterProfiler','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','KEGG.db','ActivePathways','DEFormats','yulab.utils'), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})"
 
 # 构建期校验：任一关键包不可加载则 docker build 失败，避免运行时才报 there is no package
 RUN Rscript -e 'for (p in c(\
