@@ -74,7 +74,7 @@ jobs:
 
       - name: Build and push backend image
         if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
-        run: cp -r ./code ./backend/code
+        run: cp -r ./code ./backend/code && cp deploy/conda-r442.yml backend/conda-r442.yml
 
       - name: Push backend image
         if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'

@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     # 远程 IDE：若必须把绝对 URL 指到你本机映射端口，可设 DOWNLOAD_PUBLIC_BASE_URL=http://localhost:3450（与「端口」面板本地端口一致）。
     DOWNLOAD_PUBLIC_BASE_URL: str = "http://localhost:8001"
 
-    # 脚本执行器路径。默认指向本机 conda，便于本地开发；生产 Docker 请在 compose/env 中设为 python、/usr/bin/Rscript（见 docker-compose.prod.yml）。
+    # 脚本执行器路径。默认指向本机 conda（deploy/conda-r442.yml → R_442）；生产 Docker 见 docker-compose.prod.yml（/opt/conda/envs/R_442/bin/Rscript）。
     PYTHON_EXEC_PATH: str = "/opt/anaconda/envs/automata/bin/python"
     RSCRIPT_PATH: str = "/opt/anaconda/envs/R_442/bin/Rscript"
     
@@ -137,8 +137,8 @@ class Settings(BaseSettings):
     # 注意：模型应用需要上传模型权重（pth/pt/pkl），因此在该白名单中补齐。
     ALLOWED_FILE_TYPES: list = ["txt", "csv", "tsv", "xlsx", "xls", "pth", "pkl"]
     
-    # KEGG 富集：为 True 时 R 脚本 enrichKEGG(use_internal_data=TRUE)，使用 KEGG.db 本地注释，不访问 rest.kegg.jp（需安装 KEGG.db）
-    KEGG_USE_INTERNAL_DATA: bool = True
+    # KEGG 富集：True 时需 R 包 KEGG.db（Bioconductor 3.22+ 已移除该包，仅旧环境/自建库可用）。默认走在线 KEGGREST。
+    KEGG_USE_INTERNAL_DATA: bool = False
 
     # Redis 配置（Celery 使用）
     REDIS_URL: str = "redis://localhost:6379/0"

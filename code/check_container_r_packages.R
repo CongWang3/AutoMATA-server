@@ -5,7 +5,7 @@
 #
 # 退出码 0 = 全部可加载；非 0 = 有缺失（标准输出会列出包名）。
 
-# 与 code/**/*.R 中显式加载的包一致，并含生产常用 KEGG.db（kegg_enrichment.R 离线模式）。
+# 与 code/**/*.R 中显式加载的包一致。KEGG.db 在 Bioconductor 3.22+ 不可用，默认在线 KEGG，不列入此处。
 required <- sort(unique(c(
   "ActivePathways",
   "clusterProfiler",
@@ -22,7 +22,6 @@ required <- sort(unique(c(
   "GOplot",
   "ggraph",
   "igraph",
-  "KEGG.db",
   "limma",
   "linkET",
   "optparse",

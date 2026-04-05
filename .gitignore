@@ -48,6 +48,8 @@ assets
 
 # Python 环境配置
 backend/.venv/
+# Docker 构建前从 deploy/conda-r442.yml 拷贝，勿提交副本
+backend/conda-r442.yml
 # Conda 环境导出文件（用于环境复现，可以提交）
 environment.yml
 environment.yaml

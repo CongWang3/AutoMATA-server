@@ -33,7 +33,8 @@ services:
       # 默认不注入占位域名；由 .env.prod 的 DOWNLOAD_PUBLIC_BASE_URL 决定。留空则 API 返回同源相对路径。
       DOWNLOAD_PUBLIC_BASE_URL: ${DOWNLOAD_PUBLIC_BASE_URL:-}
       PYTHON_EXEC_PATH: ${PYTHON_EXEC_PATH:-python}
-      RSCRIPT_PATH: ${RSCRIPT_PATH:-/usr/bin/Rscript}
+      # 与 deploy/conda-r442.yml 的 R_442 一致（镜像内 micromamba 环境路径）
+      RSCRIPT_PATH: ${RSCRIPT_PATH:-/opt/conda/envs/R_442/bin/Rscript}
     depends_on:
       mysql:
         condition: service_healthy
@@ -67,7 +68,8 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       REPO_ROOT: /app
       PYTHON_EXEC_PATH: ${PYTHON_EXEC_PATH:-python}
-      RSCRIPT_PATH: ${RSCRIPT_PATH:-/usr/bin/Rscript}
+      # 与 deploy/conda-r442.yml 的 R_442 一致（镜像内 micromamba 环境路径）
+      RSCRIPT_PATH: ${RSCRIPT_PATH:-/opt/conda/envs/R_442/bin/Rscript}
     command: ["python", "download_server.py"]
     depends_on:
       mysql:

@@ -1,7 +1,7 @@
 # 安装 pca.R 等绘图脚本常用 CRAN 依赖（含 ggpubr 及其传递依赖）。
 #
-# 本机开发：团队已用 conda 环境 R_442（deploy/conda-r442.yml）验证可满足项目需要，一般无需再跑本脚本。
-# 适用场景：无 conda 的环境、仅缺少数包时补齐，或与后端 Docker 镜像（backend/Dockerfile 中的 R 安装）对照排查。
+# 本机开发：团队以 deploy/conda-r442.yml（环境名 R_442）为准，一般无需再跑本脚本。
+# 适用场景：无 conda 的环境、仅缺少数包时补齐；后端 Docker 镜像的 R 亦从同文件用 micromamba 创建，再另装 Bioc/少量 CRAN。
 #
 # 用法：在 shell 中执行
 #   Rscript code/data_analysis_plot/install_plot_deps.R
