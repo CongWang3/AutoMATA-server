@@ -36,13 +36,18 @@ ENV PATH="/opt/conda/envs/R_442/bin:${PATH}"
 
 RUN Rscript -e "stopifnot(as.character(getRversion()) == '4.4.2'); cat('R ', as.character(getRversion()), ' OK\n', sep='')"
 
+# conda-r442 自带 ggplot2 3.5.x；Bioc 的 ggtree 仍引用已移除的 ggplot2 内部 check_linewidth，会导致 clusterProfiler 装挂。
+# 在安装 Bioconductor 栈之前固定 ggplot2 3.4.4（与 ggtree/enrichplot 兼容）。
 # conda-r442 未导出 Bioconductor；下列 CRAN 包也不在 yml 中，需补齐后端 code/ 脚本。
 ARG R_PARALLEL_MAKE=2
 RUN Rscript -e "install.packages(c(\
-  'BiocManager','optparse','patchwork','VennDiagram','UpSetR','pheatmap','vegan','limma',\
+  'remotes','BiocManager','optparse','patchwork','VennDiagram','UpSetR','pheatmap','vegan','limma',\
   'ggnewscale','GOplot','VennDetail','linkET','ggraph'\
 ), repos='https://cloud.r-project.org', dependencies=TRUE, Ncpus=${R_PARALLEL_MAKE})" \
- && Rscript -e "BiocManager::install(c('DESeq2','ComplexHeatmap','clusterProfiler','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','ActivePathways','DEFormats','yulab.utils'), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})"
+ && Rscript -e "remotes::install_version('ggplot2', version='3.4.4', repos='https://cloud.r-project.org', upgrade='never', Ncpus=${R_PARALLEL_MAKE})" \
+ && Rscript -e "BiocManager::install(c('DESeq2','ComplexHeatmap','clusterProfiler','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','ActivePathways','DEFormats','yulab.utils'), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})" \
+ && Rscript -e "if (!requireNamespace('linkET', quietly=TRUE)) install.packages('linkET', repos='https://cloud.r-project.org', dependencies=TRUE, Ncpus=${R_PARALLEL_MAKE})" \
+ && Rscript -e "stopifnot(requireNamespace('ggtree', quietly=TRUE), requireNamespace('clusterProfiler', quietly=TRUE), requireNamespace('linkET', quietly=TRUE))"
 
 RUN Rscript -e 'for (p in c(\
   "ggpubr","ggplot2","vegan","dplyr","ggrepel","patchwork","optparse",\
