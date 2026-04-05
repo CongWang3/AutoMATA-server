@@ -19,6 +19,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     git \
     default-mysql-client \
+    pkg-config \
+    libfreetype6-dev \
+    libcairo2-dev \
+    libfontconfig1-dev \
+    libexpat1-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libpng-dev \
+    libtiff5-dev \
+    libjpeg-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN wget -qO- https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C /tmp bin/micromamba \
@@ -35,12 +45,18 @@ RUN awk 'BEGIN{print "name: R_442\nchannels:\n  - conda-forge\ndependencies:"} /
 
 ENV PATH="/opt/conda/envs/R_442/bin:${PATH}"
 
+# GitHub ggtree 依赖 ggiraph → systemfonts/gdtools；用 conda-forge 预装可避免在 slim 里反复编失败。
+# clusterProfiler 走 BiocManager 时会强装与 ggplot2 3.5 不兼容的旧源码 ggtree；改由 conda-forge 一次装齐 enrichplot/ggtree/clusterProfiler。
+RUN micromamba install -y -n R_442 -c conda-forge \
+    r-ggiraph r-gdtools r-systemfonts \
+    bioconductor-clusterprofiler \
+    && micromamba clean -a -y
+
 RUN Rscript -e "stopifnot(as.character(getRversion()) == '4.4.2'); cat('R ', as.character(getRversion()), ' OK\n', sep='')"
 
-# conda-r442 为 ggplot2 3.5.x：aplot/enrichplot 需要 is_ggplot（3.5+）。
-# install_github(..., dependencies=TRUE) 会装 Suggests，拉 sf/WGCNA/Hmisc 等需系统库或极重依赖，易失败且导致 ggtree 链不完整；仅用 Depends/Imports/LinkingTo。
-# clusterProfiler 可能把 ggtree 换回 Bioc 旧版，装完后再覆盖一次 YuLab-SMU/ggtree。
-# linkET：CRAN 对 R 4.4 可能无包，从 Hy4m/linkET；同样勿 dependencies=TRUE。
+# conda-r442 为 ggplot2 3.5.x；install_github 勿用 dependencies=TRUE（避免 Suggests 拉 sf/WGCNA 等）。
+# clusterProfiler 已由 micromamba 安装；此处不再 BiocManager::install(clusterProfiler)。
+# linkET：CRAN 可能对 R 4.4 无包，从 Hy4m/linkET。
 ARG R_PARALLEL_MAKE=2
 RUN Rscript -e "install.packages(c(\
   'remotes','BiocManager','optparse','patchwork','VennDiagram','UpSetR','pheatmap','vegan','limma',\
@@ -50,9 +66,6 @@ RUN Rscript -e "install.packages(c(\
   'DESeq2','ComplexHeatmap','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','ActivePathways','DEFormats','yulab.utils',\
   'treeio','tidytree','aplot'\
   ), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})" \
- && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('YuLab-SMU/ggtree', upgrade='never', dependencies=c('Depends','Imports','LinkingTo'), build_vignettes=FALSE)" \
- && Rscript -e "BiocManager::install(c('clusterProfiler'), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})" \
- && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('YuLab-SMU/ggtree', upgrade='never', dependencies=c('Depends','Imports','LinkingTo'), build_vignettes=FALSE)" \
  && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('Hy4m/linkET', upgrade='never', dependencies=c('Depends','Imports','LinkingTo'), build_vignettes=FALSE)" \
  && Rscript -e "stopifnot(requireNamespace('ggtree', quietly=TRUE), requireNamespace('clusterProfiler', quietly=TRUE), requireNamespace('linkET', quietly=TRUE))"
 
