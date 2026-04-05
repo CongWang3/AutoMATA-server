@@ -35,6 +35,10 @@ services:
       PYTHON_EXEC_PATH: ${PYTHON_EXEC_PATH:-python}
       # 与 deploy/conda-r442.yml 的 R_442 一致（镜像内 micromamba 环境路径）
       RSCRIPT_PATH: ${RSCRIPT_PATH:-/opt/conda/envs/R_442/bin/Rscript}
+      # org.Mm/Bt/Dm.eg.db 等非人类注释包按需下载，持久化到此目录（首次运行时安装，后续复用）
+      R_LIBS_USER: /opt/r_userlib
+      # STRINGdb 缓存目录（首次运行时下载物种数据文件，后续复用，避免重复联网）
+      AUTOMATA_STRINGDB_CACHE_DIR: /opt/stringdb_cache
     depends_on:
       mysql:
         condition: service_healthy
@@ -46,6 +50,10 @@ services:
       - ./data/download_data:/app/download_data
       # Release 解压或手工放置 gene_*/mrna_*/protein_* 到 ./data/reference_sql；.env.prod 设 REFERENCE_DATA_SQL_DIR=/app/reference_sql
       - ./data/reference_sql:/app/reference_sql:ro
+      # 持久化 R 包（org.Mm/Bt/Dm.eg.db 等，首次按需下载后长期保留）
+      - ./data/r_library:/opt/r_userlib
+      # 持久化 STRINGdb 缓存（protein.links 等数据文件）
+      - ./data/stringdb_cache:/opt/stringdb_cache
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:-18005}:8005"
     healthcheck:

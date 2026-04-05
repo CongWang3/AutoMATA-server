@@ -67,7 +67,9 @@ RUN Rscript -e "install.packages(c(\
   'ggnewscale','GOplot','ggraph'\
 ), repos='https://cloud.r-project.org', dependencies=c('Depends','Imports','LinkingTo'), Ncpus=${R_PARALLEL_MAKE})" \
  && Rscript -e "BiocManager::install(c(\
-  'DESeq2','ComplexHeatmap','DOSE','org.Hs.eg.db','STRINGdb','impute','ggplotify','ActivePathways','DEFormats','yulab.utils',\
+  'DESeq2','ComplexHeatmap','DOSE',\
+  'org.Hs.eg.db',\
+  'STRINGdb','impute','ggplotify','ActivePathways','DEFormats','yulab.utils',\
   'treeio','tidytree','aplot','VennDetail'\
   ), ask=FALSE, update=FALSE, Ncpus=${R_PARALLEL_MAKE})" \
  && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('Hy4m/linkET', upgrade='never', dependencies=c('Depends','Imports','LinkingTo'), build_vignettes=FALSE)" \

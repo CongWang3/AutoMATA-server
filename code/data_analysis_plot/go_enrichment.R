@@ -29,6 +29,10 @@ rm(list=ls())
 setwd(automata_path_data_analysis_plot())
 
 library(clusterProfiler)
+if (!requireNamespace("org.Hs.eg.db", quietly=TRUE)) {
+    message("Installing org.Hs.eg.db from Bioconductor (persistent cache: R_LIBS_USER)...")
+    BiocManager::install("org.Hs.eg.db", ask=FALSE, update=FALSE)
+}
 library(org.Hs.eg.db)  # 人类的包 待修改为其他物种的包 下载链接：https://www.bioconductor.org/packages/release/BiocViews.html#___OrgDb
 library(dplyr)
 library(GOplot)
@@ -71,6 +75,14 @@ if (organism == "Homo_sapiens"){
     db <- "org.Dm.eg.db"  # 待下载
 }else if (organism == "Arabidopsis"){
     db <- "org.At.tair.db"  # 待下载
+}
+# 按需安装物种对应注释包（org.Hs.eg.db 已在上方加载；其余首次使用时下载到持久卷 R_LIBS_USER）
+if (exists("db") && !is.null(db) && db != "org.Hs.eg.db") {
+    if (!requireNamespace(db, quietly=TRUE)) {
+        message("Installing R package: ", db, " from Bioconductor...")
+        BiocManager::install(db, ask=FALSE, update=FALSE)
+    }
+    library(package=db, character.only=TRUE)
 }
 # 富集分析的参数
 pvalue <- opt$pvalue  # 显著性水平

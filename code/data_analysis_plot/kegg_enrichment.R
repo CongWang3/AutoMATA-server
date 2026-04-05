@@ -39,6 +39,10 @@ setwd(automata_path_data_analysis_plot())
 # 启用方式：环境变量 KEGG_USE_INTERNAL_DATA=1，或增加命令行参数 --use_local_kegg（由后端传入）。
 
 library(clusterProfiler)
+if (!requireNamespace("org.Hs.eg.db", quietly=TRUE)) {
+    message("Installing org.Hs.eg.db from Bioconductor (persistent cache: R_LIBS_USER)...")
+    BiocManager::install("org.Hs.eg.db", ask=FALSE, update=FALSE)
+}
 library(org.Hs.eg.db)  # 人类的包 待修改为其他物种的包
 library(dplyr)
 library(GOplot)
@@ -88,6 +92,18 @@ option_list <- list(
 )
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw KEGG Enrichment!", add_help_option=FALSE))
 org <- opt$organism  # https://www.genome.jp/kegg/tables/br08606.html。Mus musculus, Bovine, Homo_sapiens ->"hsa", "bos", "mmu"
+# 按需安装 KEGG 物种对应注释包（org.Hs.eg.db 已在上方加载；其余首次使用时下载到持久卷 R_LIBS_USER）
+local({
+    pkg_map <- c(hsa="org.Hs.eg.db", mmu="org.Mm.eg.db", bos="org.Bt.eg.db", dme="org.Dm.eg.db")
+    pkg <- pkg_map[org]
+    if (!is.na(pkg) && pkg != "org.Hs.eg.db") {
+        if (!requireNamespace(pkg, quietly=TRUE)) {
+            message("Installing R package: ", pkg, " from Bioconductor...")
+            BiocManager::install(pkg, ask=FALSE, update=FALSE)
+        }
+        library(package=pkg, character.only=TRUE)
+    }
+})
 
 
 # 参数

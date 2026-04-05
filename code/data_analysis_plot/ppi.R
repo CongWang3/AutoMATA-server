@@ -73,6 +73,21 @@ input <- automata_job_file(opt$jobID, paste0(opt$jobID, "_data.txt"))
 # input <- "D:\\wamp\\www\\multi_omics_own\\example\\draw_example\\ppi_example.txt"  # 输入文件
 # jobID <- "ppi_example"  # 任务ID
 
+# 按需安装物种注释包（首次运行时下载到持久卷 R_LIBS_USER，后续复用）
+local({
+    pkg_map <- c(
+        Homo_sapiens         = "org.Hs.eg.db",
+        Mus_musculus         = "org.Mm.eg.db",
+        Bos_taurus           = "org.Bt.eg.db",
+        Drosophila_melanogaster = "org.Dm.eg.db"
+    )
+    pkg <- pkg_map[opt$org]
+    if (!is.na(pkg) && !requireNamespace(pkg, quietly=TRUE)) {
+        message("Installing R package: ", pkg, " from Bioconductor...")
+        BiocManager::install(pkg, ask=FALSE, update=FALSE)
+    }
+})
+
 if (opt$org == "Homo_sapiens"){
     org <- "org.Hs.eg.db"  # 人类的包 待修改为其他物种的包
     species <- 9606

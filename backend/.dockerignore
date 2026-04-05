@@ -13,6 +13,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+# STRINGdb 缓存（~296MB）在运行时持久化到卷，不打入镜像
+code/data_analysis_plot/stringdb_cache/
 
 # 测试与本地杂项
 tests/
