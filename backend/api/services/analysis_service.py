@@ -939,8 +939,13 @@ class AnalysisService:
         if plot_type in ["chord", "cluster", "bubble"]:
             cmd_args.append(f"-e {term_num}")
 
+        # 离线策略：
+        # - 默认使用 KEGG.db（完全不联网）
+        # - 但牛（bos/bta）在 KEGG.db 离线快照里常不支持 → 走“在线一次+缓存复用”（由 R 脚本写入 AUTOMATA_STRINGDB_CACHE_DIR）
         if settings.KEGG_USE_INTERNAL_DATA:
-            cmd_args.append("--use_local_kegg")
+            org = (organism or "").strip().lower()
+            if org not in ("bos", "bta"):
+                cmd_args.append("--use_local_kegg")
 
         await self._execute_r_script(job_id, "kegg_enrichment.R", cmd_args, job_dir, "KEGG富集分析", email)
     

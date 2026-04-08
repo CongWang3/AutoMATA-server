@@ -68,6 +68,91 @@ if (Sys.getenv("KEGG_INSECURE_SSL", "") == "1") {
 library(yulab.utils)
 library(optparse)  # 命令行
 
+# --- KEGG 在线数据缓存（持久化目录优先用 /opt/stringdb_cache）---
+.automata_kegg_cache_dir <- function() {
+  base <- Sys.getenv("AUTOMATA_KEGG_CACHE_DIR", unset = "")
+  if (!nzchar(base)) base <- Sys.getenv("AUTOMATA_STRINGDB_CACHE_DIR", unset = "")
+  if (!nzchar(base)) base <- file.path(tempdir(), "automata_cache")
+  d <- file.path(base, "kegg_cache")
+  dir.create(d, showWarnings = FALSE, recursive = TRUE)
+  d
+}
+
+.read_text_cached <- function(url, cache_file, timeout_sec = 60, retries = 3) {
+  if (file.exists(cache_file) && file.info(cache_file)$size > 0) {
+    return(readLines(cache_file, warn = FALSE, encoding = "UTF-8"))
+  }
+  dir.create(dirname(cache_file), showWarnings = FALSE, recursive = TRUE)
+  old_timeout <- getOption("timeout")
+  options(timeout = max(old_timeout, timeout_sec))
+  on.exit(options(timeout = old_timeout), add = TRUE)
+  last_err <- NULL
+  for (i in seq_len(retries)) {
+    ok <- tryCatch({
+      tmp <- paste0(cache_file, ".tmp")
+      suppressWarnings(download.file(url, destfile = tmp, mode = "wb", quiet = TRUE))
+      if (!file.exists(tmp) || file.info(tmp)$size == 0) stop("downloaded empty file")
+      file.rename(tmp, cache_file)
+      TRUE
+    }, error = function(e) { last_err <<- e; FALSE })
+    if (isTRUE(ok)) break
+    Sys.sleep(min(2 ^ i, 10))
+  }
+  if (!file.exists(cache_file) || file.info(cache_file)$size == 0) {
+    stop("无法下载 KEGG 注释：", url, "；最后错误：", conditionMessage(last_err), call. = FALSE)
+  }
+  readLines(cache_file, warn = FALSE, encoding = "UTF-8")
+}
+
+.kegg_term2gene_term2name <- function(kegg_org) {
+  cache_dir <- .automata_kegg_cache_dir()
+  url_link <- sprintf("https://rest.kegg.jp/link/%s/pathway", kegg_org)
+  url_list <- sprintf("https://rest.kegg.jp/list/pathway/%s", kegg_org)
+  link_lines <- .read_text_cached(url_link, file.path(cache_dir, sprintf("link_%s_pathway.tsv", kegg_org)))
+  list_lines <- .read_text_cached(url_list, file.path(cache_dir, sprintf("list_pathway_%s.tsv", kegg_org)))
+
+  # link（实际格式）: path:bta00010 <tab> bta:112447087
+  link_lines <- link_lines[nzchar(link_lines)]
+  sp <- strsplit(link_lines, "\t", fixed = TRUE)
+  col1 <- vapply(sp, `[[`, character(1), 1)
+  col2 <- vapply(sp, `[[`, character(1), 2)
+  # 自动识别哪列是 pathway，哪列是 gene（避免不同 endpoint/缓存文件列顺序差异）
+  if (all(startsWith(col1, "path:")) && all(startsWith(col2, paste0(kegg_org, ":")))) {
+    path_raw <- col1
+    gene_raw <- col2
+  } else if (all(startsWith(col2, "path:")) && all(startsWith(col1, paste0(kegg_org, ":")))) {
+    path_raw <- col2
+    gene_raw <- col1
+  } else {
+    stop("KEGG link 文件格式无法识别（期望 'path:' 与 '", kegg_org, ":' 前缀）。", call. = FALSE)
+  }
+  gene <- sub(paste0("^", kegg_org, ":"), "", gene_raw)
+  pathway <- sub("^path:", "", path_raw)
+  term2gene <- data.frame(term = pathway, gene = gene, stringsAsFactors = FALSE)
+
+  # list: path:bta00010 <tab> Glycolysis / Gluconeogenesis - Bos taurus (cow)
+  list_lines <- list_lines[nzchar(list_lines)]
+  sp2 <- strsplit(list_lines, "\t", fixed = TRUE)
+  pid <- sub("^path:", "", vapply(sp2, `[[`, character(1), 1))
+  pname <- vapply(sp2, `[[`, character(1), 2)
+  term2name <- data.frame(term = pid, name = pname, stringsAsFactors = FALSE)
+
+  list(term2gene = term2gene, term2name = term2name)
+}
+
+.enrich_kegg_online_cached <- function(gene, kegg_org, pvalue, qvalue, adjust) {
+  message(sprintf("Reading KEGG annotation (cached) for '%s' in: %s", kegg_org, .automata_kegg_cache_dir()))
+  maps <- .kegg_term2gene_term2name(kegg_org)
+  suppressWarnings(clusterProfiler::enricher(
+    gene = gene,
+    TERM2GENE = maps$term2gene,
+    TERM2NAME = maps$term2name,
+    pvalueCutoff = pvalue,
+    qvalueCutoff = qvalue,
+    pAdjustMethod = adjust
+  ))
+}
+
 # 还未实现：选择特别感兴趣的KEGGID进行分析 报错Error in (function (cl, name, valueClass)  : 'result' is not a slot in class "data.frame"
 # 还未实现：把图片下面的GO Term标签改为KEGG Pathway
 # KEGG annotation包每半年更新一次。就用在线读取KEGG annotaion包吧。以防万一我下载了2024.10.8最新版KEGG annotaion包, 在f盘的chromeDownload文件夹下：KEGG.db_2.4.5.zip（win）,KEGG.db_2.4.5.tar.gz(package source)。
@@ -87,7 +172,7 @@ option_list <- list(
   make_option(c("-g", "--adjust"), type="character", default="BH", action="store", help="This argument is the pvalue adjustment method for KEGG enrichment analysis, one of holm, hochberg, hommel, bonferroni, BH, BY, fdr, none"),  # 一审
   # 默认 online：clusterProfiler::enrichKEGG 经 KEGGREST 访问 rest.kegg.jp 获取最新通路注释（gene↔pathway、通路名称等）
   # local：use_internal_data=TRUE，改用 Bioconductor 包 KEGG.db 内置快照，不联网；注释较旧，需先安装 KEGG.db（BiocManager::install("KEGG.db")）
-  make_option(c("--use_local_kegg"), action="store_true", default=TRUE, help="Offline: use KEGG.db instead of rest.kegg.jp (requires KEGG.db package)")
+  make_option(c("--use_local_kegg"), action="store_true", default=FALSE, help="Offline: use KEGG.db instead of rest.kegg.jp (requires KEGG.db package)")
 
 )
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw KEGG Enrichment!", add_help_option=FALSE))
@@ -185,28 +270,36 @@ gene <- table_data$entrezID
 
 # 是否使用本地 KEGG.db（不访问 rest.kegg.jp）：命令行 --use_local_kegg 或环境变量 KEGG_USE_INTERNAL_DATA=1
 use_internal_data <- isTRUE(opt$use_local_kegg) || (Sys.getenv("KEGG_USE_INTERNAL_DATA", "") == "1")
+# 按需求：牛（bta）初始化允许联网缓存一次；因此 bta 永远不走 KEGG.db 离线
+if (identical(kegg_org, "bta")) use_internal_data <- FALSE
 if (use_internal_data) {
   message("KEGG enrichment: use_internal_data=TRUE (KEGG.db local). No rest.kegg.jp access.")
   if (!requireNamespace("KEGG.db", quietly = TRUE)) {
     stop("离线 KEGG 需要 Bioconductor 包 KEGG.db。安装：BiocManager::install('KEGG.db')")
-  }
-  # 实测：KEGG.db 离线快照覆盖物种有限；牛（bta）常见会不支持。此时必须走在线 KEGGREST。
-  if (identical(kegg_org, "bta")) {
-    stop("离线 KEGG.db 不支持牛（bta）。请改用在线模式：不要传 --use_local_kegg，且不要设置 KEGG_USE_INTERNAL_DATA=1。", call. = FALSE)
   }
 } else {
   message("KEGG enrichment: use_internal_data=FALSE (online via KEGGREST → rest.kegg.jp).")
 }
 
 # 进行KEGG富集分析, 设置pvalue和qvalue阈值
-KEGG <- enrichKEGG(
-  gene = gene,
-  organism = kegg_org,
-  pvalueCutoff = pvalue,
-  qvalueCutoff = qvalue,
-  pAdjustMethod = adjust,
-  use_internal_data = use_internal_data
-)
+if (use_internal_data) {
+  KEGG <- enrichKEGG(
+    gene = gene,
+    organism = kegg_org,
+    pvalueCutoff = pvalue,
+    qvalueCutoff = qvalue,
+    pAdjustMethod = adjust,
+    use_internal_data = TRUE
+  )
+} else {
+  KEGG <- .enrich_kegg_online_cached(
+    gene = gene,
+    kegg_org = kegg_org,
+    pvalue = pvalue,
+    qvalue = qvalue,
+    adjust = adjust
+  )
+}
 # 将KEGG富集分析结果转换为data frame
 KEGG <- as.data.frame(KEGG)
 # 筛选数据
