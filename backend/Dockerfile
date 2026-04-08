@@ -75,6 +75,15 @@ RUN Rscript -e "install.packages(c(\
  && Rscript -e "options(repos = BiocManager::repositories()); remotes::install_github('Hy4m/linkET', upgrade='never', dependencies=c('Depends','Imports','LinkingTo'), build_vignettes=FALSE)" \
  && Rscript -e "stopifnot(requireNamespace('ggtree', quietly=TRUE), requireNamespace('clusterProfiler', quietly=TRUE), requireNamespace('linkET', quietly=TRUE))"
 
+# KEGG.db 已从较新的 Bioconductor 发行版移除；但离线 KEGG 仍依赖它。
+# 构建期从历史归档下载源码并编译安装，避免运行时手工装包。
+RUN set -eux; \
+    Rscript -e "if (requireNamespace('KEGG.db', quietly=TRUE)) { remove.packages('KEGG.db'); }"; \
+    wget -O /tmp/KEGG.db_2.7.1.tar.gz --timeout=300 --tries=5 --retry-connrefused \
+      "https://www.bioconductor.org/packages/2.10/data/annotation/src/contrib/KEGG.db_2.7.1.tar.gz"; \
+    Rscript -e "install.packages('/tmp/KEGG.db_2.7.1.tar.gz', repos=NULL, type='source'); library(KEGG.db); cat('KEGG.db OK\\n')"; \
+    rm -f /tmp/KEGG.db_2.7.1.tar.gz
+
 RUN Rscript -e 'for (p in c(\
   "ggpubr","ggplot2","vegan","dplyr","ggrepel","patchwork","optparse",\
   "linkET","VennDetail","tidyverse","VennDiagram","UpSetR","igraph","ggraph",\
