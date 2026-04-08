@@ -220,6 +220,8 @@ KEGG$geneID <- as.character(sapply(KEGG$geneID, function(x) {
 # 写入文件
 filename <- automata_job_file(opt$jobID, "result/KEGG_enrichment_result.txt")
 write.table(KEGG, file = filename, sep = "\t", row.names = FALSE, quote = FALSE)
+# 保存图片
+result_path <- automata_job_file(opt$jobID, "result/kegg_enrichment")
 
 # 若没有任何富集结果，后续绘图/表格构建会报错（长度不一致）。
 # 此时保留空表输出并正常退出，避免任务失败。
@@ -260,8 +262,7 @@ termNum <- ifelse(nrow(kegg) < termNum, nrow(kegg), termNum)
 # 获取genelist中的基因数量
 geneNum <- nrow(genelist)
 
-# 保存图片
-result_path <- automata_job_file(opt$jobID, "result/kegg_enrichment")
+
 
 # 和弦图chord
 # 绘制和弦图
