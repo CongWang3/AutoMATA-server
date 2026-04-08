@@ -91,7 +91,11 @@ option_list <- list(
 
 )
 opt = parse_args(OptionParser(option_list = option_list, usage = "This Script is to draw KEGG Enrichment!", add_help_option=FALSE))
-org <- opt$organism  # https://www.genome.jp/kegg/tables/br08606.html。Mus musculus, Bovine, Homo_sapiens ->"hsa", "bos", "mmu"
+org <- opt$organism  # https://www.genome.jp/kegg/tables/br08606.html。常见：Homo sapiens=hsa, Mus musculus=mmu, Bos taurus=bta
+# 兼容旧/业务侧传参：bos（bovine）→ bta（KEGG organism code）
+# org 用于选择 OrgDb（org.Bt.eg.db 等），kegg_org 用于 enrichKEGG(organism=...)
+kegg_org <- org
+if (identical(kegg_org, "bos")) kegg_org <- "bta"
 # 按需安装 KEGG 物种对应注释包（org.Hs.eg.db 已在上方加载；其余首次使用时下载到持久卷 R_LIBS_USER）
 local({
     pkg_map <- c(hsa="org.Hs.eg.db", mmu="org.Mm.eg.db", bos="org.Bt.eg.db", dme="org.Dm.eg.db")
@@ -151,8 +155,6 @@ for (gene in gene_column){
             mget(gene, org.Bt.egSYMBOL2EG)[[1]][1] 
         }else if (org == "dme"){
             mget(gene, org.Dm.egSYMBOL2EG)[[1]][1] 
-        }else if (org == "ath"){
-            mget(gene, org.At.tairSYMBOL)
         }
     }, error = function(e) {
         # 如果匹配不到，则返回NA
@@ -188,6 +190,10 @@ if (use_internal_data) {
   if (!requireNamespace("KEGG.db", quietly = TRUE)) {
     stop("离线 KEGG 需要 Bioconductor 包 KEGG.db。安装：BiocManager::install('KEGG.db')")
   }
+  # 实测：KEGG.db 离线快照覆盖物种有限；牛（bta）常见会不支持。此时必须走在线 KEGGREST。
+  if (identical(kegg_org, "bta")) {
+    stop("离线 KEGG.db 不支持牛（bta）。请改用在线模式：不要传 --use_local_kegg，且不要设置 KEGG_USE_INTERNAL_DATA=1。", call. = FALSE)
+  }
 } else {
   message("KEGG enrichment: use_internal_data=FALSE (online via KEGGREST → rest.kegg.jp).")
 }
@@ -195,7 +201,7 @@ if (use_internal_data) {
 # 进行KEGG富集分析, 设置pvalue和qvalue阈值
 KEGG <- enrichKEGG(
   gene = gene,
-  organism = org,
+  organism = kegg_org,
   pvalueCutoff = pvalue,
   qvalueCutoff = qvalue,
   pAdjustMethod = adjust,
