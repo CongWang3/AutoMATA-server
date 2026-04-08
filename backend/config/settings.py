@@ -137,8 +137,8 @@ class Settings(BaseSettings):
     # 注意：模型应用需要上传模型权重（pth/pt/pkl），因此在该白名单中补齐。
     ALLOWED_FILE_TYPES: list = ["txt", "csv", "tsv", "xlsx", "xls", "pth", "pkl"]
     
-    # KEGG 富集：True 时需 R 包 KEGG.db（Bioconductor 3.22+ 已移除该包，仅旧环境/自建库可用）。默认走在线 KEGGREST。
-    KEGG_USE_INTERNAL_DATA: bool = False
+    # KEGG 富集：True 时需 R 包 KEGG.db（Bioconductor 3.22+ 已移除该包，仅旧环境/自建库可用）。走在线 KEGGREST设置为False。
+    KEGG_USE_INTERNAL_DATA: bool = True
 
     # Redis 配置（Celery 使用）
     REDIS_URL: str = "redis://localhost:6379/0"
