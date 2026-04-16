@@ -47,14 +47,48 @@ def ensure_database_schema() -> None:
     """
     确保 ORM 定义的所有表存在（幂等，等价于缺失表时执行 CREATE TABLE）。
 
+    优化策略：
+    1. 先检查表是否存在，避免每次都执行 create_all() 触发 DDL 锁
+    2. 仅在表缺失时才执行 create_all()
+    3. 解决并发 DDL 锁问题（MySQL 8.0 + SQLAlchemy 已知问题）
+
     Docker / 生产镜像入口仅 uvicorn，不跑 init_db.py 时，用此函数在进程启动时补全
     job_files、job_logs 等表，避免功能残缺。
     """
     import api.models  # noqa: F401 — 将各模型注册到 Base.metadata
+    from sqlalchemy import inspect, text
 
     try:
+        # 先检查数据库连接
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        
+        # 检查表是否已存在
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+        
+        # 获取 ORM 模型定义的所有表名
+        expected_tables = set(Base.metadata.tables.keys())
+        
+        # 找出缺失的表
+        missing_tables = expected_tables - existing_tables
+        
+        if not missing_tables:
+            logger.info(
+                "数据库表结构已校验（%d 个表均已存在，跳过 create_all）",
+                len(existing_tables),
+            )
+            return
+        
+        # 仅在缺失表时才执行 create_all()
+        logger.info(
+            "发现 %d 个缺失的表: %s，执行 create_all...",
+            len(missing_tables),
+            ", ".join(sorted(missing_tables)),
+        )
         Base.metadata.create_all(bind=engine)
         logger.info("数据库表结构已校验（create_all，缺失表已创建）")
+        
     except Exception:
         logger.exception("数据库表结构创建失败")
         raise
