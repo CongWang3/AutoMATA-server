@@ -397,6 +397,7 @@ def _normalize_sql_line_endings(raw: bytes) -> bytes:
 def _mysql_cli_import(sql_path: Path) -> None:
     """使用 mysql 非交互导入；密码经环境变量 MYSQL_PWD 传入。"""
     import os
+    import sys
 
     env = os.environ.copy()
     env["MYSQL_PWD"] = settings.DB_PASSWORD
@@ -424,11 +425,17 @@ def _mysql_cli_import(sql_path: Path) -> None:
     payload = _normalize_sql_line_endings(raw)
     size_mb = len(payload) / (1024 * 1024)
     t0 = time.monotonic()
+    
+    # 输出进度提示到 stdout，让 CI/CD 能看到进度
+    print(f"\n[导入进度] 开始导入: {sql_path.name} ({size_mb:.1f} MB)", flush=True)
+    print(f"[导入进度] 预计耗时: {size_mb/10:.1f}~{size_mb/5:.1f} 分钟（取决于表大小和服务器性能）", flush=True)
+    
     logger.info(
         "mysql 导入开始: %s（约 %.1f MB，大表可能需数分钟）",
         sql_path.name,
         size_mb,
     )
+    
     # 勿用 BytesIO 作 stdin：部分环境下 fileno() 不可用会导致 Popen 失败
     subprocess.run(
         cmd,
@@ -438,10 +445,14 @@ def _mysql_cli_import(sql_path: Path) -> None:
         capture_output=True,
         timeout=86400,
     )
+    
+    elapsed = time.monotonic() - t0
+    print(f"[导入进度] 完成: {sql_path.name}（耗时 {elapsed:.1f} 秒）", flush=True)
+    
     logger.info(
         "mysql 导入完成: %s（耗时 %.1f 秒）",
         sql_path.name,
-        time.monotonic() - t0,
+        elapsed,
     )
 
 
@@ -491,6 +502,18 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
 
         logger.info("参考 SQL 目录: %s（空表将依次导入，日志会显示每文件耗时）", base)
 
+        # 统计需要导入的表数量
+        tables_to_import = [
+            table for table in REFERENCE_ANNOTATION_TABLES
+            if _table_row_count(engine, table) == 0 and _find_sql_file(base, table)
+        ]
+        total_tables = len(tables_to_import)
+        current_index = 0
+        
+        if total_tables > 0:
+            print(f"\n[整体进度] 发现 {total_tables} 个参考数据表需要导入", flush=True)
+            logger.info("需要导入的表数量: %d", total_tables)
+
         for table in REFERENCE_ANNOTATION_TABLES:
             n = _table_row_count(engine, table)
             if n > 0:
@@ -505,12 +528,19 @@ def ensure_reference_annotation_tables(engine: Engine) -> None:
                     base,
                 )
                 continue
+            
+            current_index += 1
+            print(f"\n{'='*60}", flush=True)
+            print(f"[整体进度] 正在导入第 {current_index}/{total_tables} 个表: {table}", flush=True)
+            print(f"{'='*60}\n", flush=True)
+            
             try:
                 logger.info("导入参考数据: %s <- %s", table, sql_file.name)
                 _sync_reference_columns(engine, table)
                 _mysql_cli_import(sql_file)
                 after = _table_row_count(engine, table)
                 logger.info("表 `%s` 导入后行数: %s", table, after)
+                print(f"[整体进度] 表 {table} 导入完成，共 {after} 行\n", flush=True)
             except FileNotFoundError:
                 logger.error(
                     "未找到 mysql 客户端，无法导入 %s。请在镜像中安装 default-mysql-client，"

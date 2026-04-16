@@ -704,10 +704,9 @@ def create_app() -> web.Application:
 
 
 if __name__ == '__main__':
-    from config.database import ensure_database_schema
-
-    ensure_database_schema()
-
+    # 下载服务器不需要执行 DDL，只需要连接数据库读取下载记录
+    # 表结构由 backend 容器负责创建和维护
+    
     app = create_app()
 
     logger.info("=" * 50)
