@@ -283,7 +283,7 @@ if (type == "chord"){
                 # border.size = 0.1,  # 基因节点边框大小
                 process.label = 10  # 处理标签大小？
                 ) 
-        for(dev in c("png", "jpeg", "tiff", "png", "bmp", "svg")){  # "pdf", "jpeg", "tiff", "png", "bmp", "svg"
+        for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){  # "pdf", "jpeg", "tiff", "png", "bmp", "svg"
             ggsave(paste(result_path, dev, sep = "."), gochord, device = dev, width = 15, height = 15)
         }
     }else{
