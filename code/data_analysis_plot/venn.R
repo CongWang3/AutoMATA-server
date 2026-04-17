@@ -57,101 +57,94 @@ type <- opt$type # 可选"venn", "vennpie", 这俩不行！"upset", "barplot"
 # 读取数据
 gene_dataset <- read.table(opt$input, header = TRUE, sep = "\t", check.names = FALSE)
 
-# 得到列数, 循环遍历, 删除空数据""
+# 得到列数, 循环遍历, 删除空数据（"" / NA / 纯空白）
 final_list <- list()
-for (i in 1:ncol(gene_dataset)){
-    print(i)
-    gene_list <- gene_dataset[,i]
-    # col <- paste("gene", i, sep="")
-    # 删除每一列的空数据"".循环每一个字符串元素，查看是否为空值
-    new_list <- character()#创建一个空字符串
-    for (i in (1:length(gene_list))){
-        if (gene_list[i] != ""){
-            append_gene <- as.character(gene_list[i])#如果不是空值，所添加的元素
-            new_list <- append(new_list,append_gene)#在新字符串中逐个添加元素
-        }
+for (col_idx in 1:ncol(gene_dataset)){
+    print(col_idx)
+    gene_list <- gene_dataset[, col_idx]
+    new_list <- character()
+    for (row_idx in 1:length(gene_list)){
+        raw_val <- gene_list[row_idx]
+        if (is.na(raw_val)) next
+        gene_name <- trimws(as.character(raw_val))
+        if (!nzchar(gene_name)) next
+        new_list <- append(new_list, gene_name)
     }
     print(new_list)
-    final_list <- append(final_list,list(new_list))#将每一列的元素添加到最终的列表中
+    final_list <- append(final_list, list(new_list))
 }
 
 # 画出Venn图
 ven <- venndetail(final_list)
 
-# if (type!="barplot"){
-#     if (dev=="pdf"){
-#         pdf(paste(result_path,".pdf",sep=""), width = 8, height = 8)
-#     }else if (dev=="jpeg") {
-#         jpeg(paste(result_path,".jpeg",sep=""), width = 8, height = 8)
-#     }else if (dev=="tiff") {
-#         tiff(paste(result_path,".tiff",sep=""), width = 8, height = 8)
-#     }else if (dev=="png") {
-#         png(paste(result_path,".png",sep=""), width = 800, height = 800)
-#     }else if (dev=="bmp") {
-#         bmp(paste(result_path,".bmp",sep=""), width = 8, height = 8)
-#     }else if (dev=="svg") {
-#         svg(paste(result_path,".svg",sep=""), width = 8, height = 8)
-#     }
-# }
 
 
 result_path <- automata_job_file(opt$jobID, "result/venn")
 
+save_base_plot <- function(dev, draw_fn, width = 8, height = 8, dpi = 100) {
+    out_file <- paste(result_path, dev, sep = ".")
+    tryCatch({
+        if (dev == "pdf") {
+            pdf(out_file, width = width, height = height, bg = "white")
+        } else if (dev == "jpeg") {
+            jpeg(out_file, width = width * dpi, height = height * dpi, res = dpi, bg = "white")
+        } else if (dev == "tiff") {
+            tiff(out_file, width = width * dpi, height = height * dpi, res = dpi, bg = "white")
+        } else if (dev == "png") {
+            png(out_file, width = width * dpi, height = height * dpi, res = dpi, bg = "white")
+        } else if (dev == "bmp") {
+            bmp(out_file, width = width * dpi, height = height * dpi, res = dpi, bg = "white")
+        } else if (dev == "svg") {
+            svg(out_file, width = width, height = height, bg = "white")
+        } else {
+            stop(paste("unsupported device:", dev))
+        }
+        draw_fn()
+        dev.off()
+        message("saved: ", out_file)
+        TRUE
+    }, error = function(e) {
+        # 单个格式失败不影响其它格式，避免任务整体失败
+        if (dev.cur() > 1) {
+            try(dev.off(), silent = TRUE)
+        }
+        warning(paste("save failed for", dev, ":", conditionMessage(e)))
+        FALSE
+    })
+}
+
 if (type=="venn"){
     # 传统venn图
-    pdf(paste(result_path, ".pdf",sep=""), width = 8, height = 8)
-    plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5,cex=3)
-    dev.off()
-    
-    jpeg(paste(result_path, ".jpeg",sep=""), width = 800, height = 800)
-    plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5,cex=3)
-    dev.off()
-    
-    tiff(paste(result_path,".tiff",sep=""), width = 800, height = 800)
-    plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5,cex=3)
-    dev.off()
-    
-    png(paste(result_path,".png",sep=""), width = 800, height = 800)
-    plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5,cex=3)
-    dev.off()
-    
-    bmp(paste(result_path,".bmp",sep=""), width = 800, height = 800)
-    plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5,cex=3)
-    dev.off()
-    
-    svg(paste(result_path,".svg",sep=""), width = 8, height = 8)
-    plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5,cex=3)
-    dev.off()
+    draw_venn <- function() {
+        plot(ven, type="venn", col="black", cat.cex=ncol(gene_dataset), alpha=0.5, cex=3)
+    }
+    for (dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")) {
+        save_base_plot(dev, draw_venn, width = 8, height = 8)
+    }
 }else if (type=="vennpie"){
     # Venn饼图
-    pdf(paste(result_path,".pdf",sep=""), width = 8, height = 8)
-    plot(ven, type="vennpie")
-    dev.off()  # 关闭设备以保存文件
-
-    jpeg(paste(result_path,".jpeg",sep=""), width = 800, height = 800)
-    plot(ven, type="vennpie")
-    dev.off()  # 关闭设备以保存文件
-
-    tiff(paste(result_path,".tiff",sep=""), width = 800, height = 800)
-    plot(ven, type="vennpie")
-    dev.off()  # 关闭设备以保存文件
-
-    png(paste(result_path,".png",sep=""), width = 800, height = 800)
-    plot(ven, type="vennpie")
-    dev.off()  # 关闭设备以保存文件
-
-    bmp(paste(result_path,".bmp",sep=""), width = 800, height = 800)
-    plot(ven, type="vennpie")
-    dev.off()  # 关闭设备以保存文件
-
-    svg(paste(result_path,".svg",sep=""), width = 8, height = 8)
-    plot(ven, type="vennpie")
-    dev.off()  # 关闭设备以保存文件
+    draw_vennpie <- function() {
+        plot(ven, type="vennpie")
+    }
+    for (dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")) {
+        save_base_plot(dev, draw_vennpie, width = 8, height = 8)
+    }
 }else if (type=="barplot") {
     # barplot
     p1 <- dplot(ven, order = TRUE, textsize = 4)
     for(dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")){
-        ggsave(paste(result_path, dev, sep = "."), p1, device = dev, width = 10, height = 8)
+        tryCatch({
+            ggsave(
+                paste(result_path, dev, sep = "."),
+                p1,
+                device = dev,
+                width = 10,
+                height = 8,
+                bg = "white"
+            )
+        }, error = function(e) {
+            warning(paste("save failed for", dev, ":", conditionMessage(e)))
+        })
 
     }
     # ggsave(paste(".barplot",dev,sep="."), width = 10, height = 8, device = dev)
