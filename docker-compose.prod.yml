@@ -56,12 +56,12 @@ services:
       - ./data/stringdb_cache:/opt/stringdb_cache
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:-18005}:8005"
-    # 启动时先初始化 MySQL 用户，再启动 uvicorn
-    command: >
-      bash -c "
-      python init_mysql_user.py &&
-      uvicorn main:app --host 0.0.0.0 --port 8005
-      "
+    # 直接使用 Dockerfile 默认 CMD（init_db.py 由 CI 部署流程执行）
+    # command: >
+    #   bash -c "
+    #   python init_mysql_user.py &&
+    #   uvicorn main:app --host 0.0.0.0 --port 8005
+    #   "
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health', timeout=5)"]
       interval: 30s
