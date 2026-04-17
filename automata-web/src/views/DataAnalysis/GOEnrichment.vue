@@ -1,6 +1,6 @@
 <template>
   <AnalysisForm
-    title="GO Enrichment"
+    title="GO Enrichment Analysis"
     subtitle="GO Enrichment Analysis"
     :fields="analysisFields"
     :on-submit="handleSubmit"
