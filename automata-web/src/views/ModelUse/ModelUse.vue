@@ -211,13 +211,29 @@
                     {{ isSubmitting ? 'Predicting...' : 'Submit' }}
                   </button>
 
-                  <button 
+                  <!-- <el-button 
+                    type="primary" 
+                    @click="submitForm"
+                    :loading="submitting"
+                    size="large"
+                    class="submit-btn"
+                  >
+                    {{ submitting ? 'Submitting…' : 'Submit' }}
+                  </el-button> -->
+
+                  <!-- <button 
                     type="button" 
                     class="btn btn-secondary px-4"
                     @click="resetForm"
                   >
                     Reset
-                  </button>
+                  </button> -->
+                  <el-button 
+                    class="btn btn-secondary px-4"
+                    @click="resetForm"
+                  >
+                    Reset
+                  </el-button>
 
                 </div>
               </form>
