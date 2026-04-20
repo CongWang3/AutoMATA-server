@@ -440,14 +440,25 @@
 
                                 <!-- 提交按钮 -->
                                 <div class="submission-section">
-                                    <div class="d-grid gap-2">
-                                        <button type="submit" class="btn btn-primary btn-lg"
+                                    <!-- <div class="d-grid gap-2"> -->
+                                    <div class="d-flex justify-content-center gap-3">
+                                        <!-- <button type="submit" class="btn btn-primary btn-lg"
                                             :disabled="isSubmitting || !isFormValid">
                                             <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2"
                                                 role="status"></span>
                                             {{ isSubmitting ? 'Submitting...' : 'Submit' }}
                                         </button>
-                                        <button type="button" class="btn btn-outline-secondary" @click="resetForm">Reset</button>
+                                        <button type="button" class="btn btn-outline-secondary" @click="resetForm">Reset</button> -->
+                                        <el-button
+                                            native-type="submit"
+                                            type="primary"
+                                            :loading="isSubmitting"
+                                            :disabled="isSubmitting || !isFormValid"
+                                            size="large"
+                                        >
+                                            {{ isSubmitting ? 'Submitting...' : 'Submit' }}
+                                        </el-button>
+                                        <el-button @click="resetForm">Reset</el-button>
                                     </div>
                                 </div>
                             </form>

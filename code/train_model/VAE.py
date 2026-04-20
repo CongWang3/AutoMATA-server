@@ -27,6 +27,25 @@ sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 import warnings
 warnings.filterwarnings('ignore')
 
+
+def _safe_tsne_2d(latent_array, max_samples=1000, random_state=42):
+    """
+    Robust 2D projection for visualization.
+    - Use t-SNE only when n_samples and dimensions are sufficient.
+    - Adapt perplexity for small sample sizes to avoid sklearn ValueError.
+    """
+    n_vis = min(max_samples, latent_array.shape[0])
+    latent_vis = latent_array[:n_vis]
+    if latent_vis.shape[1] > 2 and n_vis >= 3:
+        tsne_perplexity = min(30.0, max(1.0, (n_vis - 1) / 3))
+        tsne = TSNE(n_components=2, random_state=random_state, perplexity=tsne_perplexity)
+        return tsne.fit_transform(latent_vis), True
+    if latent_vis.shape[1] >= 2:
+        return latent_vis[:, :2], False
+    if latent_vis.shape[1] == 1:
+        return np.column_stack([latent_vis[:, 0], np.zeros(n_vis)]), False
+    return np.zeros((n_vis, 2)), False
+
 class FocalLoss(nn.Module):
     """
     Focal Loss implementation
@@ -661,12 +680,13 @@ def visualize_results(metrics, save_path=None):
     ax3 = axes[1, 0]
     latent_mu = metrics['reconstruction']['latent_mu']
     
-    # 如果潜在维度 > 2，使用t-SNE降维
-    if latent_mu.shape[1] > 2:
-        tsne = TSNE(n_components=2, random_state=42)
-        latent_2d = tsne.fit_transform(latent_mu[:1000])  # 只使用前1000个样本
-    else:
-        latent_2d = latent_mu[:1000]
+    # # 如果潜在维度 > 2，使用t-SNE降维
+    # if latent_mu.shape[1] > 2:
+    #     tsne = TSNE(n_components=2, random_state=42)
+    #     latent_2d = tsne.fit_transform(latent_mu[:1000])  # 只使用前1000个样本
+    # else:
+    #     latent_2d = latent_mu[:1000]
+    latent_2d, used_tsne = _safe_tsne_2d(latent_mu, max_samples=1000, random_state=42)
     
     # 处理KL散度数据用于颜色映射
     kl_div_for_plot = metrics['latent_space']['kl_divergence_per_sample'][:1000]
@@ -682,8 +702,10 @@ def visualize_results(metrics, save_path=None):
     scatter = ax3.scatter(latent_2d[:, 0], latent_2d[:, 1], 
                         c=kl_div_clipped, 
                         cmap='viridis', alpha=0.6)
-    ax3.set_xlabel('t-SNE 1')
-    ax3.set_ylabel('t-SNE 2')
+    # ax3.set_xlabel('t-SNE 1')
+    # ax3.set_ylabel('t-SNE 2')
+    ax3.set_xlabel('t-SNE 1' if used_tsne else 'Latent dim 1')
+    ax3.set_ylabel('t-SNE 2' if used_tsne else 'Latent dim 2')
     ax3.set_title('Latent space visualization')
     plt.colorbar(scatter, ax=ax3, label='KL divergence')
     
@@ -1313,16 +1335,19 @@ def visualize_predictions(prediction_results, save_path=None):
     
     # 3. Latent space visualization (t-SNE)
     ax3 = axes[1, 0]
-    if latent_mu.shape[1] > 2:
-        tsne = TSNE(n_components=2, random_state=42)
-        latent_2d = tsne.fit_transform(latent_mu[:1000])
-    else:
-        latent_2d = latent_mu[:1000]
+    # if latent_mu.shape[1] > 2:
+    #     tsne = TSNE(n_components=2, random_state=42)
+    #     latent_2d = tsne.fit_transform(latent_mu[:1000])
+    # else:
+    #     latent_2d = latent_mu[:1000]
+    latent_2d, used_tsne = _safe_tsne_2d(latent_mu, max_samples=1000, random_state=42)
     
     scatter = ax3.scatter(latent_2d[:, 0], latent_2d[:, 1], 
                         c=np.arange(len(latent_2d)), cmap='viridis', alpha=0.6)
-    ax3.set_xlabel('t-SNE 1')
-    ax3.set_ylabel('t-SNE 2')
+    # ax3.set_xlabel('t-SNE 1')
+    # ax3.set_ylabel('t-SNE 2')
+    ax3.set_xlabel('t-SNE 1' if used_tsne else 'Latent dim 1')
+    ax3.set_ylabel('t-SNE 2' if used_tsne else 'Latent dim 2')
     ax3.set_title('Latent space visualization')
     plt.colorbar(scatter, ax=ax3, label='Sample index')
     

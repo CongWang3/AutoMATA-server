@@ -307,8 +307,9 @@ class CombinedClusteringLoss(nn.Module):
         self.reduction = reduction
         
         # Initialize various loss functions (center loss 跟随当前模块所在设备)
-        current_device = next(self.parameters()).device
-        self.center_loss = CenterLoss(num_classes=10, feat_dim=128, use_gpu=(current_device.type == "cuda"), device=current_device)
+        # current_device = next(self.parameters()).device
+        # self.center_loss = CenterLoss(num_classes=10, feat_dim=128, use_gpu=(current_device.type == "cuda"), device=current_device)
+        self.center_loss = None
         self.contrastive_loss = ContrastiveClusteringLoss()
         self.entropy_loss = EntropyLoss()
         self.compactness_loss = CompactnessLoss()
@@ -338,6 +339,25 @@ class CombinedClusteringLoss(nn.Module):
             cluster_loss = cluster_loss
         else:
             cluster_loss = cluster_loss / x.size(0)
+
+        # Center loss: lazily (re)initialize to match runtime feature dim / cluster count / device.
+        feature_dim = int(features.size(1))
+        num_classes = int(max(len(cluster_centers), int(cluster_assignments.max().item()) + 1))
+        target_device = features.device
+        need_init = (
+            self.center_loss is None
+            or self.center_loss.feat_dim != feature_dim
+            or self.center_loss.num_classes != num_classes
+            or self.center_loss.centers.device != target_device
+        )
+        if need_init:
+            self.center_loss = CenterLoss(
+                num_classes=num_classes,
+                feat_dim=feature_dim,
+                use_gpu=(target_device.type == "cuda"),
+                reduction=self.reduction,
+                device=target_device,
+            )
         
         # Center loss
         center_loss = self.center_loss(features, cluster_assignments)
@@ -723,18 +743,43 @@ def visualize_results(metrics, save_path=None):
     assignments = metrics['clustering']['assignments']
     
     # If the latent dimension > 2, use t-SNE to reduce dimensionality
-    if latent.shape[1] > 2:
-        tsne = TSNE(n_components=2, random_state=42)
-        latent_2d = tsne.fit_transform(latent[:1000])  # Only use the first 1000 samples
-        assignments_2d = assignments[:1000]
+    # if latent.shape[1] > 2:
+    #     tsne = TSNE(n_components=2, random_state=42)
+    #     latent_2d = tsne.fit_transform(latent[:1000])  # Only use the first 1000 samples
+    #     assignments_2d = assignments[:1000]
+    # else:
+    #     latent_2d = latent[:1000]
+    #     assignments_2d = assignments[:1000]
+
+    # If the latent dimension > 2, use t-SNE to reduce dimensionality.
+    # t-SNE requires perplexity < n_samples, so we adapt perplexity for small batches.
+    n_vis = min(1000, latent.shape[0])
+    latent_vis = latent[:n_vis]
+    assignments_2d = assignments[:n_vis]
+    if latent.shape[1] > 2 and n_vis >= 3:
+        tsne_perplexity = min(30.0, max(1.0, (n_vis - 1) / 3))
+        tsne = TSNE(n_components=2, random_state=42, perplexity=tsne_perplexity)
+        latent_2d = tsne.fit_transform(latent_vis)
+        x_label = 't-SNE 1'
+        y_label = 't-SNE 2'
     else:
-        latent_2d = latent[:1000]
-        assignments_2d = assignments[:1000]
+        # Fallback for low-dimensional latent vectors or extremely small samples.
+        if latent_vis.shape[1] >= 2:
+            latent_2d = latent_vis[:, :2]
+        elif latent_vis.shape[1] == 1:
+            latent_2d = np.column_stack([latent_vis[:, 0], np.zeros(n_vis)])
+        else:
+            latent_2d = np.zeros((n_vis, 2))
+        x_label = 'Latent dim 1'
+        y_label = 'Latent dim 2'
     
     scatter = ax3.scatter(latent_2d[:, 0], latent_2d[:, 1], 
                         c=assignments_2d, cmap='tab10', alpha=0.6)
-    ax3.set_xlabel('t-SNE 1')
-    ax3.set_ylabel('t-SNE 2')
+    ax3.set_xlabel(x_label)
+    ax3.set_ylabel(y_label)
+
+    # ax3.set_xlabel('t-SNE 1')
+    # ax3.set_ylabel('t-SNE 2')
     ax3.set_title('Clustering result visualization')
     plt.colorbar(scatter, ax=ax3, label='Clustering labels')
     

@@ -48,6 +48,17 @@ import pickle
 
 from DataProcess import load_data
 
+def load_checkpoint_compat(path, map_location=None):
+    """
+    兼容 PyTorch 2.6+：
+    torch.load 默认 weights_only=True，会导致旧 checkpoint 反序列化失败。
+    这里显式使用 weights_only=False（仅用于受信任的本地训练产物）。
+    """
+    try:
+        return torch.load(path, map_location=map_location, weights_only=False)
+    except TypeError:
+        # 兼容旧版 PyTorch（无 weights_only 参数）
+        return torch.load(path, map_location=map_location)
 
 
 def test(dataloader, model):
@@ -597,7 +608,8 @@ if __name__ == "__main__":
     savename = str(path_jobs() / jobID / "model.pth")
     if (model_type == 'AutoEncoder'):
         savename = str(path_jobs() / jobID / "model_autoencoder.pth")
-        checkpoint = torch.load(savename)
+        # checkpoint = torch.load(savename)
+        checkpoint = load_checkpoint_compat(savename, map_location=device)
         input_dim = checkpoint['input_dim']
         hidden_size_1 = checkpoint['hidden_size_1']
         hidden_size_2 = checkpoint['hidden_size_2']
@@ -608,7 +620,8 @@ if __name__ == "__main__":
         encoder.load_state_dict(checkpoint['model_state_dict'])
 
         savename_cls = str(path_jobs() / jobID / "model_cls.pth")
-        checkpoint_cls = torch.load(savename_cls)
+        # checkpoint_cls = torch.load(savename_cls)
+        checkpoint_cls = load_checkpoint_compat(savename_cls, map_location=device)
         cls_hidden_size = checkpoint_cls['cls_hidden_size']
         output_size = checkpoint_cls['output_size']
         loss_function = checkpoint_cls['loss_function']
@@ -620,7 +633,8 @@ if __name__ == "__main__":
         classifier.load_state_dict(checkpoint_cls['model_state_dict'])
 
     elif (model_type == 'CNN'):
-        checkpoint = torch.load(savename)
+        # checkpoint = torch.load(savename)
+        checkpoint = load_checkpoint_compat(savename, map_location=device)
         input_size = checkpoint['input_size']
         loss_function = checkpoint['loss_function']
         optimizer_function = checkpoint['optimizer_function']
@@ -638,7 +652,8 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'LSTM'):
-        checkpoint = torch.load(savename)
+        # checkpoint = torch.load(savename)
+        checkpoint = load_checkpoint_compat(savename, map_location=device)
         loss_function = checkpoint['loss_function']
         optimizer_function = checkpoint['optimizer_function']
         output_size = checkpoint['output_size']
@@ -653,7 +668,8 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'MLP'):
-        checkpoint = torch.load(savename)
+        # checkpoint = torch.load(savename)
+        checkpoint = load_checkpoint_compat(savename, map_location=device)
         loss_function = checkpoint['loss_function']
         optimizer_function = checkpoint['optimizer_function']
         output_size = checkpoint['output_size']
@@ -668,7 +684,8 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'RBFN'):
-        checkpoint = torch.load(savename)
+        # checkpoint = torch.load(savename)
+        checkpoint = load_checkpoint_compat(savename, map_location=device)
         loss_function = checkpoint['loss_function']
         optimizer_function = checkpoint['optimizer_function']
         out_dim = checkpoint['out_dim']
@@ -684,7 +701,8 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'RNN'):
-        checkpoint = torch.load(savename)
+        # checkpoint = torch.load(savename)
+        checkpoint = load_checkpoint_compat(savename, map_location=device)
         loss_function = checkpoint['loss_function']
         optimizer_function = checkpoint['optimizer_function']
         output_size = checkpoint['output_size']
@@ -699,7 +717,8 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint['model_state_dict'])
 
     elif (model_type == 'Transformer'):
-        checkpoint = torch.load(savename)
+        # checkpoint = torch.load(savename)
+        checkpoint = load_checkpoint_compat(savename, map_location=device)
         loss_function = checkpoint['loss_function']
         optimizer_function = checkpoint['optimizer_function']
         output_size = checkpoint['output_size']

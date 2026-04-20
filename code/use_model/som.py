@@ -120,7 +120,17 @@ def classify(som,data,winmap):
             result.append(default_class)
     return result
 
-
+def load_checkpoint_compat(path, map_location=None):
+    """
+    兼容 PyTorch 2.6+：
+    torch.load 默认 weights_only=True，会导致旧 checkpoint 反序列化失败。
+    这里显式使用 weights_only=False（仅用于受信任的本地训练产物）。
+    """
+    try:
+        return torch.load(path, map_location=map_location, weights_only=False)
+    except TypeError:
+        # 兼容旧版 PyTorch（无 weights_only 参数）
+        return torch.load(path, map_location=map_location)
 
 if __name__ == '__main__':
     
@@ -143,7 +153,8 @@ if __name__ == '__main__':
     #     som = pickle.load(infile)
     # with open(savename_2, 'rb') as infile:
     #     winmap = pickle.load(infile)
-    checkpoint = torch.load(savename, map_location="cpu")
+    # checkpoint = torch.load(savename, map_location="cpu")
+    checkpoint = load_checkpoint_compat(savename, map_location="cpu")
     som = checkpoint['som']
     winmap = checkpoint['winmap']
     feature_indices = checkpoint.get('feature_indices', None)
