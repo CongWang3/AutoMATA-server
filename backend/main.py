@@ -216,7 +216,9 @@ async def health_check():
 # ------------------ example 目录直下下载 ------------------
 # 前端需要把 /xp/www/AutoMATA/example 里的 zip/txt 等文件直接下载给用户，
 # 因此在后端提供一个受控的文件下载接口。
-EXAMPLE_DIR = (Path(__file__).resolve().parent.parent / "example").resolve()
+# EXAMPLE_DIR = (Path(__file__).resolve().parent.parent / "example").resolve()
+EXAMPLE_DIR = (Path(__file__).resolve().parent / "example").resolve()  # 楼上服务器测试不可下载示例文件 .parent.parent 改为 .parent即可下载
+
 
 @app.get("/example/{file_path:path}")
 def download_example_file(file_path: str):

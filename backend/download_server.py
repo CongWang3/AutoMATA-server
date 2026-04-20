@@ -61,7 +61,9 @@ async def _throttle_after_chunk(chunk_len: int) -> None:
 
 
 # 示例文件根目录（用于 /example/{file_path} 下载）
-EXAMPLE_DIR = (Path(__file__).resolve().parent.parent / "example").resolve()
+# EXAMPLE_DIR = (Path(__file__).resolve().parent.parent / "example").resolve()
+EXAMPLE_DIR = (Path(__file__).resolve().parent / "example").resolve()  # 楼上服务器测试不可下载示例文件 .parent.parent 改为 .parent即可下载
+
 
 
 async def handle_example_file(request: web.Request) -> web.FileResponse:
