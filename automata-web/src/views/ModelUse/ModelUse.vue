@@ -198,7 +198,18 @@
                 <!-- 提交按钮 -->
                 <div class="d-flex justify-content-center gap-3 mt-4">
                   
-                  <button 
+                  <el-button
+                    native-type="submit"
+                    type="primary"
+                    :loading="isSubmitting"
+                    :disabled="!isFormValid || isSubmitting"
+                    size="large"
+                    class="px-5"
+                  >
+                    {{ isSubmitting ? 'Predicting...' : 'Submit' }}
+                  </el-button>
+                  
+                  <!-- <button 
                     type="submit" 
                     class="btn btn-primary px-5"
                     :disabled="!isFormValid || isSubmitting"
@@ -209,7 +220,7 @@
                       role="status"
                     ></span>
                     {{ isSubmitting ? 'Predicting...' : 'Submit' }}
-                  </button>
+                  </button> -->
 
                   <!-- <el-button 
                     type="primary" 
