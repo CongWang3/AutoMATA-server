@@ -281,16 +281,16 @@ const downloadExample = (type: 'pheno' | 'omics1' | 'omics2' | 'omics3') => {
   let relativePath = ''
   switch (type) {
     case 'pheno':
-      relativePath = 'train_example/jobID_pheno.txt'
+      relativePath = 'jobID_pheno.txt'
       break
     case 'omics1':
-      relativePath = 'train_example/jobID_omics_1.txt'
+      relativePath = 'jobID_omics_1.txt'
       break
     case 'omics2':
-      relativePath = 'train_example/jobID_omics_2.txt'
+      relativePath = 'jobID_omics_2.txt'
       break
     case 'omics3':
-      relativePath = 'train_example/jobID_omics_3.txt'
+      relativePath = 'jobID_omics_3.txt'
       break
   }
 
