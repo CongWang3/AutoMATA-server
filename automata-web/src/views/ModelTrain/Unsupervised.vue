@@ -248,12 +248,25 @@
                 </div>
 
                 <div class="submission-section">
-                  <div class="d-grid gap-2">
+                  <!-- <div class="d-grid gap-2">
                     <button type="submit" class="btn btn-primary btn-lg" :disabled="isSubmitting || !isFormValid">
                       <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2" role="status"></span>
                       {{ isSubmitting ? 'Submitting...' : 'Submit' }}
                     </button>
                     <button type="button" class="btn btn-outline-secondary" @click="resetForm">Reset</button>
+                  </div> -->
+                  <div class="d-flex justify-content-center gap-3">
+                    <el-button
+                        native-type="submit"
+                        type="primary"
+                        :loading="isSubmitting"
+                        :disabled="isSubmitting || !isFormValid"
+                        size="large"
+                        style="width: 150px;"
+                    >
+                        {{ isSubmitting ? 'Submitting...' : 'Submit' }}
+                    </el-button>
+                    <el-button @click="resetForm">Reset</el-button>
                   </div>
                 </div>
               </form>
