@@ -106,8 +106,8 @@ RUN pip list --format=freeze | grep -iE '^(nvidia-|triton)==' | cut -d= -f1 | xa
 # CI 已将仓库根目录 code/ 拷入 backend/code/，与本行一并进镜像；仅构建 backend 且无 code/ 时本镜像不含分析脚本。
 COPY . /app
 
-# Docker 启动脚本需要执行权限
-RUN chmod +x /app/start_docker.sh
+# Docker 启动脚本需要执行权限  误提交这行代码 start_docker.sh 到仓库
+# RUN chmod +x /app/start_docker.sh  # 报错
 
 EXPOSE 8005
 
