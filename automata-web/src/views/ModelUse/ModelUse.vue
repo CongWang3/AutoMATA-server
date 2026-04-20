@@ -205,6 +205,7 @@
                     :disabled="!isFormValid || isSubmitting"
                     size="large"
                     class="px-5"
+                    style="width: 150px;"
                   >
                     {{ isSubmitting ? 'Predicting...' : 'Submit' }}
                   </el-button>

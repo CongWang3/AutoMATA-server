@@ -455,6 +455,7 @@
                                             :loading="isSubmitting"
                                             :disabled="isSubmitting || !isFormValid"
                                             size="large"
+                                            style="width: 150px;"
                                         >
                                             {{ isSubmitting ? 'Submitting...' : 'Submit' }}
                                         </el-button>
