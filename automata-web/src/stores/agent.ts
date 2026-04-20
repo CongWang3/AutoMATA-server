@@ -23,7 +23,7 @@ export interface ProviderOption {
 
 // 可用的 AI 提供商
 export const PROVIDERS: ProviderOption[] = [
-  { value: 'openai', label: 'OpenAI', description: 'GPT-4o' },
+  // { value: 'openai', label: 'OpenAI', description: 'GPT-4o' },
   { value: 'qwen', label: '通义千问', description: 'Qwen' },
   { value: 'deepseek', label: 'DeepSeek', description: 'DeepSeek' }
 ]
@@ -41,7 +41,8 @@ export const useAgentStore = defineStore('agent', () => {
   const isOpen = ref(false)
   const isConnected = ref(false)
   const isSending = ref(false)
-  const currentProvider = ref('openai')
+  // const currentProvider = ref('openai')
+  const currentProvider = ref('deepseek')
   const error = ref<string | null>(null)
   
   // 当前正在生成的 assistant 消息 ID（用于流式更新）
