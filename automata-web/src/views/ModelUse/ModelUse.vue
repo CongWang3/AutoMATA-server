@@ -776,11 +776,22 @@ watch(
   color: #444444;
 }
 
-.btn-primary:hover {
+.btn-primary {
   background-color: #409eff;
   border-color: #409eff;
+  color: #fff;
+  font-size: 14px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+.btn-primary:hover {
+  background-color: #66b1ff;
+  border-color: #66b1ff;
+  color: #fff;
+  font-size: 14px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 .btn-outline-secondary {
