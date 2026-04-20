@@ -215,14 +215,15 @@ if(plot_type == "linear"){
     cir <- TRUE
 }
 
+plot_font_family <- "sans"
 p1 <- ggraph(net, layout = plot_type, circular = cir)+
   geom_edge_arc(aes(edge_width=width), color = "lightblue", show.legend = F)+
   geom_node_point(aes(size=size), color="orange", alpha=0.7)+
-  geom_node_text(aes(filter=deg>show_num, label=name), size = 1.5, repel = F)+
+  geom_node_text(aes(filter=deg>show_num, label=name), size = 1.5, repel = F, family = plot_font_family)+
   scale_edge_width(range = c(0.2,1))+
   scale_size_continuous(range = c(1,10) )+
   guides(size=F)+
-  theme_graph()
+  theme_graph(base_family = plot_font_family)
 
 
 # 保存图片
