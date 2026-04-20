@@ -57,8 +57,8 @@ services:
       - ./data/stringdb_cache:/opt/stringdb_cache
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:-18005}:8005"
-    # 使用 Docker 启动脚本：自动检测 MySQL 用户（幂等），然后启动 uvicorn
-    command: ["bash", "/app/start_docker.sh"]
+    # # 使用 Docker 启动脚本：自动检测 MySQL 用户（幂等），然后启动 uvicorn
+    # command: ["bash", "/app/start_docker.sh"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health', timeout=5)"]
       interval: 30s
