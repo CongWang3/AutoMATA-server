@@ -782,8 +782,8 @@ watch(
   color: #fff;
   font-size: 14px;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+  /* transform: translateY(-1px); */
+  /* box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3); */
 }
 
 .btn-primary:hover {
