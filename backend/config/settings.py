@@ -162,6 +162,7 @@ class Settings(BaseSettings):
     AGENT_OPENAI_BASE_URL: str = ""  # 可选代理地址
     AGENT_OPENAI_MODEL: str = "gpt-4o"
     AGENT_QWEN_API_KEY: str = ""
+    AGENT_QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     AGENT_QWEN_MODEL: str = "qwen-plus"
     AGENT_DEEPSEEK_API_KEY: str = ""
     AGENT_DEEPSEEK_MODEL: str = "deepseek-chat"

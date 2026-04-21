@@ -95,11 +95,11 @@ def _get_qwen_model() -> BaseChatModel:
     if not api_key:
         raise ValueError("通义千问 API Key 未配置，请设置 AGENT_QWEN_API_KEY 环境变量")
     
-    # 通义千问通过 OpenAI 兼容接口
-    qwen_base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    # 通义千问通过 OpenAI 兼容接口（支持环境变量覆盖，默认 DashScope）
+    qwen_base_url = settings.AGENT_QWEN_BASE_URL or "https://dashscope.aliyuncs.com/compatible-mode/v1"
     
     logger.info(f"[LLM Provider] 初始化通义千问模型: {settings.AGENT_QWEN_MODEL}")
-    logger.info(f"[LLM Provider] 使用 DashScope 地址: {qwen_base_url}")
+    logger.info(f"[LLM Provider] 使用通义千问地址: {qwen_base_url}")
     
     return ChatOpenAI(
         api_key=api_key,
