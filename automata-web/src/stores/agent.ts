@@ -24,9 +24,9 @@ export interface ProviderOption {
 // 可用的 AI 提供商
 export const PROVIDERS: ProviderOption[] = [
   // { value: 'openai', label: 'OpenAI', description: 'GPT-4o' },
-  // { value: 'qwen', label: '通义千问', description: 'Qwen' },
+  { value: 'qwen', label: 'Qwen', description: 'qwen-plus' },
   // { value: 'deepseek', label: 'DeepSeek', description: 'DeepSeek' }
-  { value: 'deepseek', label: 'DeepSeek', description: 'DeepSeek' }
+  { value: 'deepseek', label: 'DeepSeek', description: 'deepseek-chat' }
 ]
 
 /**
