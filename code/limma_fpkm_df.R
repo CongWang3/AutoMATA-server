@@ -27,6 +27,10 @@ invisible(local({
 setwd(automata_path_code())
 library(limma)
 library(dplyr)
+library(vegan)
+library(ggrepel)
+library(ggpubr)
+library(ellipse)
 getOption('timeout')  # 解决超时
 options(timeout=100000)
 library(pheatmap)
@@ -195,6 +199,113 @@ filename <- automata_job_file(opt$jobID, "result/select_up.txt")
 write.table(res1_up, file = filename, row.names = FALSE, sep='\t', quote = FALSE)  # 所有显著上调差异基因
 filename <- automata_job_file(opt$jobID, "result/select_down.txt")
 write.table(res1_down, file = filename,  row.names = FALSE, sep='\t', quote = FALSE)  # 所有显著下调差异基因
+
+
+# PCA（风格对齐 data_analysis_plot/pca.R）
+print("Drawing PCA Plot")
+tryCatch({
+  # limma 分支使用 log_fpkm 进行样本层面的 PCA
+  pca_input <- t(as.matrix(log_fpkm))  # 行=样本，列=基因
+  storage.mode(pca_input) <- "numeric"
+  # 与 pca.R 保持一致：缺失值替换为 0，并移除零方差特征，避免 rda 失败
+  if (any(is.na(pca_input))) {
+    pca_input[is.na(pca_input)] <- 0
+  }
+  keep_var <- apply(pca_input, 2, function(x) !all(is.na(x)) && sd(x, na.rm = TRUE) > 0)
+  pca_input <- pca_input[, keep_var, drop = FALSE]
+  if (ncol(pca_input) == 0) {
+    stop("No valid features for PCA after filtering zero-variance columns")
+  }
+  if (nrow(pca_input) < 2) {
+    stop("No enough samples for PCA")
+  }
+
+  # 尽量按样本名对齐分组信息（group_info 第一列通常是样本名）
+  group_df <- group_info
+  if (ncol(group_df) >= 1) {
+    sample_col <- as.character(group_df[[1]])
+    if (all(rownames(pca_input) %in% sample_col)) {
+      idx <- match(rownames(pca_input), sample_col)
+      group_df <- group_df[idx, , drop = FALSE]
+    }
+  }
+
+  rda_result <- rda(pca_input, scale = TRUE)
+  pca_summary <- summary(rda_result)
+  pc1_Explained <- round(pca_summary$cont$importance[2, 1] * 100, 2)
+  pc2_Explained <- round(pca_summary$cont$importance[2, 2] * 100, 2)
+
+  coords <- data.frame(scores(rda_result, display = "sites", choices = c(1, 2)))
+  coords$group <- factor(group_df$Group, levels = unique(group_df$Group))
+
+  # 保持箭头风格，但避免变量过多导致图面不可读：取 loading 最大前 20 个
+  var_all <- data.frame(scores(rda_result, display = "species", choices = c(1, 2)))
+  var_all$func <- rownames(var_all)
+  var_all$loading <- sqrt(var_all$PC1^2 + var_all$PC2^2)
+  var <- head(var_all[order(var_all$loading, decreasing = TRUE), ], 20)
+
+  group_levels <- levels(coords$group)
+  n_groups <- length(group_levels)
+  base_colors <- c(
+    "#1F77B4FF", "#FF7F0EFF", "#2CA02CFF",
+    "#9467BDFF", "#8C564BFF", "#E377C2FF",
+    "#7F7F7FFF", "#BCBD22FF", "#17BECFFF"
+  )
+  if (n_groups <= length(base_colors)) {
+    group_colors <- base_colors[seq_len(n_groups)]
+  } else {
+    group_colors <- grDevices::rainbow(n_groups)
+  }
+  names(group_colors) <- group_levels
+
+  group_unique <- unique(coords$group)
+  oval_list <- lapply(group_unique, function(g) {
+    subset <- dplyr::filter(coords, group == g)
+    if (nrow(subset) < 3) return(NULL)
+    cov_data <- cov(subset[, c("PC1", "PC2")])
+    if (any(!is.finite(cov_data))) return(NULL)
+    mean_data <- colMeans(subset[, c("PC1", "PC2")])
+    oval_point <- ellipse::ellipse(cov_data, centre = mean_data, level = 0.95)
+    data.frame(Group = g, oval_point)
+  })
+  oval_list <- Filter(Negate(is.null), oval_list)
+  oval_data <- if (length(oval_list) > 0) do.call(rbind, oval_list) else data.frame(Group = factor(), PC1 = numeric(), PC2 = numeric())
+  if (nrow(oval_data) > 0) {
+    if ("x" %in% colnames(oval_data)) colnames(oval_data)[colnames(oval_data) == "x"] <- "PC1"
+    if ("y" %in% colnames(oval_data)) colnames(oval_data)[colnames(oval_data) == "y"] <- "PC2"
+  }
+
+  p_pca <- ggplot() +
+    geom_point(data = coords, aes(x = PC1, y = PC2, fill = group), size = 3, color = "transparent", shape = 21) +
+    geom_segment(data = var, aes(x = 0, y = 0, xend = -1.25 * PC1, yend = 1.25 * PC2),
+                 arrow = arrow(angle = 22.5, length = unit(0.25, "cm"), type = "closed")) +
+    geom_text_repel(data = var, aes(x = -1.275 * PC1, y = 1.275 * PC2, label = func), size = 3.8) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
+    geom_path(data = oval_data, aes(x = PC1, y = PC2, group = Group, color = Group), show.legend = FALSE, linetype = "dashed") +
+    geom_polygon(data = oval_data, aes(x = PC1, y = PC2, group = Group, fill = Group), alpha = 0.2) +
+    scale_color_manual(values = group_colors, breaks = group_levels) +
+    scale_fill_manual(values = group_colors, breaks = group_levels) +
+    labs(x = paste("PC1 (", pc1_Explained, "%)", sep = ""), y = paste("PC2 (", pc2_Explained, "%)", sep = "")) +
+    scale_x_continuous(limits = c(min(coords$PC1) - 1.5, max(coords$PC1) + 1.5)) +
+    scale_y_continuous(limits = c(min(coords$PC2) - 1.5, max(coords$PC2) + 1.9)) +
+    theme_classic2() +
+    theme(
+      legend.title = element_blank(),
+      legend.key.size = unit(35, "pt"),
+      axis.line = element_line(color = "black"),
+      axis.ticks = element_blank()
+    )
+
+  result_path <- automata_job_file(opt$jobID, "result/pca")
+  for (dev in c("pdf", "jpeg", "tiff", "png", "bmp", "svg")) {
+    ggsave(paste(result_path, dev, sep = "."), p_pca, device = dev, width = 8.8, height = 6)
+  }
+}, error = function(e) {
+  # PCA 作为附加结果，失败不阻断后续 volcano / heatmap
+  message("PCA generation skipped: ", e$message)
+})
+print("Drawing PCA Plot End")
 
 
 # 画图

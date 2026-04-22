@@ -171,7 +171,21 @@ write.table(res1_down, file = filename,  row.names = FALSE, sep='\t', quote = FA
 # PCA（风格对齐 data_analysis_plot/pca.R）
 print("Drawing PCA Plot")
 tryCatch({
-  vsd <- vst(dds, blind = TRUE)
+  # 小样本/小基因集时，vst() 可能报：
+  # "less than 'nsub' rows, it is recommended to use varianceStabilizingTransformation directly"
+  # 为避免直接跳过 PCA，这里按数据规模优先走 varianceStabilizingTransformation，且对 vst 失败做兜底回退。
+  n_gene_for_vst <- nrow(counts(dds))
+  if (is.na(n_gene_for_vst) || n_gene_for_vst < 1000) {
+    vsd <- varianceStabilizingTransformation(dds, blind = TRUE)
+  } else {
+    vsd <- tryCatch(
+      suppressWarnings(vst(dds, blind = TRUE)),
+      error = function(e) {
+        message("vst failed, fallback to varianceStabilizingTransformation: ", e$message)
+        varianceStabilizingTransformation(dds, blind = TRUE)
+      }
+    )
+  }
   pca_input <- t(assay(vsd))  # 行=样本，列=基因
 
   # 尽量按样本名对齐分组信息（group_info 第一列通常是样本名）
