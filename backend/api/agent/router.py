@@ -5,8 +5,10 @@ AI Agent WebSocket 路由
 import json
 import asyncio
 import logging
-from typing import Dict, List, Optional
+import re
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, Depends, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -18,6 +20,7 @@ from api.dependencies.auth import get_current_user_from_websocket
 from api.agent.llm_provider import validate_provider_config
 from api.agent.graph import create_agent_graph, run_agent
 from api.agent.tools import get_all_tools
+from api.models.job import Job
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +34,265 @@ conversation_histories: Dict[str, Dict[int, List[BaseMessage]]] = {}
 # Agent 图实例缓存
 # 格式: {provider: compiled_graph}
 agent_graphs: Dict[str, any] = {}
+JOB_ID_PATTERN = re.compile(r"\b\d{14}_[a-zA-Z0-9]{8}\b")
+TRACEBACK_FILE_LINE_RE = re.compile(
+    r'^\s*File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>.+?)\s*$'
+)
+R_ERROR_RE = re.compile(r"^\s*Error(?:\s+in\s+.+?)?:\s*(?P<msg>.+)\s*$", re.IGNORECASE)
+
+
+def _extract_job_id(message: str, explicit_job_id: Optional[str] = None) -> Optional[str]:
+    """优先使用前端显式传入 job_id，否则从用户消息中提取。"""
+    if explicit_job_id and JOB_ID_PATTERN.fullmatch(str(explicit_job_id).strip()):
+        return str(explicit_job_id).strip()
+    m = JOB_ID_PATTERN.search(message or "")
+    return m.group(0) if m else None
+
+
+def _read_tail_lines(path: Path, max_lines: int = 200) -> str:
+    """读取文本文件最后 N 行（容错）。"""
+    if not path.exists() or not path.is_file():
+        return ""
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+        return "".join(lines[-max_lines:]).strip()
+    except Exception:
+        return ""
+
+
+def _extract_root_cause(log_tail: str) -> Dict:
+    """
+    从日志尾部提取根因线索：
+    - Python traceback 关键帧（file:line:function）
+    - Python 最后一行异常类型/消息
+    - R 的 Error in ... 消息
+    """
+    if not log_tail:
+        return {
+            "has_traceback": False,
+            "language": None,
+            "exception_type": None,
+            "exception_message": None,
+            "frames": [],
+        }
+
+    lines = [ln.rstrip("\n") for ln in log_tail.splitlines()]
+    frames: List[Dict[str, str]] = []
+    has_python_tb = any("Traceback (most recent call last):" in ln for ln in lines)
+
+    if has_python_tb:
+        for ln in lines:
+            m = TRACEBACK_FILE_LINE_RE.match(ln)
+            if not m:
+                continue
+            frames.append(
+                {
+                    "file": m.group("file"),
+                    "line": m.group("line"),
+                    "function": m.group("func").strip(),
+                }
+            )
+        # 最后一行通常为异常类型和消息
+        tail_line = ""
+        for ln in reversed(lines):
+            if ln.strip():
+                tail_line = ln.strip()
+                break
+        exc_type = None
+        exc_msg = None
+        if ":" in tail_line:
+            left, right = tail_line.split(":", 1)
+            if left.strip().endswith(("Error", "Exception")):
+                exc_type = left.strip()
+                exc_msg = right.strip()
+        return {
+            "has_traceback": True,
+            "language": "python",
+            "exception_type": exc_type,
+            "exception_message": exc_msg or (tail_line if tail_line else None),
+            "frames": frames[-8:],
+        }
+
+    # 尝试提取 R 错误行
+    r_msg = None
+    for ln in reversed(lines):
+        m = R_ERROR_RE.match(ln)
+        if m:
+            r_msg = m.group("msg").strip()
+            break
+    if r_msg:
+        return {
+            "has_traceback": False,
+            "language": "r",
+            "exception_type": "RRuntimeError",
+            "exception_message": r_msg,
+            "frames": [],
+        }
+
+    return {
+        "has_traceback": False,
+        "language": None,
+        "exception_type": None,
+        "exception_message": None,
+        "frames": [],
+    }
+
+
+def _collect_result_artifacts(job_dir: Path, result_file: Optional[str], max_items: int = 30) -> List[str]:
+    """收集任务目录与 result_file 指向路径下的结果文件清单。"""
+    seen: set[str] = set()
+    out: List[str] = []
+
+    def _append_path(base: Path):
+        nonlocal out
+        if not base.exists():
+            return
+        if base.is_file():
+            rel = str(base)
+            if rel not in seen:
+                seen.add(rel)
+                out.append(rel)
+            return
+        for p in sorted(base.rglob("*")):
+            if not p.is_file():
+                continue
+            rel = str(p)
+            if rel in seen:
+                continue
+            seen.add(rel)
+            out.append(rel)
+            if len(out) >= max_items:
+                return
+
+    _append_path(job_dir / "result")
+    if result_file:
+        _append_path(Path(result_file))
+    return out[:max_items]
+
+
+def _load_job_context(db: Session, user_id: int, job_id: str) -> Dict:
+    """
+    读取任务上下文（数据库 + 任务目录），用于平台紧密相关诊断/解读。
+    """
+    job = db.query(Job).filter(Job.job_id == job_id, Job.user_id == user_id).first()
+    if not job:
+        return {
+            "job_id": job_id,
+            "found": False,
+            "missing_fields": ["job_record"],
+        }
+
+    job_dir = settings.path_jobs / job_id
+    candidates = [
+        job_dir / "terminal_msg.txt",
+        job_dir / "result" / "terminal.log",
+        job_dir / "config.txt",
+    ]
+    logs_tail = ""
+    for p in candidates[:2]:
+        logs_tail = _read_tail_lines(p, max_lines=200)
+        if logs_tail:
+            break
+
+    config_summary = _read_tail_lines(candidates[2], max_lines=120)
+    artifacts = _collect_result_artifacts(job_dir, job.result_file)
+    root_cause = _extract_root_cause(logs_tail)
+
+    status_text = job.status.value if hasattr(job.status, "value") else str(job.status)
+    job_type_text = job.job_type.value if hasattr(job.job_type, "value") else str(job.job_type)
+    missing_fields = []
+    if not logs_tail:
+        missing_fields.append("terminal_log")
+    if not config_summary:
+        missing_fields.append("config_txt")
+    if not artifacts:
+        missing_fields.append("result_artifacts")
+
+    return {
+        "job_id": job_id,
+        "found": True,
+        "job_meta": {
+            "job_type": job_type_text,
+            "status": status_text,
+            "progress": job.progress,
+            "current_step": job.current_step,
+            "created_at": str(job.created_at) if job.created_at else None,
+            "updated_at": str(job.updated_at) if job.updated_at else None,
+            "result_file": job.result_file,
+            "error_message": job.error_message,
+            "input_params": job.input_params,
+        },
+        "log_tail": logs_tail,
+        "config_summary": config_summary,
+        "root_cause": root_cause,
+        "result_artifacts": artifacts,
+        "diagnosis_ready": bool(logs_tail or artifacts),
+        "missing_fields": missing_fields,
+    }
+
+
+def _classify_intent(message: str, requested_mode: Optional[str] = None) -> str:
+    """
+    自动识别用户意图（参数建议 / 失败诊断 / 结果解读）。
+    优先使用前端显式传入 mode；否则走关键词规则分类。
+    """
+    allowed_modes = {"param_advice", "failure_diagnosis", "result_interpretation"}
+    if requested_mode in allowed_modes:
+        return requested_mode
+
+    text = (message or "").lower()
+    if not text:
+        return "param_advice"
+
+    if re.search(r"(traceback|error|报错|失败|terminal|terminal_msg|异常|堆栈|cannot|not found)", text):
+        return "failure_diagnosis"
+    if re.search(r"(结果|解读|报告|interpret|enrichment|通路|显著|p值|fdr|fold change)", text):
+        return "result_interpretation"
+    if re.search(r"(参数|padj|dropout|learning rate|epoch|batch|建议|怎么设|如何设置)", text):
+        return "param_advice"
+    return "param_advice"
+
+
+def _build_mode_prompt(intent: str, user_message: str, job_context: Optional[Dict] = None) -> Tuple[str, str]:
+    """
+    为不同意图构造面向普通生物学用户的响应约束提示。
+    返回: (intent_display, wrapped_message)
+    """
+    intent_map = {
+        "param_advice": "参数建议",
+        "failure_diagnosis": "失败诊断",
+        "result_interpretation": "结果解读",
+    }
+    intent_display = intent_map.get(intent, "参数建议")
+
+    mode_instructions = {
+        "param_advice": (
+            "你是生物信息平台助手。当前任务=参数建议。"
+            "用户是普通生物学用户，请避免术语堆砌。"
+            "输出顺序：1) 先给结论（最多3条）；2) 可执行步骤；3) 简短原因。"
+        ),
+        "failure_diagnosis": (
+            "你是生物信息平台助手。当前任务=失败诊断。"
+            "请先归类最可能的错误类型，再给排查步骤（按优先级）。"
+            "如果有 root_cause.frames，请明确指出最关键 file:line:function 并解释其为何导致报错。"
+            "输出顺序：1) 最可能原因；2) 关键报错位置(file:line)；3) 立即可做的3步；4) 仍失败时提供下一步信息收集清单。"
+        ),
+        "result_interpretation": (
+            "你是生物信息平台助手。当前任务=结果解读。"
+            "面向普通生物学用户，先给生物学含义，再给风险提示和后续实验建议。"
+            "输出顺序：1) 关键发现；2) 生物学解释；3) 下一步建议。"
+        ),
+    }
+    instruction = mode_instructions.get(intent, mode_instructions["param_advice"])
+    context_block = ""
+    if job_context:
+        context_block = (
+            "\n\n任务上下文（由平台自动读取，请优先据此判断）:\n"
+            f"{json.dumps(job_context, ensure_ascii=False)}"
+        )
+    wrapped = f"{instruction}{context_block}\n\n用户问题：{user_message}"
+    return intent_display, wrapped
 
 
 def _get_or_create_graph(provider: str = None):
@@ -254,6 +516,8 @@ async def agent_chat_websocket(
                 if msg_type == "chat":
                     user_message = message_data.get("message", "").strip()
                     provider = message_data.get("provider")
+                    requested_mode = message_data.get("mode")
+                    requested_job_id = message_data.get("job_id")
                     
                     if not user_message:
                         await websocket.send_text(json.dumps({
@@ -284,6 +548,23 @@ async def agent_chat_websocket(
                     
                     # 获取对话历史
                     history = _get_conversation_history(user_id, ws_id)
+                    intent = _classify_intent(user_message, requested_mode)
+                    detected_job_id = _extract_job_id(user_message, requested_job_id)
+                    job_context = _load_job_context(db, user.id, detected_job_id) if detected_job_id else None
+                    intent_display, wrapped_message = _build_mode_prompt(intent, user_message, job_context)
+                    await websocket.send_text(json.dumps({
+                        "event": "agent_intent",
+                        "intent": intent,
+                        "intent_display": intent_display
+                    }, ensure_ascii=False))
+                    if job_context:
+                        await websocket.send_text(json.dumps({
+                            "event": "agent_job_context",
+                            "job_id": detected_job_id,
+                            "found": bool(job_context.get("found")),
+                            "diagnosis_ready": bool(job_context.get("diagnosis_ready")),
+                            "missing_fields": job_context.get("missing_fields", [])
+                        }, ensure_ascii=False))
                     
                     # 构建工具上下文（只存储可序列化的数据）
                     # 注意：不要存储 db session 对象，因为它无法被 msgpack 序列化
@@ -301,7 +582,7 @@ async def agent_chat_websocket(
                     try:
                         async for event in run_agent(
                             graph=graph,
-                            user_message=user_message,
+                            user_message=wrapped_message,
                             user_id=user_id,
                             conversation_history=history,
                             tool_context=tool_context,

@@ -14,6 +14,8 @@ export interface ChatMessage {
   isThinking?: boolean
 }
 
+export type AgentMode = 'param_advice' | 'failure_diagnosis' | 'result_interpretation'
+
 // AI 提供商选项
 export interface ProviderOption {
   value: string
@@ -45,6 +47,14 @@ export const useAgentStore = defineStore('agent', () => {
   // const currentProvider = ref('openai')
   const currentProvider = ref('deepseek')
   const error = ref<string | null>(null)
+  const currentIntent = ref<string>('')
+  const currentIntentDisplay = ref<string>('')
+  const currentJobContext = ref<{
+    jobId: string
+    found: boolean
+    diagnosisReady: boolean
+    missingFields: string[]
+  } | null>(null)
   
   // 当前正在生成的 assistant 消息 ID（用于流式更新）
   const currentAssistantMessageId = ref<string | null>(null)
@@ -201,6 +211,15 @@ export const useAgentStore = defineStore('agent', () => {
         isSending.value = false
       }
     })
+
+    // Agent 意图分类
+    agentWebSocketService.setOnIntent((intent, intentDisplay) => {
+      currentIntent.value = intent
+      currentIntentDisplay.value = intentDisplay
+    })
+    agentWebSocketService.setOnJobContext((payload) => {
+      currentJobContext.value = payload
+    })
     
     // 错误处理
     agentWebSocketService.setOnError((message) => {
@@ -221,7 +240,7 @@ export const useAgentStore = defineStore('agent', () => {
   /**
    * 发送消息
    */
-  async function sendMessage(content: string): Promise<void> {
+  async function sendMessage(content: string, mode?: AgentMode, jobId?: string): Promise<void> {
     if (!content.trim() || isSending.value) return
     
     // 确保已连接
@@ -240,7 +259,7 @@ export const useAgentStore = defineStore('agent', () => {
     // 发送到服务器
     isSending.value = true
     error.value = null
-    agentWebSocketService.sendChat(content.trim(), currentProvider.value)
+    agentWebSocketService.sendChat(content.trim(), currentProvider.value, mode, jobId)
   }
 
   /**
@@ -275,6 +294,9 @@ export const useAgentStore = defineStore('agent', () => {
     isConnected,
     isSending,
     currentProvider,
+    currentIntent,
+    currentIntentDisplay,
+    currentJobContext,
     error,
     
     // 计算属性

@@ -8,6 +8,8 @@ type ThinkingCallback = (content: string) => void
 type ToolCallCallback = (tool: string, args: any) => void
 type ToolResultCallback = (tool: string, result: string) => void
 type ResponseCallback = (content: string, done: boolean) => void
+type IntentCallback = (intent: string, intentDisplay: string) => void
+type JobContextCallback = (payload: { jobId: string; found: boolean; diagnosisReady: boolean; missingFields: string[] }) => void
 type ErrorCallback = (message: string) => void
 type ConnectedCallback = () => void
 type DisconnectedCallback = () => void
@@ -26,6 +28,8 @@ export class AgentWebSocketService {
   private onToolCallCallback: ToolCallCallback | null = null
   private onToolResultCallback: ToolResultCallback | null = null
   private onResponseCallback: ResponseCallback | null = null
+  private onIntentCallback: IntentCallback | null = null
+  private onJobContextCallback: JobContextCallback | null = null
   private onErrorCallback: ErrorCallback | null = null
   private onConnectedCallback: ConnectedCallback | null = null
   private onDisconnectedCallback: DisconnectedCallback | null = null
@@ -130,11 +134,13 @@ export class AgentWebSocketService {
    * @param message 消息内容
    * @param provider AI 提供商
    */
-  sendChat(message: string, provider: string = 'openai'): void {
+  sendChat(message: string, provider: string = 'openai', mode?: string, jobId?: string): void {
     this.sendMessage({
       type: 'chat',
       message,
-      provider
+      provider,
+      mode,
+      job_id: jobId
     })
   }
 
@@ -188,6 +194,17 @@ export class AgentWebSocketService {
         
       case 'agent_response':
         this.onResponseCallback?.(data.content, data.done || false)
+        break
+      case 'agent_intent':
+        this.onIntentCallback?.(data.intent || '', data.intent_display || '')
+        break
+      case 'agent_job_context':
+        this.onJobContextCallback?.({
+          jobId: data.job_id || '',
+          found: !!data.found,
+          diagnosisReady: !!data.diagnosis_ready,
+          missingFields: Array.isArray(data.missing_fields) ? data.missing_fields : [],
+        })
         break
         
       case 'error':
@@ -260,6 +277,14 @@ export class AgentWebSocketService {
 
   setOnResponse(callback: ResponseCallback): void {
     this.onResponseCallback = callback
+  }
+
+  setOnIntent(callback: IntentCallback): void {
+    this.onIntentCallback = callback
+  }
+
+  setOnJobContext(callback: JobContextCallback): void {
+    this.onJobContextCallback = callback
   }
 
   setOnError(callback: ErrorCallback): void {

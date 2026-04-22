@@ -85,6 +85,11 @@
               I can help you with data analysis and answer questions.<br>
               Try asking me any questions about bioinformatics!
             </div>
+            <div class="quick-actions">
+              <button class="quick-action-btn" @click="onQuickMode('param_advice')">参数建议</button>
+              <button class="quick-action-btn" @click="onQuickMode('failure_diagnosis')">失败诊断</button>
+              <button class="quick-action-btn" @click="onQuickMode('result_interpretation')">结果解读</button>
+            </div>
           </div>
 
           <!-- 消息列表 -->
@@ -103,6 +108,19 @@
 
         <!-- 底部输入区 -->
         <div class="input-container">
+          <div v-if="agentStore.currentIntentDisplay" class="intent-bar">
+            当前模式：{{ agentStore.currentIntentDisplay }}
+          </div>
+          <div class="jobid-bar">
+            <input
+              v-model.trim="linkedJobId"
+              class="jobid-input"
+              placeholder="可选：关联任务 JobID（如 20260331163004_e29ee5e8）"
+            >
+            <span v-if="agentStore.currentJobContext?.jobId" class="jobid-status">
+              已识别任务：{{ agentStore.currentJobContext.jobId }}
+            </span>
+          </div>
           <div class="input-wrapper">
             <textarea
               ref="inputRef"
@@ -134,7 +152,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { useAgentStore, PROVIDERS } from '@/stores/agent'
+import { useAgentStore, PROVIDERS, type AgentMode } from '@/stores/agent'
 import ChatMessage from './ChatMessage.vue'
 
 // Stores
@@ -143,6 +161,7 @@ const agentStore = useAgentStore()
 
 // 组件状态
 const inputMessage = ref('')
+const linkedJobId = ref('')
 const selectedProvider = ref(agentStore.currentProvider)
 const messagesContainer = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
@@ -161,7 +180,16 @@ async function onSend(): Promise<void> {
     inputRef.value.style.height = 'auto'
   }
   
-  await agentStore.sendMessage(message)
+  await agentStore.sendMessage(message, undefined, linkedJobId.value || undefined)
+}
+
+async function onQuickMode(mode: AgentMode): Promise<void> {
+  const presets: Record<AgentMode, string> = {
+    param_advice: '请根据我的任务目标给我参数建议（尽量通俗、可直接操作）。',
+    failure_diagnosis: '请帮我诊断任务失败原因，我会贴 terminal 日志，请先做错误归类。',
+    result_interpretation: '请帮我解读结果并生成简明报告（面向普通生物学用户）。',
+  }
+  await agentStore.sendMessage(presets[mode], mode, linkedJobId.value || undefined)
 }
 
 /**
@@ -473,6 +501,29 @@ onUnmounted(() => {
   color: #888;
 }
 
+.quick-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.quick-action-btn {
+  border: 1px solid #dcdfe6;
+  background: #fff;
+  color: #303133;
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.quick-action-btn:hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+
 /* 错误提示 */
 .error-bar {
   display: flex;
@@ -498,6 +549,36 @@ onUnmounted(() => {
   padding: 12px 16px;
   background: white;
   border-top: 1px solid #e8e8e8;
+}
+
+.intent-bar {
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.jobid-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.jobid-input {
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+}
+
+.jobid-input:focus {
+  border-color: #409eff;
+}
+
+.jobid-status {
+  font-size: 12px;
+  color: #67c23a;
 }
 
 .input-wrapper {
