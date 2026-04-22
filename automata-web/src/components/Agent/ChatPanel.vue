@@ -85,10 +85,11 @@
               I can help you with data analysis and answer questions.<br>
               Try asking me any questions about bioinformatics!
             </div>
+            <!-- 结果解读，失败诊断，参数建议 -->
             <div class="quick-actions">
-              <button class="quick-action-btn" @click="onQuickMode('param_advice')">参数建议</button>
-              <button class="quick-action-btn" @click="onQuickMode('failure_diagnosis')">失败诊断</button>
-              <button class="quick-action-btn" @click="onQuickMode('result_interpretation')">结果解读</button>
+              <button class="quick-action-btn" @click="onQuickMode('param_advice')">Parameter Suggestion</button>
+              <button class="quick-action-btn" @click="onQuickMode('failure_diagnosis')">Failure Diagnosis</button>
+              <button class="quick-action-btn" @click="onQuickMode('result_interpretation')">Result Interpretation</button>
             </div>
           </div>
 
@@ -109,16 +110,16 @@
         <!-- 底部输入区 -->
         <div class="input-container">
           <div v-if="agentStore.currentIntentDisplay" class="intent-bar">
-            当前模式：{{ agentStore.currentIntentDisplay }}
+            Current Mode: {{ agentStore.currentIntentDisplay }}
           </div>
           <div class="jobid-bar">
             <input
               v-model.trim="linkedJobId"
               class="jobid-input"
-              placeholder="可选：关联任务 JobID（如 20260331163004_e29ee5e8）"
+              placeholder="Optional: Linked JobID (e.g. 20260331163004_e29ee5e8)"
             >
             <span v-if="agentStore.currentJobContext?.jobId" class="jobid-status">
-              已识别任务：{{ agentStore.currentJobContext.jobId }}
+              Identified Job: {{ agentStore.currentJobContext.jobId }}
             </span>
           </div>
           <div class="input-wrapper">

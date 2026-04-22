@@ -165,6 +165,34 @@ async def startup_event():
     logger.info(f"API 文档：http://{settings.HOST}:{settings.PORT}/docs")
     logger.info("=" * 60)
     
+    # Agent 语义卡覆盖率摘要（部署后可快速确认平台脚本覆盖情况）
+    if AGENT_AVAILABLE:
+        try:
+            from api.agent.script_semantics import get_semantic_coverage
+
+            cov = get_semantic_coverage(str(settings.path_repo))
+            if cov.get("enabled"):
+                logger.info(
+                    "[Agent Semantics] coverage=%s (%s/%s), uncovered=%s",
+                    cov.get("coverage_ratio"),
+                    cov.get("covered_total"),
+                    cov.get("detected_total"),
+                    cov.get("uncovered_total"),
+                )
+                examples = cov.get("uncovered_examples") or []
+                if examples:
+                    logger.warning(
+                        "[Agent Semantics] uncovered examples: %s",
+                        ", ".join(examples[:10]),
+                    )
+            else:
+                logger.warning(
+                    "[Agent Semantics] coverage disabled: %s",
+                    cov.get("reason", "unknown"),
+                )
+        except Exception as e:
+            logger.warning("[Agent Semantics] failed to load coverage: %s", e)
+
     # 验证 CORS 配置
     if settings.is_production:
         logger.warning(f"生产环境 CORS 配置：{settings.CORS_ORIGINS}")

@@ -107,10 +107,10 @@ export const useAgentStore = defineStore('agent', () => {
       await agentWebSocketService.connect()
       isConnected.value = true
       error.value = null
-      console.log('✅ Agent 连接成功')
+      console.log('Agent 连接成功')
     } catch (err) {
       error.value = err instanceof Error ? err.message : '连接失败'
-      console.error('❌ Agent 连接失败:', error.value)
+      console.error('Agent 连接失败:', error.value)
     }
   }
 

@@ -6,7 +6,7 @@ import json
 import asyncio
 import logging
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +19,7 @@ from config.settings import settings
 from api.dependencies.auth import get_current_user_from_websocket
 from api.agent.llm_provider import validate_provider_config
 from api.agent.graph import create_agent_graph, run_agent
+from api.agent.script_semantics import build_semantic_context, get_semantic_coverage
 from api.agent.tools import get_all_tools
 from api.models.job import Job
 
@@ -39,6 +40,16 @@ TRACEBACK_FILE_LINE_RE = re.compile(
     r'^\s*File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>.+?)\s*$'
 )
 R_ERROR_RE = re.compile(r"^\s*Error(?:\s+in\s+.+?)?:\s*(?P<msg>.+)\s*$", re.IGNORECASE)
+
+# 跳过与平台业务无关的库路径（不尝试读源码窗口）
+_SKIP_SNIPPET_SUBSTR = (
+    "site-packages",
+    "dist-packages",
+    "/miniconda/",
+    "/anaconda/",
+    "lib/python",
+    "Lib/python",
+)
 
 
 def _extract_job_id(message: str, explicit_job_id: Optional[str] = None) -> Optional[str]:
@@ -139,6 +150,129 @@ def _extract_root_cause(log_tail: str) -> Dict:
     }
 
 
+def _resolve_repo_script_path(raw_path: str, repo_root: Path) -> Optional[Path]:
+    """
+    将 traceback 中的路径解析为仓库内可读文件。
+    兼容：本机绝对路径、Docker /app/...、仅含 code/ 或 backend/ 相对后缀。
+    """
+    if not (raw_path or "").strip():
+        return None
+    raw = raw_path.strip()
+    norm = raw.replace("\\", "/")
+    try:
+        p = Path(raw)
+        if p.is_file():
+            return p.resolve()
+    except OSError:
+        pass
+    for marker in ("code/", "backend/", "automata-web/"):
+        idx = norm.find(marker)
+        if idx >= 0:
+            candidate = (repo_root / norm[idx:]).resolve()
+            if candidate.is_file():
+                return candidate
+    if norm.startswith("/app/"):
+        candidate = (repo_root / norm[5:].lstrip("/")).resolve()
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _should_skip_snippet_path(file_str: str) -> bool:
+    fs = (file_str or "").replace("\\", "/").lower()
+    return any(s.lower() in fs for s in _SKIP_SNIPPET_SUBSTR)
+
+
+def _read_code_window(
+    path: Path,
+    center_line: int,
+    before: int = 20,
+    after: int = 20,
+) -> Optional[Dict[str, Any]]:
+    """读取源码窗口（center_line 为 1-based），返回可 JSON 序列化的片段描述。"""
+    if not path.is_file():
+        return None
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return None
+    n = len(lines)
+    if n == 0:
+        return None
+    try:
+        cl = int(center_line)
+    except (TypeError, ValueError):
+        return None
+    cl = max(1, min(cl, n))
+    start = max(1, cl - before)
+    end = min(n, cl + after)
+    numbered: List[str] = []
+    for i in range(start - 1, end):
+        text = lines[i].rstrip("\n\r")
+        numbered.append(f"{i + 1:5d} | {text}")
+    return {
+        "resolved_path": str(path),
+        "center_line": cl,
+        "start_line": start,
+        "end_line": end,
+        "snippet": "\n".join(numbered),
+    }
+
+
+def _collect_code_snippets_from_frames(
+    frames: List[Dict[str, str]],
+    repo_root: Path,
+    *,
+    before: int = 20,
+    after: int = 20,
+    max_snippets: int = 3,
+    max_total_chars: int = 15000,
+) -> List[Dict[str, Any]]:
+    """
+    从 Python traceback frames 由内向外在仓库内解析源码片段（优先最内层调用帧）。
+    """
+    if not frames:
+        return []
+    out: List[Dict[str, Any]] = []
+    seen: set[Tuple[str, int]] = set()
+    total_chars = 0
+    for frame in reversed(frames):
+        if len(out) >= max_snippets:
+            break
+        fpath = (frame or {}).get("file") or ""
+        line_s = (frame or {}).get("line")
+        if not fpath or line_s is None or _should_skip_snippet_path(fpath):
+            continue
+        try:
+            line_no = int(line_s)
+        except (TypeError, ValueError):
+            continue
+        resolved = _resolve_repo_script_path(fpath, repo_root)
+        if not resolved:
+            continue
+        key = (str(resolved), line_no)
+        if key in seen:
+            continue
+        block = _read_code_window(resolved, line_no, before=before, after=after)
+        if not block:
+            continue
+        seen.add(key)
+        snip = block.get("snippet") or ""
+        if total_chars + len(snip) + 200 > max_total_chars:
+            if out:
+                break
+            block["snippet"] = snip[: max(0, max_total_chars - 500)] + "\n... (truncated)"
+        item = {
+            "original_file": fpath,
+            "function": (frame or {}).get("function"),
+            **block,
+        }
+        out.append(item)
+        total_chars += len(block.get("snippet") or "") + 200
+    return out
+
+
 def _collect_result_artifacts(job_dir: Path, result_file: Optional[str], max_items: int = 30) -> List[str]:
     """收集任务目录与 result_file 指向路径下的结果文件清单。"""
     seen: set[str] = set()
@@ -198,9 +332,20 @@ def _load_job_context(db: Session, user_id: int, job_id: str) -> Dict:
     config_summary = _read_tail_lines(candidates[2], max_lines=120)
     artifacts = _collect_result_artifacts(job_dir, job.result_file)
     root_cause = _extract_root_cause(logs_tail)
-
     status_text = job.status.value if hasattr(job.status, "value") else str(job.status)
     job_type_text = job.job_type.value if hasattr(job.job_type, "value") else str(job.job_type)
+    code_snippets: List[Dict[str, Any]] = []
+    if root_cause.get("language") == "python" and root_cause.get("frames"):
+        code_snippets = _collect_code_snippets_from_frames(
+            root_cause["frames"], settings.path_repo
+        )
+    semantic_context = build_semantic_context(
+        job_type=job_type_text,
+        config_summary=config_summary,
+        log_tail=logs_tail,
+        root_cause=root_cause,
+        input_params=job.input_params,
+    )
     missing_fields = []
     if not logs_tail:
         missing_fields.append("terminal_log")
@@ -226,6 +371,8 @@ def _load_job_context(db: Session, user_id: int, job_id: str) -> Dict:
         "log_tail": logs_tail,
         "config_summary": config_summary,
         "root_cause": root_cause,
+        "code_snippets": code_snippets,
+        "semantic_context": semantic_context,
         "result_artifacts": artifacts,
         "diagnosis_ready": bool(logs_tail or artifacts),
         "missing_fields": missing_fields,
@@ -276,11 +423,15 @@ def _build_mode_prompt(intent: str, user_message: str, job_context: Optional[Dic
             "你是生物信息平台助手。当前任务=失败诊断。"
             "请先归类最可能的错误类型，再给排查步骤（按优先级）。"
             "如果有 root_cause.frames，请明确指出最关键 file:line:function 并解释其为何导致报错。"
+            "若任务上下文中包含 code_snippets（平台从仓库自动回读的源码窗口），请必须结合片段中的实际逻辑解释根因，"
+            "不要与代码行为相矛盾；不要臆测片段中不存在的逻辑。"
+            "若任务上下文中包含 semantic_context（脚本语义卡+检查器结果），请优先引用 checker_results 作为事实依据。"
             "输出顺序：1) 最可能原因；2) 关键报错位置(file:line)；3) 立即可做的3步；4) 仍失败时提供下一步信息收集清单。"
         ),
         "result_interpretation": (
             "你是生物信息平台助手。当前任务=结果解读。"
             "面向普通生物学用户，先给生物学含义，再给风险提示和后续实验建议。"
+            "若有 semantic_context.semantic_card/result_hints，请优先按其结构组织解读。"
             "输出顺序：1) 关键发现；2) 生物学解释；3) 下一步建议。"
         ),
     }
@@ -664,5 +815,6 @@ async def get_agent_status():
         "enabled": settings.AGENT_ENABLED,
         "default_provider": settings.AGENT_DEFAULT_PROVIDER,
         "providers": providers,
-        "max_turns": settings.AGENT_MAX_TURNS
+        "max_turns": settings.AGENT_MAX_TURNS,
+        "semantic_coverage": get_semantic_coverage(str(settings.path_repo)),
     }
