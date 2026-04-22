@@ -401,23 +401,41 @@ def _classify_intent(message: str, requested_mode: Optional[str] = None) -> str:
     return "param_advice"
 
 
+def _detect_user_language(user_message: str) -> str:
+    """
+    根据用户输入粗略检测语言：
+    - 含中文字符 -> zh
+    - 含英文字符且无中文 -> en
+    - 其他情况默认 zh
+    """
+    text = user_message or ""
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return "zh"
+    if re.search(r"[A-Za-z]", text):
+        return "en"
+    return "zh"
+
+
 def _build_mode_prompt(intent: str, user_message: str, job_context: Optional[Dict] = None) -> Tuple[str, str]:
     """
     为不同意图构造面向普通生物学用户的响应约束提示。
     返回: (intent_display, wrapped_message)
     """
-    intent_map = {
-        "param_advice": "参数建议",
-        "failure_diagnosis": "失败诊断",
-        "result_interpretation": "结果解读",
+    user_lang = _detect_user_language(user_message)
+    # 前端模式显示统一英文
+    intent_display_map = {
+        "param_advice": "Parameter Suggestion",
+        "failure_diagnosis": "Failure Diagnosis",
+        "result_interpretation": "Result Interpretation",
     }
-    intent_display = intent_map.get(intent, "参数建议")
+    intent_display = intent_display_map.get(intent, "Parameter Suggestion")
 
-    mode_instructions = {
+    mode_instructions_zh = {
         "param_advice": (
             "你是生物信息平台助手。当前任务=参数建议。"
             "用户是普通生物学用户，请避免术语堆砌。"
             "输出顺序：1) 先给结论（最多3条）；2) 可执行步骤；3) 简短原因。"
+            "请使用中文回答。"
         ),
         "failure_diagnosis": (
             "你是生物信息平台助手。当前任务=失败诊断。"
@@ -427,14 +445,42 @@ def _build_mode_prompt(intent: str, user_message: str, job_context: Optional[Dic
             "不要与代码行为相矛盾；不要臆测片段中不存在的逻辑。"
             "若任务上下文中包含 semantic_context（脚本语义卡+检查器结果），请优先引用 checker_results 作为事实依据。"
             "输出顺序：1) 最可能原因；2) 关键报错位置(file:line)；3) 立即可做的3步；4) 仍失败时提供下一步信息收集清单。"
+            "请使用中文回答。"
         ),
         "result_interpretation": (
             "你是生物信息平台助手。当前任务=结果解读。"
             "面向普通生物学用户，先给生物学含义，再给风险提示和后续实验建议。"
             "若有 semantic_context.semantic_card/result_hints，请优先按其结构组织解读。"
             "输出顺序：1) 关键发现；2) 生物学解释；3) 下一步建议。"
+            "请使用中文回答。"
         ),
     }
+    mode_instructions_en = {
+        "param_advice": (
+            "You are a bioinformatics platform assistant. Task = parameter suggestion. "
+            "The user is a non-technical biologist, avoid jargon-heavy wording. "
+            "Output order: 1) concise conclusion (up to 3 items); 2) actionable steps; 3) brief rationale. "
+            "Please answer in English."
+        ),
+        "failure_diagnosis": (
+            "You are a bioinformatics platform assistant. Task = failure diagnosis. "
+            "First classify the most likely error type, then provide prioritized troubleshooting steps. "
+            "If root_cause.frames exists, identify the key file:line:function and explain why it causes failure. "
+            "If code_snippets exist, explain based on real snippet logic and do not speculate beyond shown code. "
+            "If semantic_context exists, treat checker_results as factual evidence. "
+            "Output order: 1) most likely cause; 2) key error location (file:line); 3) immediate 3-step actions; "
+            "4) if still failing, what additional info to collect. "
+            "Please answer in English."
+        ),
+        "result_interpretation": (
+            "You are a bioinformatics platform assistant. Task = result interpretation. "
+            "For non-technical biologists, start with biological meaning, then risks/caveats, then next experiments. "
+            "If semantic_context.semantic_card/result_hints exists, structure your interpretation around them. "
+            "Output order: 1) key findings; 2) biological interpretation; 3) next-step suggestions. "
+            "Please answer in English."
+        ),
+    }
+    mode_instructions = mode_instructions_en if user_lang == "en" else mode_instructions_zh
     instruction = mode_instructions.get(intent, mode_instructions["param_advice"])
     context_block = ""
     if job_context:

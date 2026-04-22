@@ -186,9 +186,9 @@ async function onSend(): Promise<void> {
 
 async function onQuickMode(mode: AgentMode): Promise<void> {
   const presets: Record<AgentMode, string> = {
-    param_advice: '请根据我的任务目标给我参数建议（尽量通俗、可直接操作）。',
-    failure_diagnosis: '请帮我诊断任务失败原因，我会贴 terminal 日志，请先做错误归类。',
-    result_interpretation: '请帮我解读结果并生成简明报告（面向普通生物学用户）。',
+    param_advice: 'Please suggest practical parameters for my task goal in plain language.',
+    failure_diagnosis: 'Please diagnose why the task failed. I can provide terminal logs; start with error classification.',
+    result_interpretation: 'Please interpret my results and generate a concise report for non-technical biology users.',
   }
   await agentStore.sendMessage(presets[mode], mode, linkedJobId.value || undefined)
 }

@@ -107,10 +107,10 @@ export const useAgentStore = defineStore('agent', () => {
       await agentWebSocketService.connect()
       isConnected.value = true
       error.value = null
-      console.log('Agent 连接成功')
+      console.log('Agent connected')
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '连接失败'
-      console.error('Agent 连接失败:', error.value)
+      error.value = err instanceof Error ? err.message : 'Connection failed'
+      console.error('Agent connection failed:', error.value)
     }
   }
 
@@ -165,7 +165,7 @@ export const useAgentStore = defineStore('agent', () => {
       messages.value.push({
         id,
         role: 'tool',
-        content: `正在调用 ${tool}...`,
+        content: `Calling ${tool}...`,
         timestamp: new Date(),
         toolCall: { tool, args }
       })
@@ -179,7 +179,7 @@ export const useAgentStore = defineStore('agent', () => {
       )
       if (toolMsg) {
         toolMsg.toolResult = { tool, result }
-        toolMsg.content = `${tool} 执行完成`
+        toolMsg.content = `${tool} completed`
       }
     })
     
@@ -231,7 +231,7 @@ export const useAgentStore = defineStore('agent', () => {
       messages.value.push({
         id: generateId(),
         role: 'assistant',
-        content: `❌ 错误: ${message}`,
+        content: `❌ Error: ${message}`,
         timestamp: new Date()
       })
     })

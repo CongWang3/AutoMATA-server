@@ -68,7 +68,7 @@ export class AgentWebSocketService {
       
       const token = AuthService.getAuthToken()
       if (!token) {
-        reject(new Error('未找到认证 token'))
+        reject(new Error('Authentication token not found'))
         return
       }
 
@@ -93,7 +93,7 @@ export class AgentWebSocketService {
             const data = JSON.parse(event.data)
             this.handleMessage(data)
           } catch (error) {
-            console.error('解析 Agent WebSocket 消息失败:', error)
+            console.error('Failed to parse Agent WebSocket message:', error)
           }
         }
 
@@ -117,8 +117,8 @@ export class AgentWebSocketService {
         }
 
         this.ws.onerror = (error) => {
-          console.error('❌ Agent WebSocket 错误:', error)
-          this.onErrorCallback?.('连接错误')
+          console.error('❌ Agent WebSocket error:', error)
+          this.onErrorCallback?.('Connection error')
           reject(error)
         }
 
@@ -164,7 +164,7 @@ export class AgentWebSocketService {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message))
     } else {
-      console.warn('Agent WebSocket 未连接，无法发送消息')
+      console.warn('Agent WebSocket is not connected, unable to send message')
     }
   }
 
@@ -176,7 +176,7 @@ export class AgentWebSocketService {
     
     switch (eventType) {
       case 'connected':
-        console.log('✅ Agent 连接已确认:', data.message || '连接成功')
+        console.log('✅ Agent connection confirmed:', data.message || 'Connected')
         this.onConnectedCallback?.()
         break
         
@@ -208,17 +208,17 @@ export class AgentWebSocketService {
         break
         
       case 'error':
-        console.error('❌ Agent 错误:', data.message)
-        this.onErrorCallback?.(data.message || '未知错误')
+        console.error('❌ Agent error:', data.message)
+        this.onErrorCallback?.(data.message || 'Unknown error')
         break
         
       case 'pong':
         // 心跳响应
-        console.debug('💓 收到 Agent 心跳响应')
+        console.debug('💓 Received Agent heartbeat response')
         break
         
       default:
-        console.log('收到未知 Agent 消息类型:', eventType, data)
+        console.log('Received unknown Agent message type:', eventType, data)
     }
   }
 
@@ -250,7 +250,7 @@ export class AgentWebSocketService {
     this.reconnectAttempts++
     setTimeout(() => {
       this.connect().catch(error => {
-        console.error('Agent WebSocket 重连失败:', error)
+        console.error('Agent WebSocket reconnect failed:', error)
       })
     }, this.reconnectDelay * this.reconnectAttempts)
   }
