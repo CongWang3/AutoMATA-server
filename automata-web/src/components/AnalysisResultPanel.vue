@@ -69,6 +69,43 @@
             <td class="label-cell">
               <div class="preview">
                 <img
+                  v-if="pcaPreviewUrl"
+                  :key="pcaPreviewUrl"
+                  :src="pcaPreviewUrl"
+                  height="400"
+                  alt="PCA Plot"
+                  class="preview-img"
+                >
+                <span v-else class="preview-placeholder">Preview available after the image is generated</span>
+              </div>
+            </td>
+            <td>
+              <el-dropdown trigger="click" @command="(ext: string) => onDownloadComprehensiveFigure('pca', ext)">
+                <el-button
+                  type="primary"
+                  size="default"
+                >
+                  Download PCA
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      v-for="item in downloadFormats"
+                      :key="`pca-in-${item.ext}`"
+                      :command="item.ext"
+                      :disabled="!hasComprehensiveFigure('pca', item.ext)"
+                    >
+                      {{ item.label }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </td>
+          </tr>
+          <tr v-if="isComprehensiveResult">
+            <td class="label-cell">
+              <div class="preview">
+                <img
                   v-if="volcanoPreviewUrl"
                   :key="volcanoPreviewUrl"
                   :src="volcanoPreviewUrl"
@@ -780,10 +817,15 @@ function onDownloadFormat(ext: string) {
   window.open(downloadUrl, '_blank')
 }
 
-function findComprehensiveFigure(base: 'volcano' | 'cluster', ext: string): AnalysisResultFile | null {
+function findComprehensiveFigure(base: 'pca' | 'volcano' | 'cluster', ext: string): AnalysisResultFile | null {
   const files = props.resultFiles || []
   const normalizedExt = ext.toLowerCase()
-  const prefix = base === 'volcano' ? 'volcano.' : 'df_cluster_heatmap.'
+  const prefix =
+    base === 'pca'
+      ? 'pca.'
+      : base === 'volcano'
+        ? 'volcano.'
+        : 'df_cluster_heatmap.'
   return files.find((f) => f.filename.toLowerCase() === `${prefix}${normalizedExt}`) || null
 }
 
@@ -800,13 +842,20 @@ const COMPREHENSIVE_FIGURE_PREVIEW_EXT_ORDER = [
   'tiff',
 ] as const
 
-function findComprehensiveFigureForPreview(base: 'volcano' | 'cluster'): AnalysisResultFile | null {
+function findComprehensiveFigureForPreview(base: 'pca' | 'volcano' | 'cluster'): AnalysisResultFile | null {
   for (const ext of COMPREHENSIVE_FIGURE_PREVIEW_EXT_ORDER) {
     const hit = findComprehensiveFigure(base, ext)
     if (hit) return hit
   }
   return null
 }
+
+const pcaPreviewUrl = computed(() => {
+  if (!props.jobId || phase.value !== 'completed') return ''
+  const f = findComprehensiveFigureForPreview('pca')
+  if (!f) return ''
+  return AnalysisAPI.getResultFileUrl(props.jobId, f.filename)
+})
 
 const volcanoPreviewUrl = computed(() => {
   if (!props.jobId || phase.value !== 'completed') return ''
@@ -822,11 +871,11 @@ const clusterPreviewUrl = computed(() => {
   return AnalysisAPI.getResultFileUrl(props.jobId, f.filename)
 })
 
-function hasComprehensiveFigure(base: 'volcano' | 'cluster', ext: string): boolean {
+function hasComprehensiveFigure(base: 'pca' | 'volcano' | 'cluster', ext: string): boolean {
   return !!findComprehensiveFigure(base, ext)
 }
 
-function onDownloadComprehensiveFigure(base: 'volcano' | 'cluster', ext: string) {
+function onDownloadComprehensiveFigure(base: 'pca' | 'volcano' | 'cluster', ext: string) {
   if (!props.jobId) return
   const target = findComprehensiveFigure(base, ext)
   if (!target) return
