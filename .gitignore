@@ -24,6 +24,7 @@ example/draw_example/volcano_example.txt
 *.md
 # 保留 superpowers 设计规格（其余 *.md 仍忽略）
 !docs/superpowers/specs/**/*.md
+!docs/superpowers/plans/**/*.md
 *.pyc
 *.txt
 !backend/requirements.txt
