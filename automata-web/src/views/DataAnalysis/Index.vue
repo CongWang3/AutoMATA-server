@@ -81,7 +81,7 @@ const comprehensiveTool = {
   path: '/data-analysis/comprehensive',
   title: 'Comprehensive Differential Expression Analysis',
   description:
-    'One-click workflow for differential expression, volcano plot, cluster heatmap, and GO/KEGG enrichment'
+    'One-click workflow for differential expression, generate PCA plot, volcano plot, cluster heatmap, and GO/KEGG enrichment plots'
 }
 
 /** 顺序：左上 Comprehensive；其余按原可视化→富集顺延；左下角（末格）Dumbbell */

@@ -278,7 +278,7 @@
                     Genes with adjusted p-value below this value are treated as significant (often 0.05).
                   </el-descriptions-item>
                   <el-descriptions-item label="Output">
-                    Volcano plot, differential gene cluster heatmap, and tables of up / down / non-regulated genes.
+                    PCA plot (default confidence level is 0.95), Volcano plot, differential gene cluster heatmap, and tables of up / down / non-regulated genes.
                     Follow-up GO/KEGG enrichment can be launched from the results UI when offered.
                   </el-descriptions-item>
                 </el-descriptions>
