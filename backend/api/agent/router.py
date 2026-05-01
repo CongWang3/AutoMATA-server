@@ -10,13 +10,16 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, Depends, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, Depends, WebSocketDisconnect, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 
 from config.database import get_db
 from config.settings import settings
-from api.dependencies.auth import get_current_user_from_websocket
+from api.dependencies.auth import get_current_user_from_websocket, get_current_active_user
+from api.models.user import User
+from api.services.agent_byok_store import load_byok, save_byok_partial
 from api.agent.llm_provider import validate_provider_config
 from api.agent.graph import create_agent_graph, run_agent
 from api.agent.script_semantics import build_semantic_context, get_semantic_coverage
@@ -33,8 +36,8 @@ router = APIRouter(prefix="/api/v1/agent", tags=["AI Agent"])
 conversation_histories: Dict[str, Dict[int, List[BaseMessage]]] = {}
 
 # Agent 图实例缓存
-# 格式: {provider: compiled_graph}
-agent_graphs: Dict[str, any] = {}
+# 格式: {(provider, user_id): compiled_graph}；BYOK 变更后按 user_id 失效
+agent_graphs: Dict[Tuple[str, str], Any] = {}
 JOB_ID_PATTERN = re.compile(r"\b\d{14}_[a-zA-Z0-9]{8}\b")
 TRACEBACK_FILE_LINE_RE = re.compile(
     r'^\s*File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>.+?)\s*$'
@@ -492,26 +495,30 @@ def _build_mode_prompt(intent: str, user_message: str, job_context: Optional[Dic
     return intent_display, wrapped
 
 
-def _get_or_create_graph(provider: str = None):
+def invalidate_agent_graph_cache_for_user(user_id: str) -> None:
+    """BYOK 更新后调用，避免 ChatOpenAI 仍使用旧 Key。"""
+    uid = str(user_id)
+    stale = [k for k in list(agent_graphs.keys()) if k[1] == uid]
+    for k in stale:
+        del agent_graphs[k]
+    if stale:
+        logger.info("[Agent Router] 已清除用户 Agent 图缓存: user_id=%s, count=%s", uid, len(stale))
+
+
+def _get_or_create_graph(provider: str = None, user_id: str = None):
     """
-    获取或创建 Agent 执行图
-    
-    使用缓存避免重复创建
-    
-    Args:
-        provider: LLM 提供商
-        
-    Returns:
-        编译后的 Agent 执行图
+    获取或创建 Agent 执行图（按 provider + user_id 缓存，以隔离 BYOK）。
     """
-    provider = provider or settings.AGENT_DEFAULT_PROVIDER
-    
-    if provider not in agent_graphs:
-        logger.info(f"[Agent Router] 创建新的 Agent 图: provider={provider}")
+    if user_id is None:
+        raise ValueError("user_id 不能为空")
+    provider = (provider or settings.AGENT_DEFAULT_PROVIDER).lower()
+    uid = str(user_id)
+    key = (provider, uid)
+    if key not in agent_graphs:
+        logger.info(f"[Agent Router] 创建新的 Agent 图: provider={provider}, user_id={uid}")
         tools = get_all_tools()
-        agent_graphs[provider] = create_agent_graph(provider, tools)
-    
-    return agent_graphs[provider]
+        agent_graphs[key] = create_agent_graph(provider, tools, user_id=uid)
+    return agent_graphs[key]
 
 
 def _get_conversation_history(user_id: str, ws_id: int) -> List[BaseMessage]:
@@ -724,7 +731,7 @@ async def agent_chat_websocket(
                         continue
                     
                     # 验证提供商配置
-                    is_valid, error_msg = validate_provider_config(provider)
+                    is_valid, error_msg = validate_provider_config(provider, user_id=user_id)
                     if not is_valid:
                         await websocket.send_text(json.dumps({
                             "event": "error",
@@ -734,7 +741,7 @@ async def agent_chat_websocket(
                     
                     # 获取 Agent 图
                     try:
-                        graph = _get_or_create_graph(provider)
+                        graph = _get_or_create_graph(provider, user_id=user_id)
                     except Exception as e:
                         logger.error(f"[Agent WS] 创建 Agent 图失败: {e}")
                         await websocket.send_text(json.dumps({
@@ -864,3 +871,51 @@ async def get_agent_status():
         "max_turns": settings.AGENT_MAX_TURNS,
         "semantic_coverage": get_semantic_coverage(str(settings.path_repo)),
     }
+
+
+class AgentByokStatusResponse(BaseModel):
+    qwen_configured: bool
+    deepseek_configured: bool
+
+
+class AgentByokUpdateBody(BaseModel):
+    qwen: Optional[str] = None
+    deepseek: Optional[str] = None
+
+
+@router.get("/byok", response_model=AgentByokStatusResponse)
+async def get_agent_byok_status(current_user: User = Depends(get_current_active_user)):
+    """返回当前用户是否配置了各厂商 BYOK（不返回明文 Key）。"""
+    data = load_byok(settings.path_repo, settings.AGENT_BYOK_DIR, str(current_user.id))
+    return AgentByokStatusResponse(
+        qwen_configured=bool(data.get("qwen")),
+        deepseek_configured=bool(data.get("deepseek")),
+    )
+
+
+@router.put("/byok")
+async def put_agent_byok(
+    body: AgentByokUpdateBody,
+    current_user: User = Depends(get_current_active_user),
+):
+    """合并更新 BYOK；空字符串表示清除该厂商 BYOK。保存后立即失效本用户 Agent 图缓存。"""
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无更新字段",
+        )
+    allowed = {k: v for k, v in updates.items() if k in ("qwen", "deepseek")}
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 qwen / deepseek",
+        )
+    save_byok_partial(
+        settings.path_repo,
+        settings.AGENT_BYOK_DIR,
+        str(current_user.id),
+        allowed,
+    )
+    invalidate_agent_graph_cache_for_user(str(current_user.id))
+    return {"ok": True}

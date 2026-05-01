@@ -47,6 +47,7 @@ services:
     volumes:
       - ./data/uploaded_files:/app/uploaded_files
       - ./data/logs:/app/logs
+      - ./data/agent_byok:/app/data/agent_byok
       - ./data/download_data:/app/download_data
       - ./data/example:/app/example:ro  # 挂载 example 目录，用于前端访问
       # Release 解压或手工放置 gene_*/mrna_*/protein_* 到 ./data/reference_sql；.env.prod 设 REFERENCE_DATA_SQL_DIR=/app/reference_sql

@@ -75,6 +75,49 @@
           </div>
         </div>
 
+        <!-- BYOK：Qwen / DeepSeek 自有 API Key（仅存本机，不落 localStorage） -->
+        <div class="byok-panel">
+          <button type="button" class="byok-toggle" @click="byokExpanded = !byokExpanded">
+            {{ byokExpanded ? '▼' : '▶' }} API Keys (Qwen / DeepSeek)
+          </button>
+          <div v-show="byokExpanded" class="byok-body">
+            <p class="byok-hint">
+              Optional. Leave empty to use server default keys. Save overwrites; clear field + Save removes your BYOK for that provider.
+            </p>
+            <div class="byok-row">
+              <span class="byok-label">Qwen</span>
+              <span class="byok-badge" :class="byokStatus.qwen_configured ? 'on' : 'off'">
+                {{ byokStatus.qwen_configured ? 'BYOK' : 'Default' }}
+              </span>
+            </div>
+            <input
+              v-model="byokQwenInput"
+              type="password"
+              class="byok-input"
+              placeholder="sk-... (optional)"
+              autocomplete="off"
+            />
+            <div class="byok-row">
+              <span class="byok-label">DeepSeek</span>
+              <span class="byok-badge" :class="byokStatus.deepseek_configured ? 'on' : 'off'">
+                {{ byokStatus.deepseek_configured ? 'BYOK' : 'Default' }}
+              </span>
+            </div>
+            <input
+              v-model="byokDeepseekInput"
+              type="password"
+              class="byok-input"
+              placeholder="sk-... (optional)"
+              autocomplete="off"
+            />
+            <div class="byok-actions">
+              <button type="button" class="byok-save" :disabled="byokSaving" @click="saveByok">Save</button>
+              <button type="button" class="byok-refresh" @click="loadByokStatus">Refresh</button>
+            </div>
+            <p v-if="byokMessage" class="byok-msg">{{ byokMessage }}</p>
+          </div>
+        </div>
+
         <!-- 消息列表区 -->
         <div class="messages-container" ref="messagesContainer">
           <!-- 空状态 -->
@@ -154,6 +197,7 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useAgentStore, PROVIDERS, type AgentMode } from '@/stores/agent'
+import { fetchAgentByokStatus, saveAgentByokKeys } from '@/api/agentByok'
 import ChatMessage from './ChatMessage.vue'
 
 // Stores
@@ -166,6 +210,53 @@ const linkedJobId = ref('')
 const selectedProvider = ref(agentStore.currentProvider)
 const messagesContainer = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+
+const byokExpanded = ref(false)
+const byokStatus = ref({ qwen_configured: false, deepseek_configured: false })
+const byokQwenInput = ref('')
+const byokDeepseekInput = ref('')
+const byokSaving = ref(false)
+const byokMessage = ref('')
+
+async function loadByokStatus(): Promise<void> {
+  try {
+    byokStatus.value = await fetchAgentByokStatus()
+    byokMessage.value = ''
+  } catch (e) {
+    byokMessage.value = e instanceof Error ? e.message : 'Failed to load API key status'
+  }
+}
+
+async function saveByok(): Promise<void> {
+  byokSaving.value = true
+  byokMessage.value = ''
+  try {
+    const payload: Record<string, string> = {}
+    if (byokQwenInput.value.trim()) {
+      payload.qwen = byokQwenInput.value.trim()
+    } else if (byokStatus.value.qwen_configured) {
+      payload.qwen = ''
+    }
+    if (byokDeepseekInput.value.trim()) {
+      payload.deepseek = byokDeepseekInput.value.trim()
+    } else if (byokStatus.value.deepseek_configured) {
+      payload.deepseek = ''
+    }
+    if (Object.keys(payload).length === 0) {
+      byokMessage.value = 'No changes to save.'
+      return
+    }
+    await saveAgentByokKeys(payload)
+    byokQwenInput.value = ''
+    byokDeepseekInput.value = ''
+    await loadByokStatus()
+    byokMessage.value = 'Saved. Next chat uses updated keys.'
+  } catch (e) {
+    byokMessage.value = e instanceof Error ? e.message : 'Save failed'
+  } finally {
+    byokSaving.value = false
+  }
+}
 
 /**
  * 发送消息
@@ -276,6 +367,7 @@ watch(
   () => agentStore.isOpen,
   (isOpen) => {
     if (isOpen) {
+      void loadByokStatus()
       nextTick(() => {
         inputRef.value?.focus()
       })
@@ -463,6 +555,97 @@ onUnmounted(() => {
 
 .header-btn:hover {
   background: rgba(255, 255, 255, 0.25);
+}
+
+/* BYOK 折叠区 */
+.byok-panel {
+  border-bottom: 1px solid #eee;
+  background: #f9f9fb;
+  flex-shrink: 0;
+}
+.byok-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+.byok-toggle:hover {
+  background: #efeff4;
+}
+.byok-body {
+  padding: 0 12px 10px;
+}
+.byok-hint {
+  font-size: 11px;
+  color: #888;
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+.byok-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.byok-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #444;
+}
+.byok-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.byok-badge.on {
+  background: #e6f7ff;
+  color: #096dd9;
+}
+.byok-badge.off {
+  background: #f0f0f0;
+  color: #666;
+}
+.byok-input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.byok-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.byok-save,
+.byok-refresh {
+  flex: 1;
+  padding: 6px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  background: white;
+}
+.byok-save {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+.byok-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.byok-msg {
+  font-size: 11px;
+  margin: 8px 0 0;
+  color: #096dd9;
 }
 
 /* 消息列表区 */

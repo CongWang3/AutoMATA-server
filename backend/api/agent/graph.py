@@ -126,7 +126,11 @@ def create_call_model_node(model: BaseChatModel, tools: list):
     return call_model
 
 
-def create_agent_graph(provider: str = None, tools: list = None) -> StateGraph:
+def create_agent_graph(
+    provider: str = None,
+    tools: list = None,
+    user_id: Optional[str] = None,
+) -> StateGraph:
     """
     创建 Agent 执行图
     
@@ -135,6 +139,7 @@ def create_agent_graph(provider: str = None, tools: list = None) -> StateGraph:
     Args:
         provider: LLM 提供商 (openai/qwen/deepseek)
         tools: 可用工具列表
+        user_id: 当前用户 ID（BYOK 解析用，可为 None）
         
     Returns:
         编译后的 StateGraph
@@ -146,7 +151,7 @@ def create_agent_graph(provider: str = None, tools: list = None) -> StateGraph:
     tools = tools or []
     
     # 获取 LLM 模型
-    model = get_chat_model(provider)
+    model = get_chat_model(provider, user_id=user_id)
     logger.info(f"[Agent Graph] 使用模型提供商: {provider or settings.AGENT_DEFAULT_PROVIDER}")
     logger.info(f"[Agent Graph] 注册工具数量: {len(tools)}")
     

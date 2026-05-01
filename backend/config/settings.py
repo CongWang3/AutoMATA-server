@@ -169,6 +169,9 @@ class Settings(BaseSettings):
     AGENT_DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
     AGENT_MAX_TURNS: int = 10
 
+    # 用户 BYOK（Qwen/DeepSeek）JSON 目录；空则使用 REPO_ROOT/data/agent_byok
+    AGENT_BYOK_DIR: str = ""
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: Any) -> Any:
