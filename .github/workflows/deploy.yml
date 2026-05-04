@@ -21,6 +21,9 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
+      # 仅当这些路径变化时才构建对应镜像（避免仅改 compose / deploy 文档时重跑 conda 层）
+      backend_image: ${{ steps.filter.outputs.backend_image }}
+      frontend_image: ${{ steps.filter.outputs.frontend_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -33,7 +36,14 @@ jobs:
             backend:
               - 'backend/**'
               - 'code/**'
+            backend_image:
+              - 'backend/**'
+              - 'code/**'
+              - 'deploy/conda-r442.yml'
+              - 'backend/Dockerfile'
             frontend:
+              - 'automata-web/**'
+            frontend_image:
               - 'automata-web/**'
             infra:
               - 'docker-compose.prod.yml'
@@ -73,11 +83,11 @@ jobs:
         run: echo "value=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push backend image
-        if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
+        if: needs.changes.outputs.backend_image == 'true'
         run: cp -r ./code ./backend/code && cp deploy/conda-r442.yml backend/conda-r442.yml
 
       - name: Push backend image
-        if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
+        if: needs.changes.outputs.backend_image == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -92,7 +102,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=automata-backend
 
       - name: Build and push frontend image
-        if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
+        if: needs.changes.outputs.frontend_image == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./automata-web
