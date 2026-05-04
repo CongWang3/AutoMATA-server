@@ -7,8 +7,8 @@ export interface AgentByokStatus {
 
 export async function fetchAgentByokStatus(): Promise<AgentByokStatus> {
   const client = createApiClient()
-  const { data } = await client.get<AgentByokStatus>('/v1/agent/byok')
-  return data
+  // get() 已返回 response.data（见 ApiClient.request），勿再解构 .data
+  return await client.get<AgentByokStatus>('/v1/agent/byok')
 }
 
 export async function saveAgentByokKeys(payload: {
