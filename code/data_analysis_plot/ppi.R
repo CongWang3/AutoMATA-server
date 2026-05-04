@@ -169,32 +169,79 @@ data_mapped <- tryCatch(
 # # 解决：没解决
 # string_db$plot_network( data_mapped$STRING_id )  # 和官网出图相同
 
+automata_stringdb_interactions_from_links_file <- function(string_db, string_ids) {
+    indir <- string_db$input_directory
+    species <- string_db$species
+    fv <- string_db$file_version
+    thr <- as.numeric(string_db$score_threshold)
+    fn <- file.path(indir, paste0(species, ".protein.links.v", fv, ".txt.gz"))
+    if (!file.exists(fn)) {
+        cand <- list.files(
+            indir,
+            pattern = paste0("^", species, "\\.protein\\.links\\..*\\.txt\\.gz$"),
+            full.names = TRUE
+        )
+        if (!length(cand)) {
+            stop("找不到 STRING protein.links 缓存（.gz）。请确认 AUTOMATA_STRINGDB_CACHE_DIR 与离线缓存完整。目录: ", indir, call. = FALSE)
+        }
+        fn <- cand[[1]]
+    }
+    PPI <- read.table(
+        gzfile(fn),
+        header = TRUE,
+        sep = "",
+        quote = "",
+        comment.char = "",
+        stringsAsFactors = FALSE,
+        fill = FALSE
+    )
+    if (!all(c("protein1", "protein2", "combined_score") %in% names(PPI))) {
+        stop("STRING 互作文件列名异常，期望 protein1, protein2, combined_score。实际: ", paste(names(PPI), collapse = ", "), call. = FALSE)
+    }
+    PPI <- PPI[stats::complete.cases(PPI$protein1, PPI$protein2, PPI$combined_score), , drop = FALSE]
+    PPI <- PPI[as.numeric(PPI$combined_score) >= thr, , drop = FALSE]
+    sid <- unique(as.character(string_ids))
+    PPI <- PPI[as.character(PPI$protein1) %in% sid & as.character(PPI$protein2) %in% sid, , drop = FALSE]
+    data.frame(
+        from = PPI$protein1,
+        to = PPI$protein2,
+        combined_score = as.numeric(PPI$combined_score),
+        stringsAsFactors = FALSE
+    )
+}
 
 # 使用get_interactions获取蛋白互作信息，以用于后续可视化
 hit<-data_mapped$STRING_id
-info <- tryCatch(
-    {
-        string_db$get_interactions(hit)
-    },
-    error = function(e) {
-        stop(
-            paste0(
-                # "STRINGdb get_interactions failed. If running offline, ensure STRINGdb interaction files are cached.\n",
-                # "Cache dir: ", stringdb_cache_dir, "\n",
-                "Original error: ", conditionMessage(e)
-            ),
-            call. = FALSE
-        )
-    }
-)  # info包含from to combined_score三列
-# 可视化info表格 https://www.jianshu.com/p/5bfb94b0e250
+info <- automata_stringdb_interactions_from_links_file(string_db, hit)
+# STRING get_interactions 可能返回「仅一端在输入列表」的边；用 match 换回 SYMBOL 时另一端会变成 NA，
+# igraph::graph_from_data_frame 会报错。先取诱导子图（两端 STRING_id 均在本次映射结果内），再映射为 SYMBOL。
+hit_ids <- unique(as.character(data_mapped$STRING_id))
+info <- dplyr::filter(
+  info,
+  as.character(.data$from) %in% hit_ids,
+  as.character(.data$to) %in% hit_ids
+)
+if (nrow(info) == 0L) {
+  stop(
+    "PPI：在 STRING 得分阈值下，输入基因之间无互作边（诱导子图为空）。可尝试略降低 score_threshold 或扩大基因列表。",
+    call. = FALSE
+  )
+}
 
 # 转换stringID为Symbol，只取前两列和最后一列
 links <- info %>%
-  mutate(from = data_mapped[match(from, data_mapped$STRING_id), "SYMBOL"]) %>% 
-  mutate(to = data_mapped[match(to, data_mapped$STRING_id), "SYMBOL"]) %>%  
-  dplyr::select(from, to , last_col()) %>% 
-  dplyr::rename(weight = combined_score)
+  mutate(from = data_mapped[match(from, data_mapped$STRING_id), "SYMBOL"]) %>%
+  mutate(to = data_mapped[match(to, data_mapped$STRING_id), "SYMBOL"]) %>%
+  dplyr::select(from, to, dplyr::last_col()) %>%
+  dplyr::rename(weight = combined_score) %>%
+  dplyr::filter(!is.na(.data$from), !is.na(.data$to), nzchar(as.character(.data$from)), nzchar(as.character(.data$to)))
+if (nrow(links) == 0L) {
+  stop(
+    "PPI：互作边无法映射为基因符号（边表为空）。请检查 ID 类型与物种是否一致，或尝试 ENTREZID 输入。",
+    call. = FALSE
+  )
+}
+
 # 节点数据
 nodes <- links %>% { data.frame(data = c(.$from, .$to)) } %>% distinct()
 # 创建网络图

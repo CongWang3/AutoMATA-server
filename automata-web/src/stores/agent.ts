@@ -218,7 +218,11 @@ export const useAgentStore = defineStore('agent', () => {
       currentIntentDisplay.value = intentDisplay
     })
     agentWebSocketService.setOnJobContext((payload) => {
-      currentJobContext.value = payload
+      if (!payload.jobId) {
+        currentJobContext.value = null
+      } else {
+        currentJobContext.value = payload
+      }
     })
     
     // 错误处理
@@ -246,6 +250,13 @@ export const useAgentStore = defineStore('agent', () => {
     // 确保已连接
     if (!isConnected.value) {
       await connect()
+    }
+
+    // 显式 job 与当前上下文不一致时先清空，避免等不到 WS 时仍显示旧 Identified Job
+    const explicitJob = (jobId ?? '').trim()
+    const prevJob = currentJobContext.value?.jobId ?? ''
+    if (explicitJob && explicitJob !== prevJob) {
+      currentJobContext.value = null
     }
     
     // 添加用户消息
@@ -278,6 +289,7 @@ export const useAgentStore = defineStore('agent', () => {
     messages.value = []
     currentAssistantMessageId.value = null
     error.value = null
+    currentJobContext.value = null
   }
 
   /**
@@ -285,6 +297,11 @@ export const useAgentStore = defineStore('agent', () => {
    */
   function clearError(): void {
     error.value = null
+  }
+
+  /** 清空已识别的 Job 上下文（例如用户修改了 Linked JobID 输入框） */
+  function clearJobContext(): void {
+    currentJobContext.value = null
   }
 
   return {
@@ -312,6 +329,7 @@ export const useAgentStore = defineStore('agent', () => {
     sendMessage,
     switchProvider,
     clearHistory,
-    clearError
+    clearError,
+    clearJobContext,
   }
 })

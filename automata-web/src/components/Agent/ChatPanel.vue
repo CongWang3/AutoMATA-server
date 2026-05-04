@@ -362,6 +362,15 @@ watch(
   }
 )
 
+// Linked JobID 与当前「已识别任务」不一致时立即清空展示，避免换 job 后仍显示旧 Identified Job
+watch(linkedJobId, (v) => {
+  const t = v.trim()
+  const ctxId = agentStore.currentJobContext?.jobId ?? ''
+  if (t !== ctxId) {
+    agentStore.clearJobContext()
+  }
+})
+
 // 面板打开时聚焦输入框
 watch(
   () => agentStore.isOpen,

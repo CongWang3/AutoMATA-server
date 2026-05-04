@@ -762,6 +762,7 @@ async def agent_chat_websocket(
                         "intent": intent,
                         "intent_display": intent_display
                     }, ensure_ascii=False))
+                    # 每次对话都推送 job 上下文，便于前端在切换/清空 job_id 时刷新「Identified Job」
                     if job_context:
                         await websocket.send_text(json.dumps({
                             "event": "agent_job_context",
@@ -769,6 +770,14 @@ async def agent_chat_websocket(
                             "found": bool(job_context.get("found")),
                             "diagnosis_ready": bool(job_context.get("diagnosis_ready")),
                             "missing_fields": job_context.get("missing_fields", [])
+                        }, ensure_ascii=False))
+                    else:
+                        await websocket.send_text(json.dumps({
+                            "event": "agent_job_context",
+                            "job_id": "",
+                            "found": False,
+                            "diagnosis_ready": False,
+                            "missing_fields": [],
                         }, ensure_ascii=False))
                     
                     # 构建工具上下文（只存储可序列化的数据）
