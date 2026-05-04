@@ -406,6 +406,7 @@ def _classify_intent(message: str, requested_mode: Optional[str] = None) -> str:
 
 def _detect_user_language(user_message: str) -> str:
     """
+    test
     根据用户输入粗略检测语言：
     - 含中文字符 -> zh
     - 含英文字符且无中文 -> en
