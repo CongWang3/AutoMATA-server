@@ -391,12 +391,20 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 容器 */
+/* 容器：仅包裹 FAB；面板用 position:fixed 贴视口，避免父级仅 70×70 时 absolute 面板被裁剪或叠层异常 */
 .chat-panel-container {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 9999;
+  z-index: 10050;
+  width: 70px;
+  height: 70px;
+  pointer-events: none;
+}
+
+.chat-panel-container .chat-fab,
+.chat-panel-container .chat-panel {
+  pointer-events: auto;
 }
 
 /* 悬浮按钮 */
@@ -450,13 +458,15 @@ onUnmounted(() => {
   background: #ff4d4f;
 }
 
-/* 聊天面板 */
+/* 聊天面板：fixed 相对视口，避免 absolute 相对 70px 容器导致内容被裁切/不可见 */
 .chat-panel {
-  position: absolute;
-  bottom: 70px;
-  right: 0;
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + 70px + 10px);
   width: 380px;
-  height: 550px;
+  max-width: calc(100vw - 32px);
+  height: min(550px, calc(100vh - 120px));
+  max-height: calc(100vh - 120px);
   background: white;
   border-radius: 16px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
@@ -558,7 +568,6 @@ onUnmounted(() => {
 }
 
 /* BYOK 折叠区 */
-/* test */
 .byok-panel {
   border-bottom: 1px solid #eee;
   background: #f9f9fb;
@@ -652,6 +661,7 @@ onUnmounted(() => {
 /* 消息列表区 */
 .messages-container {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
   background: #fafafa;
