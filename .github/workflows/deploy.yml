@@ -238,22 +238,19 @@ jobs:
             # 使用阿里云 ACR 镜像（国内访问更快）
             export ALIYUN_REGISTRY="crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com"
             export ALIYUN_NAMESPACE="automata-bio"
-            # 镜像 tag 必须与「本次是否构建、构建了哪些镜像」一致，否则 ACR 会出现 manifest unknown
-            # - build-and-push skipped：不要用 .env 里可能陈旧的 SHA，统一拉 latest
-            # - infra 变更会同时构建 front/back，必须同时指向本次 github.sha
+            # 镜像 tag 必须与「本次 CI 是否实际 push 了该镜像」一致，否则 ACR manifest unknown
+            # （仅改 compose/infra 时 build-and-push 仍为 success 但不会跑 docker push，不能用 infra 强行设双 SHA）
             if [ "${{ needs.build-and-push.result }}" = "skipped" ]; then
-              echo "[info] 本次未执行构建任务，镜像 tag 强制为 latest（避免 .env.prod 中陈旧 SHA 导致 manifest unknown）"
+              echo "[info] build-and-push 整 job 跳过，镜像 tag 用 latest"
               export FRONTEND_IMAGE_TAG="latest"
               export BACKEND_IMAGE_TAG="latest"
             else
-              if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-                export FRONTEND_IMAGE_TAG="${{ github.sha }}"
-                export BACKEND_IMAGE_TAG="${{ github.sha }}"
-              fi
-              if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+              export FRONTEND_IMAGE_TAG="latest"
+              export BACKEND_IMAGE_TAG="latest"
+              if [ "${{ needs.changes.outputs.frontend_image }}" = "true" ]; then
                 export FRONTEND_IMAGE_TAG="${{ github.sha }}"
               fi
-              if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+              if [ "${{ needs.changes.outputs.backend_image }}" = "true" ]; then
                 export BACKEND_IMAGE_TAG="${{ github.sha }}"
               fi
             fi
@@ -381,22 +378,19 @@ jobs:
             # 使用阿里云 ACR 镜像（国内访问更快）
             export ALIYUN_REGISTRY="crpi-c0pltk6mq32oe9t3.cn-hangzhou.personal.cr.aliyuncs.com"
             export ALIYUN_NAMESPACE="automata-bio"
-            # 镜像 tag 必须与「本次是否构建、构建了哪些镜像」一致，否则 ACR 会出现 manifest unknown
-            # - build-and-push skipped：不要用 .env 里可能陈旧的 SHA，统一拉 latest
-            # - infra 变更会同时构建 front/back，必须同时指向本次 github.sha
+            # 镜像 tag 必须与「本次 CI 是否实际 push 了该镜像」一致，否则 ACR manifest unknown
+            # （仅改 compose/infra 时 build-and-push 仍为 success 但不会跑 docker push，不能用 infra 强行设双 SHA）
             if [ "${{ needs.build-and-push.result }}" = "skipped" ]; then
-              echo "[info] 本次未执行构建任务，镜像 tag 强制为 latest（避免 .env.prod 中陈旧 SHA 导致 manifest unknown）"
+              echo "[info] build-and-push 整 job 跳过，镜像 tag 用 latest"
               export FRONTEND_IMAGE_TAG="latest"
               export BACKEND_IMAGE_TAG="latest"
             else
-              if [ "${{ needs.changes.outputs.infra }}" = "true" ]; then
-                export FRONTEND_IMAGE_TAG="${{ github.sha }}"
-                export BACKEND_IMAGE_TAG="${{ github.sha }}"
-              fi
-              if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+              export FRONTEND_IMAGE_TAG="latest"
+              export BACKEND_IMAGE_TAG="latest"
+              if [ "${{ needs.changes.outputs.frontend_image }}" = "true" ]; then
                 export FRONTEND_IMAGE_TAG="${{ github.sha }}"
               fi
-              if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+              if [ "${{ needs.changes.outputs.backend_image }}" = "true" ]; then
                 export BACKEND_IMAGE_TAG="${{ github.sha }}"
               fi
             fi
