@@ -78,7 +78,18 @@
         <!-- BYOK：Qwen / DeepSeek 自有 API Key（仅存本机，不落 localStorage） -->
         <div class="byok-panel">
           <button type="button" class="byok-toggle" @click="byokExpanded = !byokExpanded">
-            {{ byokExpanded ? '▼' : '▶' }} API Keys (Qwen / DeepSeek)
+            <svg
+              class="byok-toggle-icon"
+              :class="{ 'byok-toggle-icon--open': byokExpanded }"
+              viewBox="0 0 12 12"
+              width="12"
+              height="12"
+              aria-hidden="true"
+            >
+              <!-- 实心三角：收起时顶点朝右指向标题；展开时通过 CSS 旋转 90° 朝下 -->
+              <polygon points="2 1.5 2 10.5 10 6" fill="currentColor" />
+            </svg>
+            <span class="byok-toggle-label">API Keys (Qwen / DeepSeek)</span>
           </button>
           <div v-show="byokExpanded" class="byok-body">
             <p class="byok-hint">
@@ -213,7 +224,7 @@ const inputRef = ref<HTMLTextAreaElement | null>(null)
 
 /** BYOK 说明文案（仅此一处维护） */
 const byokHint =
-  '可选。留空则使用服务端默认 Key；点击保存会写入服务器目录（Docker 下为挂载的 data/agent_byok）；清空输入框并保存可清除该厂商的 BYOK。'
+  'Enter the API Key and click Save. This user will use the API Key in future chats. The refresh button is used to align the display. Clear the input field and click Save to clear the vendor'
 
 const byokExpanded = ref(false)
 const byokStatus = ref({ qwen_configured: false, deepseek_configured: false })
@@ -588,6 +599,9 @@ onUnmounted(() => {
 }
 .byok-toggle {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   padding: 8px 12px;
   border: none;
@@ -598,6 +612,18 @@ onUnmounted(() => {
 }
 .byok-toggle:hover {
   background: #efeff4;
+}
+.byok-toggle-icon {
+  flex-shrink: 0;
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+.byok-toggle-icon--open {
+  transform: rotate(90deg);
+}
+.byok-toggle-label {
+  flex: 1;
+  min-width: 0;
 }
 .byok-body {
   padding: 0 12px 10px;
