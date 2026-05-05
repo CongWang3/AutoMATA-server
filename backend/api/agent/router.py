@@ -524,7 +524,7 @@ def _get_or_create_graph(provider: str = None, user_id: str = None):
 
 def _get_conversation_history(user_id: str, ws_id: int) -> List[BaseMessage]:
     """
-    获取用户的对话历史
+    获取用户的对话历史 test
     
     Args:
         user_id: 用户 ID
