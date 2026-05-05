@@ -903,11 +903,7 @@ async def get_agent_byok_status(current_user: User = Depends(get_current_active_
     )
 
 
-@router.put("/byok")
-async def put_agent_byok(
-    body: AgentByokUpdateBody,
-    current_user: User = Depends(get_current_active_user),
-):
+def _apply_agent_byok_updates(user_id: int, body: AgentByokUpdateBody) -> Dict[str, Any]:
     """合并更新 BYOK；空字符串表示清除该厂商 BYOK。保存后立即失效本用户 Agent 图缓存。"""
     updates = body.model_dump(exclude_unset=True)
     if not updates:
@@ -924,8 +920,25 @@ async def put_agent_byok(
     save_byok_partial(
         settings.path_repo,
         settings.AGENT_BYOK_DIR,
-        str(current_user.id),
+        str(user_id),
         allowed,
     )
-    invalidate_agent_graph_cache_for_user(str(current_user.id))
+    invalidate_agent_graph_cache_for_user(str(user_id))
     return {"ok": True}
+
+
+@router.put("/byok")
+async def put_agent_byok(
+    body: AgentByokUpdateBody,
+    current_user: User = Depends(get_current_active_user),
+):
+    return _apply_agent_byok_updates(current_user.id, body)
+
+
+@router.post("/byok")
+async def post_agent_byok(
+    body: AgentByokUpdateBody,
+    current_user: User = Depends(get_current_active_user),
+):
+    """与 PUT 相同。部分 Apache/Nginx 配置未正确转发 PUT 时会 404，前端默认走 POST。"""
+    return _apply_agent_byok_updates(current_user.id, body)

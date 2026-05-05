@@ -82,7 +82,7 @@
           </button>
           <div v-show="byokExpanded" class="byok-body">
             <p class="byok-hint">
-              Optional. Leave empty to use server default keys. Save overwrites; clear field + Save removes your BYOK for that provider.
+              {{ byokHint }}
             </p>
             <div class="byok-row">
               <span class="byok-label">Qwen</span>
@@ -210,6 +210,10 @@ const linkedJobId = ref('')
 const selectedProvider = ref(agentStore.currentProvider)
 const messagesContainer = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+
+/** BYOK 说明文案（仅此一处维护） */
+const byokHint =
+  '可选。留空则使用服务端默认 Key；点击保存会写入服务器目录（Docker 下为挂载的 data/agent_byok）；清空输入框并保存可清除该厂商的 BYOK。'
 
 const byokExpanded = ref(false)
 const byokStatus = ref({ qwen_configured: false, deepseek_configured: false })

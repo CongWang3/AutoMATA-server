@@ -16,5 +16,6 @@ export async function saveAgentByokKeys(payload: {
   deepseek?: string
 }): Promise<void> {
   const client = createApiClient()
-  await client.put('/v1/agent/byok', payload)
+  // 使用 POST：部分网关对 /api/... 的 PUT 未转发会返回 404；后端 PUT/POST 语义一致
+  await client.post('/v1/agent/byok', payload)
 }
